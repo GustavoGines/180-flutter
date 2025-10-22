@@ -1,8 +1,6 @@
 // lib/core/models/order.dart
 import 'order_item.dart';
-import '../json_utils.dart';
 import 'client.dart';
-// La importación de 'intl' ha sido eliminada.
 
 class Order {
   final int id;
@@ -11,8 +9,8 @@ class Order {
   final DateTime startTime;
   final DateTime endTime;
   final String status;
-  final double total;
-  final double deposit;
+  final double? total;
+  final double? deposit;
   final String? notes;
   final List<OrderItem> items;
   final Client? client;
@@ -24,53 +22,48 @@ class Order {
     required this.startTime,
     required this.endTime,
     required this.status,
-    required this.total,
-    required this.deposit,
     required this.items,
+    this.total,
+    this.deposit,
     this.notes,
     this.client,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
-    // 1. Leemos la fecha base del evento.
-    final DateTime eventDateBase = DateTime.parse(json['event_date'] as String);
+    // ---- LÓGICA DE PARSEO DE FECHA Y HORA MEJORADA ----
 
-    // 2. Leemos las horas como texto simple.
-    final String startTimeString = json['start_time'] as String;
-    final String endTimeString = json['end_time'] as String;
+    // Función auxiliar para combinar fecha y hora de forma segura
+    DateTime parseDateTime(String dateStr, String timeStr) {
+      try {
+        final date = DateTime.parse(dateStr).toLocal();
+        final timeParts = timeStr.split(':');
+        final hour = int.tryParse(timeParts[0]) ?? 0;
+        final minute = int.tryParse(timeParts[1]) ?? 0;
+        return DateTime(date.year, date.month, date.day, hour, minute);
+      } catch (e) {
+        // Si algo falla (formato inesperado), devuelve la fecha base para no crashear
+        return DateTime.parse(dateStr).toLocal();
+      }
+    }
 
-    // 3. Separamos las horas y los minutos.
-    final startTimeParts = startTimeString.split(':');
-    final endTimeParts = endTimeString.split(':');
-
-    // 4. Creamos los objetos DateTime finales combinando las partes.
-    final DateTime finalStartTime = DateTime(
-      eventDateBase.year,
-      eventDateBase.month,
-      eventDateBase.day,
-      int.parse(startTimeParts[0]), // Hora
-      int.parse(startTimeParts[1]), // Minuto
-    ).toLocal();
-
-    final DateTime finalEndTime = DateTime(
-      eventDateBase.year,
-      eventDateBase.month,
-      eventDateBase.day,
-      int.parse(endTimeParts[0]), // Hora
-      int.parse(endTimeParts[1]), // Minuto
-    ).toLocal();
+    final eventDateString =
+        json['event_date'] as String? ?? DateTime.now().toIso8601String();
+    final startTimeString = json['start_time'] as String? ?? '00:00';
+    final endTimeString = json['end_time'] as String? ?? '00:00';
 
     final itemsJson = (json['items'] as List?) ?? const [];
 
     return Order(
-      id: toInt(json['id']),
-      clientId: toInt(json['client_id']),
-      eventDate: eventDateBase.toLocal(),
-      startTime: finalStartTime,
-      endTime: finalEndTime,
+      id: int.tryParse(json['id'].toString()) ?? 0,
+      clientId: int.tryParse(json['client_id'].toString()) ?? 0,
+
+      eventDate: DateTime.parse(eventDateString).toLocal(),
+      startTime: parseDateTime(eventDateString, startTimeString),
+      endTime: parseDateTime(eventDateString, endTimeString),
+
       status: (json['status'] ?? 'draft').toString(),
-      total: toNum(json['total']).toDouble(),
-      deposit: toNum(json['deposit']).toDouble(),
+      total: double.tryParse(json['total'].toString()),
+      deposit: double.tryParse(json['deposit'].toString()),
       notes: json['notes']?.toString(),
       items: itemsJson
           .map((e) => OrderItem.fromJson(e as Map<String, dynamic>))

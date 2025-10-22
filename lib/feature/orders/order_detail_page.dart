@@ -1,4 +1,3 @@
-// lib/feature/orders/order_detail_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -59,9 +58,11 @@ class OrderDetailPage extends ConsumerWidget {
           final currencyFormat = NumberFormat("'\$' #,##0.00", 'es_AR');
 
           // Asumimos que los detalles especiales están en el primer item.
-          // En un futuro, podrías hacer un loop si un pedido puede tener varias tortas decoradas.
           final firstItem = order.items.isNotEmpty ? order.items.first : null;
-          final photoUrl = firstItem?.customizationJson?['photo_url'];
+
+          // --- CAMBIO CLAVE: Leemos 'photo_urls' (plural) ---
+          final photoUrls =
+              (firstItem?.customizationJson?['photo_urls'] as List<dynamic>?);
 
           final fillingsList =
               firstItem?.customizationJson?['fillings'] as List<dynamic>?;
@@ -91,7 +92,7 @@ class OrderDetailPage extends ConsumerWidget {
                     _buildInfoTile(
                       Icons.access_time,
                       'Horario',
-                      '${order.startTime} - ${order.endTime}',
+                      '${DateFormat.Hm().format(order.startTime)} - ${DateFormat.Hm().format(order.endTime)}',
                     ),
                     ListTile(
                       leading: const Icon(Icons.flag, color: darkBrown),
@@ -111,35 +112,50 @@ class OrderDetailPage extends ConsumerWidget {
                   ],
                 ),
 
-                if (photoUrl != null && photoUrl.isNotEmpty)
+                // --- CAMBIO CLAVE: Tarjeta de Galería de Fotos ---
+                if (photoUrls != null && photoUrls.isNotEmpty)
                   _buildInfoCard(
-                    title: 'Modelo de Torta',
+                    title: 'Modelos de Torta',
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12.0),
-                          child: Image.network(
-                            photoUrl,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, progress) {
-                              return progress == null
-                                  ? child
-                                  : const Center(
-                                      child: CircularProgressIndicator(),
-                                    );
-                            },
-                            errorBuilder: (context, error, stack) {
-                              return const Center(
-                                child: Icon(
-                                  Icons.broken_image,
-                                  size: 50,
-                                  color: Colors.grey,
-                                ),
-                              );
-                            },
+                      SizedBox(
+                        height: 250, // Altura fija para la galería horizontal
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
                           ),
+                          itemCount: photoUrls.length,
+                          itemBuilder: (context, index) {
+                            final url = photoUrls[index] as String;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 10),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12.0),
+                                child: Image.network(
+                                  url,
+                                  width: 250, // Ancho fijo para cada imagen
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, progress) {
+                                    return progress == null
+                                        ? child
+                                        : const Center(
+                                            child: CircularProgressIndicator(),
+                                          );
+                                  },
+                                  errorBuilder: (context, error, stack) {
+                                    return const Center(
+                                      child: Icon(
+                                        Icons.broken_image,
+                                        size: 50,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ],
