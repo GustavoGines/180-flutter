@@ -13,27 +13,60 @@ enum DateFilter { today, week, month }
 
 final ordersByFilterProvider = FutureProvider.family
     .autoDispose<List<Order>, DateFilter>((ref, filter) async {
+      // 1. Obtenemos los pedidos de la API como siempre
       final repository = ref.watch(ordersRepoProvider);
-      final now = DateTime.now().toUtc();
+      final now = DateTime.now();
       late DateTime from;
       late DateTime to;
 
       switch (filter) {
         case DateFilter.today:
-          from = DateTime.utc(now.year, now.month, now.day);
+          from = DateTime(now.year, now.month, now.day);
           to = from.add(const Duration(days: 1));
           break;
         case DateFilter.week:
           final weekStart = now.subtract(Duration(days: now.weekday - 1));
-          from = DateTime.utc(weekStart.year, weekStart.month, weekStart.day);
+          from = DateTime(weekStart.year, weekStart.month, weekStart.day);
           to = from.add(const Duration(days: 7));
           break;
         case DateFilter.month:
-          from = DateTime.utc(now.year, now.month, 1);
-          to = DateTime.utc(now.year, now.month + 1, 1);
+          from = DateTime(now.year, now.month, 1);
+          to = DateTime(now.year, now.month + 1, 1);
           break;
       }
-      return repository.getOrders(from: from, to: to);
+      final orders = await repository.getOrders(from: from, to: to);
+
+      // --- 2. ORDENAMIENTO INTELIGENTE ---
+      // Definimos la prioridad de cada estado. Un número menor va primero.
+      const statusOrder = {
+        'confirmed': 1,
+        'ready': 2,
+        'delivered': 3,
+        'canceled': 4,
+      };
+
+      orders.sort((a, b) {
+        // Criterio 1: Ordenar por la prioridad del estado
+        final priorityA =
+            statusOrder[a.status] ?? 99; // 99 para estados desconocidos
+        final priorityB = statusOrder[b.status] ?? 99;
+        int statusCompare = priorityA.compareTo(priorityB);
+        if (statusCompare != 0) {
+          return statusCompare;
+        }
+
+        // Criterio 2: Si los estados son iguales, ordenar por fecha del evento
+        int dateCompare = a.eventDate.compareTo(b.eventDate);
+        if (dateCompare != 0) {
+          return dateCompare;
+        }
+
+        // Criterio 3: Si las fechas son iguales, ordenar por hora de inicio
+        return a.startTime.compareTo(b.startTime);
+      });
+
+      // 3. Devolvemos la lista ya ordenada
+      return orders;
     });
 
 // --- UI Home (igual) ---
