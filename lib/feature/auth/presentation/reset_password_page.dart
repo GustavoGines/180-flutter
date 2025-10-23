@@ -184,7 +184,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
       labelText: label,
       labelStyle: const TextStyle(color: lightBrownText),
       filled: true,
-      fillColor: primaryPink.withOpacity(0.1),
+      fillColor: primaryPink.withAlpha(26),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -195,7 +195,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: primaryPink.withOpacity(0.3)),
+        borderSide: BorderSide(color: primaryPink.withAlpha(77)),
       ),
     );
   }

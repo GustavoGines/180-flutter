@@ -40,9 +40,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/forgot-password',
         builder: (context, state) => const ForgotPasswordPage(),
       ),
-
       GoRoute(
-        path: '/reset-password', 
+        path: '/app/reset-password', // Ruta para el deep link
         builder: (context, state) {
           final token = state.uri.queryParameters['token'];
           final email = state.uri.queryParameters['email'];
@@ -56,10 +55,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       GoRoute(path: '/', builder: (context, state) => const HomePage()),
+
+      // --- RUTA MODIFICADA ---
       GoRoute(
         path: '/new_order',
-        builder: (context, state) => const NewOrderPage(),
+        builder: (context, state) => const NewOrderPage(), // Para crear
       ),
+      GoRoute(
+        path: '/order/:id/edit', // Para editar
+        builder: (context, state) {
+          final orderId = int.parse(state.pathParameters['id']!);
+          return NewOrderPage(orderId: orderId);
+        },
+      ),
+
+      // ----------------------
       GoRoute(
         path: '/create_user',
         builder: (context, state) => const CreateUserPage(),
@@ -83,8 +93,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isGoingToLogin = location == '/login';
       final isGoingToLoading = location == '/loading';
       final isGoingToForgotPassword = location == '/forgot-password';
-      final isGoingToReset =
-          location == '/reset-password';
+      final isGoingToReset = location == '/app/reset-password';
 
       if (!isLoggedIn &&
           !isGoingToLogin &&

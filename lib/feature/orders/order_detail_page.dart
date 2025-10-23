@@ -1,7 +1,7 @@
-// lib/feature/orders/order_detail_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart'; // Añadido para la navegación
 
 import '../../core/models/order.dart';
 import '../auth/auth_state.dart';
@@ -20,44 +20,32 @@ class OrderDetailPage extends ConsumerWidget {
   final int orderId;
   const OrderDetailPage({super.key, required this.orderId});
 
-  // ======= Paleta Pastel =======
-  static const _kPastelRose = Color(
-    0xFFFFE3E8,
-  ); // rosa pastel (para todas las cards)
-  static const _kPastelLavender = Color(
-    0xFFEDE7FF,
-  ); // lila pastel (solo Modelos)
+  // ======= Paleta Pastel y Traducciones =======
+  static const _kPastelRose = Color(0xFFFFE3E8);
+  static const _kPastelLavender = Color(0xFFEDE7FF);
   static const _kInkRose = Color(0xFFF3A9B9);
   static const _kInkLavender = Color(0xFFB4A6FF);
   static const _kInkBabyBlue = Color(0xFF8CC5F5);
   static const _kInkMint = Color(0xFF83D1B9);
-  static const _kInkSand = Color(0xFFC9B99A);
 
-  // Traducciones visibles
   static const Map<String, String> statusTranslations = {
     'confirmed': 'Confirmado',
     'ready': 'Listo',
     'delivered': 'Entregado',
     'canceled': 'Cancelado',
   };
-
-  // Fondo pastel por estado (igual que en Home)
   static const Map<String, Color> _statusPastelBg = {
-    'confirmed': Color(0xFFD8F6EC), // menta pastel
-    'ready': Color(0xFFFFE6EF), // rosa pastel
-    'delivered': Color(0xFFDFF1FF), // celeste pastel
-    'canceled': Color(0xFFFFE0E0), // rojo pastel suave
+    'confirmed': Color(0xFFD8F6EC),
+    'ready': Color(0xFFFFE6EF),
+    'delivered': Color(0xFFDFF1FF),
+    'canceled': Color(0xFFFFE0E0),
   };
-
-  // Acento/borde por estado (para el chip de Estado)
   static const Map<String, Color> _statusInk = {
     'confirmed': _kInkMint,
     'ready': _kInkRose,
     'delivered': _kInkBabyBlue,
-    'canceled': Color(0xFFE57373), // rojo pastel suave
+    'canceled': Color(0xFFE57373),
   };
-
-  // Color de acento general para títulos/íconos secundarios
   static const Color darkBrown = Color(0xFF7A4A4A);
 
   @override
@@ -75,7 +63,6 @@ class OrderDetailPage extends ConsumerWidget {
         elevation: 1,
         iconTheme: const IconThemeData(color: darkBrown),
       ),
-      // FAB solo para admin/staff
       floatingActionButton: orderAsyncValue.whenOrNull(
         data: (order) {
           final userRole = ref.watch(authStateProvider).user?.role;
@@ -91,41 +78,51 @@ class OrderDetailPage extends ConsumerWidget {
       body: orderAsyncValue.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'No se pudo cargar el pedido:\n$err',
-              textAlign: TextAlign.center,
-            ),
+          child: Text(
+            'No se pudo cargar el pedido:\n$err',
+            textAlign: TextAlign.center,
           ),
         ),
         data: (order) {
+          // --- NUEVA PREPARACIÓN DE DATOS (COMBINADOS) ---
           final total = order.total ?? 0.0;
           final deposit = order.deposit ?? 0.0;
           final balance = total - deposit;
           final currencyFormat = NumberFormat("'\$' #,##0.00", 'es_AR');
 
-          final firstItem = order.items.isNotEmpty ? order.items.first : null;
-          final photoUrls =
-              (firstItem?.customizationJson?['photo_urls'] as List<dynamic>?);
-          final fillings =
-              (firstItem?.customizationJson?['fillings'] as List<dynamic>?)
-                  ?.join(', ');
+          // Juntamos todas las URLs de todos los items en una sola lista
+          final allPhotoUrls = order.items
+              .where((item) => item.customizationJson?['photo_urls'] != null)
+              .expand(
+                (item) =>
+                    (item.customizationJson!['photo_urls'] as List<dynamic>),
+              )
+              .cast<String>()
+              .toList();
 
-          // Color de tinta según estado (para el chip)
-          final ink = _statusInk[order.status] ?? _kInkSand;
-          final bg =
-              _statusPastelBg[order.status] ??
-              _kPastelRose; // 👈 fondo según estado
+          // Juntamos todos los rellenos y eliminamos duplicados
+          final allFillings = order.items
+              .where((item) => item.customizationJson?['fillings'] != null)
+              .expand(
+                (item) =>
+                    (item.customizationJson!['fillings'] as List<dynamic>),
+              )
+              .cast<String>()
+              .toSet()
+              .join(', ');
+
+          final ink = _statusInk[order.status] ?? Colors.grey.shade600;
+          final bg = _statusPastelBg[order.status] ?? _kPastelRose;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ====== Card 1: Evento y Cliente (Rosa pastel) ======
                 _buildInfoCard(
                   title: 'Evento y Cliente',
+                  backgroundColor: bg,
+                  borderColor: ink.withAlpha(89),
                   children: [
                     _buildInfoTile(
                       Icons.person,
@@ -157,11 +154,9 @@ class OrderDetailPage extends ConsumerWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: ink.withValues(alpha: 0.12),
+                          color: ink.withAlpha(31),
                           borderRadius: BorderRadius.circular(99),
-                          border: Border.all(
-                            color: ink.withValues(alpha: 0.35),
-                          ),
+                          border: Border.all(color: ink.withAlpha(89)),
                         ),
                         child: Text(
                           (statusTranslations[order.status] ?? order.status)
@@ -169,20 +164,19 @@ class OrderDetailPage extends ConsumerWidget {
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             letterSpacing: .3,
-                            color: ink.withValues(alpha: 0.95),
+                            color: ink.withAlpha(242),
                           ),
                         ),
                       ),
                     ),
                   ],
-                  background: bg, // 👈 fondo por estado
-                  borderColor: ink.withValues(alpha: 0.35),
                 ),
 
-                // ====== Card 2: Modelos de Torta (Lila pastel) ======
-                if (photoUrls != null && photoUrls.isNotEmpty)
+                if (allPhotoUrls.isNotEmpty)
                   _buildInfoCard(
-                    title: 'Modelos de Torta',
+                    title: 'Modelos',
+                    backgroundColor: _kPastelLavender,
+                    borderColor: _kInkLavender.withAlpha(89),
                     children: [
                       SizedBox(
                         height: 250,
@@ -192,9 +186,9 @@ class OrderDetailPage extends ConsumerWidget {
                             horizontal: 16,
                             vertical: 8,
                           ),
-                          itemCount: photoUrls.length,
+                          itemCount: allPhotoUrls.length,
                           itemBuilder: (context, index) {
-                            final url = photoUrls[index] as String;
+                            final url = allPhotoUrls[index];
                             return Padding(
                               padding: const EdgeInsets.only(right: 10),
                               child: ClipRRect(
@@ -203,20 +197,6 @@ class OrderDetailPage extends ConsumerWidget {
                                   url,
                                   width: 250,
                                   fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, progress) =>
-                                      progress == null
-                                      ? child
-                                      : const Center(
-                                          child: CircularProgressIndicator(),
-                                        ),
-                                  errorBuilder: (context, error, stack) =>
-                                      const Center(
-                                        child: Icon(
-                                          Icons.broken_image,
-                                          size: 50,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
                                 ),
                               ),
                             );
@@ -224,30 +204,36 @@ class OrderDetailPage extends ConsumerWidget {
                         ),
                       ),
                     ],
-                    background: _kPastelLavender,
-                    borderColor: _kInkLavender.withValues(alpha: 0.35),
                   ),
 
-                // ====== Card 3: Detalles del Producto (Rosa pastel) ======
-                if (firstItem != null)
-                  _buildInfoCard(
-                    title: 'Detalles del Producto',
-                    children: [
-                      _buildInfoTile(
-                        Icons.cake,
-                        'Producto',
-                        '${firstItem.name} (x${firstItem.qty})',
+                _buildInfoCard(
+                  title: 'Detalles de Productos',
+                  backgroundColor: _kPastelRose,
+                  borderColor: _kInkRose.withAlpha(89),
+                  children: [
+                    ...order.items.map(
+                      (item) => ListTile(
+                        leading: const Icon(
+                          Icons.cake_outlined,
+                          color: darkBrown,
+                        ),
+                        title: Text('${item.name} (x${item.qty})'),
+                        trailing: Text(
+                          currencyFormat.format(item.qty * item.unitPrice),
+                        ),
                       ),
-                      if (fillings != null && fillings.isNotEmpty)
-                        _buildInfoTile(Icons.layers, 'Rellenos', fillings),
-                    ],
-                    background: _kPastelRose,
-                    borderColor: _kInkRose.withValues(alpha: 0.35),
-                  ),
+                    ),
+                    if (allFillings.isNotEmpty)
+                      const Divider(indent: 16, endIndent: 16),
+                    if (allFillings.isNotEmpty)
+                      _buildInfoTile(Icons.layers, 'Rellenos', allFillings),
+                  ],
+                ),
 
-                // ====== Card 4: Información Financiera (Rosa pastel) ======
                 _buildInfoCard(
                   title: 'Información Financiera',
+                  backgroundColor: _kPastelRose,
+                  borderColor: _kInkRose.withAlpha(89),
                   children: [
                     _buildInfoTile(
                       Icons.receipt_long,
@@ -283,14 +269,13 @@ class OrderDetailPage extends ConsumerWidget {
                       ),
                     ),
                   ],
-                  background: _kPastelRose,
-                  borderColor: _kInkRose.withValues(alpha: 0.35),
                 ),
 
-                // ====== Card 5: Notas (Rosa pastel) ======
                 if (order.notes != null && order.notes!.isNotEmpty)
                   _buildInfoCard(
                     title: 'Notas Adicionales',
+                    backgroundColor: _kPastelRose,
+                    borderColor: _kInkRose.withAlpha(89),
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -303,8 +288,6 @@ class OrderDetailPage extends ConsumerWidget {
                         ),
                       ),
                     ],
-                    background: _kPastelRose,
-                    borderColor: _kInkRose.withValues(alpha: 0.35),
                   ),
               ],
             ),
@@ -348,17 +331,11 @@ class OrderDetailPage extends ConsumerWidget {
                   },
                 ),
               ListTile(
-                leading: const Icon(Icons.edit_document),
                 title: const Text('Modificar Pedido Completo'),
                 onTap: () {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Función de edición completa no implementada.',
-                      ),
-                    ),
-                  );
+                  // Navega a la ruta de edición con el ID
+                  context.push('/order/${order.id}/edit');
                 },
               ),
             ],
@@ -418,35 +395,37 @@ class OrderDetailPage extends ConsumerWidget {
 
   // ====== Helpers de UI ======
   Widget _buildInfoCard({
-    required String title,
+    String? title,
     required List<Widget> children,
-    Color? background,
+    Color? backgroundColor,
     Color? borderColor,
   }) {
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 16),
-      color: background ?? Colors.white,
-      surfaceTintColor: Colors.transparent, // mantiene el pastel limpio (M3)
+      color: backgroundColor ?? Colors.white,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
-        side: BorderSide(color: (borderColor ?? Colors.black12), width: 1.2),
+        side: BorderSide(color: borderColor ?? Colors.black12, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: darkBrown,
+          if (title != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: darkBrown,
+                ),
               ),
             ),
-          ),
-          const Divider(indent: 16, endIndent: 16, thickness: 0.5, height: 1),
+          if (title != null)
+            const Divider(indent: 16, endIndent: 16, thickness: 0.5, height: 1),
           ...children,
         ],
       ),

@@ -92,7 +92,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 labelText: 'Email',
                 labelStyle: TextStyle(color: lightBrownText),
                 filled: true,
-                fillColor: primaryPink.withOpacity(0.1),
+                fillColor: primaryPink.withAlpha(26),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide
@@ -105,7 +105,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: primaryPink.withOpacity(0.3),
+                    color: primaryPink.withAlpha(77),
                   ), // Borde más claro
                 ),
               ),
@@ -121,7 +121,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 labelText: 'Contraseña',
                 labelStyle: TextStyle(color: lightBrownText),
                 filled: true,
-                fillColor: primaryPink.withOpacity(0.1),
+                fillColor: primaryPink.withAlpha(26),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none, // Borde más sutil
@@ -132,7 +132,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: primaryPink.withOpacity(0.3)),
+                  borderSide: BorderSide(color: primaryPink.withAlpha(77)),
                 ),
               ),
               obscureText: true,

@@ -25,18 +25,23 @@ class OrdersRepository {
       queryParameters: {'from': fromStr, 'to': toStr},
     );
 
-    final body = res.data;
-    List<dynamic> rows;
-
-    if (body is Map && body.containsKey('data') && body['data'] is List) {
-      rows = body['data'];
-    } else if (body is List) {
-      rows = body;
-    } else {
-      rows = const [];
+    // --- LÓGICA SIMPLIFICADA PARA PAGINACIÓN ---
+    final data = res.data;
+    if (data is Map<String, dynamic> && data.containsKey('data')) {
+      final List<dynamic> orderList = data['data'];
+      return orderList
+          .map((j) => Order.fromJson(j as Map<String, dynamic>))
+          .toList();
     }
 
-    return rows.map((j) => Order.fromJson(j as Map<String, dynamic>)).toList();
+    // Fallback si la respuesta no es paginada (aunque no debería pasar)
+    if (data is List<dynamic>) {
+      return data
+          .map((j) => Order.fromJson(j as Map<String, dynamic>))
+          .toList();
+    }
+
+    return []; // Devuelve una lista vacía si el formato es inesperado
   }
 
   Future<Order> getOrderById(int id) async {
@@ -74,7 +79,6 @@ class OrdersRepository {
     }
   }
 
-  /// Actualiza el estado de un pedido.
   Future<Order?> updateStatus(int orderId, String status) async {
     try {
       final response = await _dio.patch(
@@ -88,7 +92,6 @@ class OrdersRepository {
     }
   }
 
-  /// Marca un pedido como totalmente pagado.
   Future<Order?> markAsPaid(int orderId) async {
     try {
       final response = await _dio.patch(
