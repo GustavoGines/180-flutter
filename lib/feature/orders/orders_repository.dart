@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart'; // <-- LÍNEA AÑADIDA
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/models/order.dart';
@@ -70,6 +70,34 @@ class OrdersRepository {
       return response.data['url'] as String?;
     } catch (e) {
       print('Error al subir la imagen: $e');
+      return null;
+    }
+  }
+
+  /// Actualiza el estado de un pedido.
+  Future<Order?> updateStatus(int orderId, String status) async {
+    try {
+      final response = await _dio.patch(
+        '/orders/$orderId/status',
+        data: {'status': status},
+      );
+      return Order.fromJson(response.data);
+    } catch (e) {
+      print('Error al actualizar estado: $e');
+      return null;
+    }
+  }
+
+  /// Marca un pedido como totalmente pagado.
+  Future<Order?> markAsPaid(int orderId) async {
+    try {
+      final response = await _dio.patch(
+        '/orders/$orderId/status',
+        data: {'is_fully_paid': true},
+      );
+      return Order.fromJson(response.data);
+    } catch (e) {
+      print('Error al marcar como pagado: $e');
       return null;
     }
   }

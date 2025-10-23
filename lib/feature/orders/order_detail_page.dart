@@ -1,9 +1,11 @@
+// lib/feature/orders/order_detail_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/models/order.dart'; // Asegúrate que la ruta a tu modelo sea correcta
-import 'orders_repository.dart'; // Asegúrate que la ruta a tu repositorio sea correcta
+import '../../core/models/order.dart';
+import '../auth/auth_state.dart';
+import 'orders_repository.dart';
 
 // Provider que busca un solo pedido por su ID
 final orderByIdProvider = FutureProvider.autoDispose.family<Order, int>((
@@ -18,26 +20,73 @@ class OrderDetailPage extends ConsumerWidget {
   final int orderId;
   const OrderDetailPage({super.key, required this.orderId});
 
-  // Paleta de colores de la app
-  static const Color primaryPink = Color(0xFFF9C0C0);
+  // ======= Paleta Pastel =======
+  static const _kPastelRose = Color(
+    0xFFFFE3E8,
+  ); // rosa pastel (para todas las cards)
+  static const _kPastelLavender = Color(
+    0xFFEDE7FF,
+  ); // lila pastel (solo Modelos)
+  static const _kInkRose = Color(0xFFF3A9B9);
+  static const _kInkLavender = Color(0xFFB4A6FF);
+  static const _kInkBabyBlue = Color(0xFF8CC5F5);
+  static const _kInkMint = Color(0xFF83D1B9);
+  static const _kInkSand = Color(0xFFC9B99A);
+
+  // Traducciones visibles
+  static const Map<String, String> statusTranslations = {
+    'confirmed': 'Confirmado',
+    'ready': 'Listo',
+    'delivered': 'Entregado',
+    'canceled': 'Cancelado',
+  };
+
+  // Fondo pastel por estado (igual que en Home)
+  static const Map<String, Color> _statusPastelBg = {
+    'confirmed': Color(0xFFD8F6EC), // menta pastel
+    'ready': Color(0xFFFFE6EF), // rosa pastel
+    'delivered': Color(0xFFDFF1FF), // celeste pastel
+    'canceled': Color(0xFFFFE0E0), // rojo pastel suave
+  };
+
+  // Acento/borde por estado (para el chip de Estado)
+  static const Map<String, Color> _statusInk = {
+    'confirmed': _kInkMint,
+    'ready': _kInkRose,
+    'delivered': _kInkBabyBlue,
+    'canceled': Color(0xFFE57373), // rojo pastel suave
+  };
+
+  // Color de acento general para títulos/íconos secundarios
   static const Color darkBrown = Color(0xFF7A4A4A);
-  static const Color lightBrownText = Color(0xFFA57D7D);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final orderAsyncValue = ref.watch(orderByIdProvider(orderId));
 
     return Scaffold(
-      backgroundColor: Colors
-          .grey[50], // Un fondo ligeramente gris para que las tarjetas resalten
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           'Detalle del Pedido',
-          style: const TextStyle(color: darkBrown),
+          style: TextStyle(color: darkBrown),
         ),
         backgroundColor: Colors.white,
         elevation: 1,
         iconTheme: const IconThemeData(color: darkBrown),
+      ),
+      // FAB solo para admin/staff
+      floatingActionButton: orderAsyncValue.whenOrNull(
+        data: (order) {
+          final userRole = ref.watch(authStateProvider).user?.role;
+          if (userRole == 'admin' || userRole == 'staff') {
+            return FloatingActionButton(
+              child: const Icon(Icons.edit_note),
+              onPressed: () => _showActionsModal(context, ref, order),
+            );
+          }
+          return null;
+        },
       ),
       body: orderAsyncValue.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -51,28 +100,30 @@ class OrderDetailPage extends ConsumerWidget {
           ),
         ),
         data: (order) {
-          // --- Preparación de Datos ---
           final total = order.total ?? 0.0;
           final deposit = order.deposit ?? 0.0;
           final balance = total - deposit;
           final currencyFormat = NumberFormat("'\$' #,##0.00", 'es_AR');
 
-          // Asumimos que los detalles especiales están en el primer item.
           final firstItem = order.items.isNotEmpty ? order.items.first : null;
-
-          // --- CAMBIO CLAVE: Leemos 'photo_urls' (plural) ---
           final photoUrls =
               (firstItem?.customizationJson?['photo_urls'] as List<dynamic>?);
+          final fillings =
+              (firstItem?.customizationJson?['fillings'] as List<dynamic>?)
+                  ?.join(', ');
 
-          final fillingsList =
-              firstItem?.customizationJson?['fillings'] as List<dynamic>?;
-          final fillings = fillingsList?.join(', ');
+          // Color de tinta según estado (para el chip)
+          final ink = _statusInk[order.status] ?? _kInkSand;
+          final bg =
+              _statusPastelBg[order.status] ??
+              _kPastelRose; // 👈 fondo según estado
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ====== Card 1: Evento y Cliente (Rosa pastel) ======
                 _buildInfoCard(
                   title: 'Evento y Cliente',
                   children: [
@@ -95,30 +146,46 @@ class OrderDetailPage extends ConsumerWidget {
                       '${DateFormat.Hm().format(order.startTime)} - ${DateFormat.Hm().format(order.endTime)}',
                     ),
                     ListTile(
-                      leading: const Icon(Icons.flag, color: darkBrown),
+                      leading: Icon(Icons.flag, color: ink, size: 28),
                       title: const Text(
                         'Estado',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      trailing: Chip(
-                        label: Text(
-                          order.status.toUpperCase(),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
                         ),
-                        backgroundColor: _getStatusColor(order.status),
-                        labelStyle: const TextStyle(color: Colors.white),
+                        decoration: BoxDecoration(
+                          color: ink.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(99),
+                          border: Border.all(
+                            color: ink.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Text(
+                          (statusTranslations[order.status] ?? order.status)
+                              .toUpperCase(),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: .3,
+                            color: ink.withValues(alpha: 0.95),
+                          ),
+                        ),
                       ),
                     ),
                   ],
+                  background: bg, // 👈 fondo por estado
+                  borderColor: ink.withValues(alpha: 0.35),
                 ),
 
-                // --- CAMBIO CLAVE: Tarjeta de Galería de Fotos ---
+                // ====== Card 2: Modelos de Torta (Lila pastel) ======
                 if (photoUrls != null && photoUrls.isNotEmpty)
                   _buildInfoCard(
                     title: 'Modelos de Torta',
                     children: [
                       SizedBox(
-                        height: 250, // Altura fija para la galería horizontal
+                        height: 250,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(
@@ -134,24 +201,22 @@ class OrderDetailPage extends ConsumerWidget {
                                 borderRadius: BorderRadius.circular(12.0),
                                 child: Image.network(
                                   url,
-                                  width: 250, // Ancho fijo para cada imagen
+                                  width: 250,
                                   fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, progress) {
-                                    return progress == null
-                                        ? child
-                                        : const Center(
-                                            child: CircularProgressIndicator(),
-                                          );
-                                  },
-                                  errorBuilder: (context, error, stack) {
-                                    return const Center(
-                                      child: Icon(
-                                        Icons.broken_image,
-                                        size: 50,
-                                        color: Colors.grey,
+                                  loadingBuilder: (context, child, progress) =>
+                                      progress == null
+                                      ? child
+                                      : const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                  errorBuilder: (context, error, stack) =>
+                                      const Center(
+                                        child: Icon(
+                                          Icons.broken_image,
+                                          size: 50,
+                                          color: Colors.grey,
+                                        ),
                                       ),
-                                    );
-                                  },
                                 ),
                               ),
                             );
@@ -159,8 +224,11 @@ class OrderDetailPage extends ConsumerWidget {
                         ),
                       ),
                     ],
+                    background: _kPastelLavender,
+                    borderColor: _kInkLavender.withValues(alpha: 0.35),
                   ),
 
+                // ====== Card 3: Detalles del Producto (Rosa pastel) ======
                 if (firstItem != null)
                   _buildInfoCard(
                     title: 'Detalles del Producto',
@@ -173,8 +241,11 @@ class OrderDetailPage extends ConsumerWidget {
                       if (fillings != null && fillings.isNotEmpty)
                         _buildInfoTile(Icons.layers, 'Rellenos', fillings),
                     ],
+                    background: _kPastelRose,
+                    borderColor: _kInkRose.withValues(alpha: 0.35),
                   ),
 
+                // ====== Card 4: Información Financiera (Rosa pastel) ======
                 _buildInfoCard(
                   title: 'Información Financiera',
                   children: [
@@ -212,8 +283,11 @@ class OrderDetailPage extends ConsumerWidget {
                       ),
                     ),
                   ],
+                  background: _kPastelRose,
+                  borderColor: _kInkRose.withValues(alpha: 0.35),
                 ),
 
+                // ====== Card 5: Notas (Rosa pastel) ======
                 if (order.notes != null && order.notes!.isNotEmpty)
                   _buildInfoCard(
                     title: 'Notas Adicionales',
@@ -229,6 +303,8 @@ class OrderDetailPage extends ConsumerWidget {
                         ),
                       ),
                     ],
+                    background: _kPastelRose,
+                    borderColor: _kInkRose.withValues(alpha: 0.35),
                   ),
               ],
             ),
@@ -238,15 +314,124 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // Widget helper para crear las tarjetas
+  // ====== Acciones ======
+  void _showActionsModal(BuildContext context, WidgetRef ref, Order order) {
+    final isPaid =
+        order.total != null &&
+        order.deposit != null &&
+        order.deposit! >= order.total!;
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.flag_circle_outlined),
+                title: const Text('Cambiar Estado'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showStatusDialog(context, ref, order);
+                },
+              ),
+              if (!isPaid)
+                ListTile(
+                  leading: const Icon(Icons.price_check, color: Colors.green),
+                  title: const Text(
+                    'Marcar como Pagado',
+                    style: TextStyle(color: Colors.green),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await ref.read(ordersRepoProvider).markAsPaid(order.id);
+                    ref.invalidate(orderByIdProvider(order.id));
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.edit_document),
+                title: const Text('Modificar Pedido Completo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Función de edición completa no implementada.',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showStatusDialog(BuildContext context, WidgetRef ref, Order order) {
+    String selectedStatus = order.status;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Cambiar Estado del Pedido'),
+              content: DropdownButton<String>(
+                value: selectedStatus,
+                isExpanded: true,
+                items: statusTranslations.keys.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(statusTranslations[value]!),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setDialogState(() => selectedStatus = newValue);
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  child: const Text('Guardar'),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await ref
+                        .read(ordersRepoProvider)
+                        .updateStatus(order.id, selectedStatus);
+                    ref.invalidate(orderByIdProvider(order.id));
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ====== Helpers de UI ======
   Widget _buildInfoCard({
     required String title,
     required List<Widget> children,
+    Color? background,
+    Color? borderColor,
   }) {
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      color: background ?? Colors.white,
+      surfaceTintColor: Colors.transparent, // mantiene el pastel limpio (M3)
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+        side: BorderSide(color: (borderColor ?? Colors.black12), width: 1.2),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -261,34 +446,18 @@ class OrderDetailPage extends ConsumerWidget {
               ),
             ),
           ),
-          const Divider(indent: 16, endIndent: 16, thickness: 0.5),
+          const Divider(indent: 16, endIndent: 16, thickness: 0.5, height: 1),
           ...children,
         ],
       ),
     );
   }
 
-  // Widget helper para crear las filas de información
   Widget _buildInfoTile(IconData icon, String title, String subtitle) {
     return ListTile(
       leading: Icon(icon, color: darkBrown, size: 28),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 16)),
     );
-  }
-
-  // Helper para dar color al estado
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'confirmed':
-        return Colors.green.shade600;
-      case 'delivered':
-        return Colors.blue.shade600;
-      case 'canceled':
-        return Colors.red.shade600;
-      case 'draft':
-      default:
-        return Colors.orange.shade600;
-    }
   }
 }
