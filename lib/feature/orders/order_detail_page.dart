@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:go_router/go_router.dart'; // Añadido para la navegación
+import 'package:go_router/go_router.dart';
+import 'package:pasteleria_180_flutter/feature/orders/home_page.dart';
 
 import '../../core/models/order.dart';
 import '../auth/auth_state.dart';
@@ -338,6 +339,22 @@ class OrderDetailPage extends ConsumerWidget {
                   context.push('/order/${order.id}/edit');
                 },
               ),
+
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  'Eliminar Pedido',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(context); // Cierra el modal de acciones
+                  _showDeleteConfirmationDialog(
+                    context,
+                    ref,
+                    order,
+                  ); // Abre el diálogo de confirmación
+                },
+              ),
             ],
           ),
         );
@@ -388,6 +405,63 @@ class OrderDetailPage extends ConsumerWidget {
               ],
             );
           },
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirmationDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Order order,
+  ) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Confirmar Eliminación'),
+          content: const Text(
+            '¿Estás seguro de que quieres eliminar este pedido de forma permanente? Esta acción no se puede deshacer.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancelar'),
+              onPressed: () {
+                Navigator.of(context).pop(); // Cierra el diálogo
+              },
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.warning_amber),
+              label: const Text('Eliminar'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+              ),
+              onPressed: () async {
+                // Llama al repositorio para borrar el pedido
+                await ref.read(ordersRepoProvider).deleteOrder(order.id);
+
+                if (context.mounted) {
+                  Navigator.of(
+                    context,
+                  ).pop(); // Cierra el diálogo de confirmación
+
+                  // Muestra un mensaje de éxito
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Pedido eliminado con éxito.'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+
+                  // Invalida la lista de pedidos para que se refresque
+                  ref.invalidate(ordersByFilterProvider);
+
+                  // Vuelve a la página principal
+                  context.go('/');
+                }
+              },
+            ),
+          ],
         );
       },
     );

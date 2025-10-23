@@ -21,8 +21,21 @@ final ordersByFilterProvider = FutureProvider.family
 
       switch (filter) {
         case DateFilter.today:
-          from = DateTime(now.year, now.month, now.day);
-          to = from.add(const Duration(days: 1));
+          from = now;
+          // Hasta el final del día de mañana
+          final tomorrow = DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).add(const Duration(days: 1));
+          to = DateTime(
+            tomorrow.year,
+            tomorrow.month,
+            tomorrow.day,
+            23,
+            59,
+            59,
+          );
           break;
         case DateFilter.week:
           final weekStart = now.subtract(Duration(days: now.weekday - 1));
@@ -130,7 +143,7 @@ class HomePage extends ConsumerWidget {
           ],
           bottom: const TabBar(
             tabs: [
-              Tab(text: 'Hoy', icon: Icon(Icons.today)),
+              Tab(text: 'Próximos', icon: Icon(Icons.star_border_outlined)),
               Tab(text: 'Semana', icon: Icon(Icons.calendar_view_week)),
               Tab(text: 'Mes', icon: Icon(Icons.calendar_month)),
             ],
@@ -152,7 +165,7 @@ class HomePage extends ConsumerWidget {
   }
 }
 
-// --- OrderListView (igual) ---
+// --- OrderListView  ---
 
 class OrderListView extends ConsumerWidget {
   final DateFilter filter;
@@ -176,17 +189,100 @@ class OrderListView extends ConsumerWidget {
           );
         }
         return RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(ordersByFilterProvider(filter));
-            await ref.read(ordersByFilterProvider(filter).future);
-          },
+          // CORRECCIÓN MENOR: Usamos ref.refresh que es más simple
+          onRefresh: () => ref.refresh(ordersByFilterProvider(filter).future),
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.only(bottom: 80, top: 8),
             itemCount: orders.length,
             itemBuilder: (context, index) {
+              // Prevenimos un error si la lista cambia mientras se construye
+              if (index >= orders.length) return const SizedBox.shrink();
               final order = orders[index];
-              return OrderCard(order: order, filter: filter);
+
+              return Dismissible(
+                key: ValueKey(order.id),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  color: Colors.red.shade700,
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        'ELIMINAR',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.delete_forever, color: Colors.white),
+                    ],
+                  ),
+                ),
+
+                // --- LÓGICA DE BORRADO CORREGIDA Y MÁS ROBUSTA ---
+                confirmDismiss: (direction) async {
+                  final bool? didConfirm = await showDialog<bool>(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text('Confirmar Eliminación'),
+                        content: const Text(
+                          '¿Estás seguro de que quieres eliminar este pedido?',
+                        ),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text('Cancelar'),
+                          ),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.red.shade700,
+                            ),
+                            onPressed: () => Navigator.of(context).pop(true),
+                            child: const Text('Eliminar'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (didConfirm == true) {
+                    try {
+                      // Hacemos la llamada a la API y esperamos el resultado
+                      await ref.read(ordersRepoProvider).deleteOrder(order.id);
+                      // Si la API responde bien, invalidamos el provider para refrescar la lista
+                      ref.invalidate(ordersByFilterProvider(filter));
+                      // Y mostramos el mensaje de éxito
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Pedido #${order.id} eliminado.'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      // Devolvemos true para que la animación de Dismissible se complete
+                      return true;
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error al eliminar: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      // Si la API falla, devolvemos false para que el ítem vuelva a su lugar
+                      return false;
+                    }
+                  }
+                  // Si el usuario canceló, el ítem vuelve a su lugar
+                  return false;
+                },
+
+                // onDismissed ya no es necesario aquí
+                child: OrderCard(order: order, filter: filter),
+              );
             },
           ),
         );
