@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1060028047975",
+    "project_id": "pasteleria180-2025",
+    "storage_bucket": "pasteleria180-2025.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1060028047975:android:30b282c9f39facb46aeac2",
+        "android_client_info": {
+          "package_name": "com.one80.pasteleria.pasteleria_180_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_X0ziKaVTFfcrx2MsNRMZfP04eMWi3js"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1060028047975:android:8a3b5522dab182726aeac2",
+        "android_client_info": {
+          "package_name": "com.one80.pasteleria.pasteleria_180_flutter.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_X0ziKaVTFfcrx2MsNRMZfP04eMWi3js"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

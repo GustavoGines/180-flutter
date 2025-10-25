@@ -47,7 +47,7 @@ class AuthRepository {
       await _dio.post('/logout');
     } catch (e) {
       // Incluso si la API falla, deslogueamos localmente
-      print('API logout call failed, logging out locally anyway: $e');
+      debugPrint('API logout call failed, logging out locally anyway: $e');
     } finally {
       // Siempre borra el token del almacenamiento seguro
       await _storage.delete(key: 'auth_token');
@@ -73,7 +73,7 @@ class AuthRepository {
     } on DioException catch (e) {
       // Imprimimos el error para depuración
       if (kDebugMode) {
-        print('Error en forgotPassword: $e');
+        debugPrint('Error en forgotPassword: $e');
       }
       return false;
     }
@@ -101,7 +101,7 @@ class AuthRepository {
       return response.statusCode == 200;
     } on DioException catch (e) {
       // Imprime el error para depuración (ej. token inválido, contraseña corta, etc.)
-      print('Error en resetPassword: $e');
+      debugPrint('Error en resetPassword: $e');
       return false;
     }
   }

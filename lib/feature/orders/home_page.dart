@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:pasteleria_180_flutter/core/app_distribution.dart';
+import 'dart:io' show Platform;
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pasteleria_180_flutter/core/config.dart' show kFlavor;
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../auth/auth_state.dart';
 import '../../core/models/order.dart';
@@ -84,84 +90,414 @@ final ordersByFilterProvider = FutureProvider.family
 
 // --- UI Home (igual) ---
 
-class HomePage extends ConsumerWidget {
+// 1. La clase principal ahora es un ConsumerStatefulWidget
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+// 2. Toda la lógica y el `build` method van dentro de la clase _HomePageState
+class _HomePageState extends ConsumerState<HomePage>
+    with TickerProviderStateMixin {
+  late final TabController _tabController;
+
+  String _versionName = '';
+  String _buildNumber = '';
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() {
+      _versionName = info.version; // p.ej. 1.0.3
+      _buildNumber = info.buildNumber; // p.ej. 4
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadVersion(); // 👈 carga versión
+    // Lanza el chequeo cuando el árbol ya montó (evita race conditions con el plugin nativo)
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _autoCheckForUpdateIfEnabled(),
+    );
+  }
+
+  Future<void> _checkForUpdate({bool interactive = false}) async {
+    // Solo Android + dev
+    if (!Platform.isAndroid || kFlavor != 'dev') return;
+
+    // Si es interactivo, mostramos tu explainer (una vez)
+    if (interactive) {
+      final proceed = await _maybeShowTesterExplainerOnce();
+      if (!proceed) return;
+    }
+
+    // Pedir permiso de notificaciones solo en modo interactivo
+    if (interactive) {
+      final current = await Permission.notification.status;
+      if (current.isDenied || current.isRestricted) {
+        final granted = await Permission.notification.request();
+        if (!granted.isGranted) {
+          if (!mounted) return;
+          await _showResultSheet(
+            icon: Icons.notifications_off_outlined,
+            title: 'Notificaciones desactivadas',
+            message:
+                'Activá las notificaciones para recibir avisos de actualización.',
+          );
+          return;
+        }
+      }
+      if (await Permission.notification.isPermanentlyDenied) {
+        if (!mounted) return;
+        await _showResultSheet(
+          icon: Icons.notifications_off_outlined,
+          title: 'Permiso bloqueado',
+          message: 'Abrí Ajustes y activá las notificaciones para esta app.',
+        );
+        return;
+      }
+    }
+
+    // Si es interactivo: mostrar loader bonito
+    VoidCallback? close;
+    if (interactive) {
+      close = _showProgressSheet(message: 'Buscando actualización…');
+    }
+
+    try {
+      final hasUpdate = await checkTesterUpdate();
+
+      // Cerrar loader si estaba abierto
+      if (interactive && close != null) close();
+
+      if (!mounted) return;
+
+      if (hasUpdate) {
+        // El SDK inicia su flujo. Solo damos feedback en modo interactivo.
+        if (interactive) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Nueva versión encontrada. Iniciando actualización…',
+              ),
+            ),
+          );
+        }
+      } else {
+        if (interactive) {
+          await _showResultSheet(
+            icon: Icons.check_circle_outline,
+            title: 'Estás al día',
+            message: 'No hay actualizaciones disponibles por ahora.',
+          );
+        }
+      }
+    } catch (e) {
+      if (interactive && close != null) close();
+      if (interactive && mounted) {
+        await _showResultSheet(
+          icon: Icons.error_outline,
+          title: 'No pudimos buscar',
+          message: 'Reintentá en unos minutos.\nDetalle: $e',
+        );
+      }
+    }
+  }
+
+  /// Muestra un diálogo explicativo SOLO la primera vez.
+  /// Devuelve true si el usuario toca "Continuar".
+  Future<bool> _maybeShowTesterExplainerOnce() async {
+    final prefs = await SharedPreferences.getInstance();
+    const key = 'fad_explainer_shown';
+    final alreadyShown = prefs.getBool(key) ?? false;
+    if (alreadyShown && mounted) return true; // ya lo vio: seguimos directo
+
+    if (!mounted) return false;
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Habilitar alertas de pruebas'),
+        content: const Text(
+          'Para avisarte cuando haya una nueva versión de la app, '
+          'necesitamos habilitar las alertas de pruebas UNA sola vez. '
+          'Se te pedirá iniciar sesión con tu cuenta de Google '
+          'y aceptar notificaciones.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Ahora no'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Continuar'),
+          ),
+        ],
+      ),
+    );
+
+    // Marcamos como mostrado solo si aceptó continuar
+    if (ok == true) {
+      await prefs.setBool(key, true);
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
 
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Resumen de Pedidos'),
-          actions: [
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'clients':
-                    context.push('/clients');
-                    break;
-                  case 'create_user':
-                    context.push('/create_user');
-                    break;
-                  case 'logout':
-                    ref.read(authStateProvider.notifier).logout();
-                    break;
-                }
-              },
-              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+    // 3. Ya no necesitamos DefaultTabController porque lo manejamos manualmente
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Resumen de Pedidos'),
+        actions: [
+          _versionPillMenu(), // 👈 la pill moderna de versión
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              switch (value) {
+                case 'clients':
+                  context.push('/clients');
+                  break;
+                case 'create_user':
+                  context.push('/create_user');
+                  break;
+                case 'logout':
+                  ref.read(authStateProvider.notifier).logout();
+                  break;
+              }
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem(
+                value: 'clients',
+                child: ListTile(
+                  leading: Icon(Icons.people_outline),
+                  title: Text('Clientes'),
+                ),
+              ),
+              if (authState.user?.isAdmin ?? false)
                 const PopupMenuItem(
-                  value: 'clients',
+                  value: 'create_user',
                   child: ListTile(
-                    leading: Icon(Icons.people_outline),
-                    title: Text('Clientes'),
+                    leading: Icon(Icons.person_add_alt_1),
+                    title: Text('Crear Usuario'),
                   ),
                 ),
-                if (authState.user?.isAdmin ?? false)
-                  const PopupMenuItem(
-                    value: 'create_user',
-                    child: ListTile(
-                      leading: Icon(Icons.person_add_alt_1),
-                      title: Text('Crear Usuario'),
-                    ),
-                  ),
-                const PopupMenuDivider(),
-                const PopupMenuItem(
-                  value: 'logout',
-                  child: ListTile(
-                    leading: Icon(Icons.logout, color: Colors.red),
-                    title: Text(
-                      'Cerrar Sesión',
-                      style: TextStyle(color: Colors.red),
-                    ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: ListTile(
+                  leading: Icon(Icons.logout, color: Colors.red),
+                  title: Text(
+                    'Cerrar Sesión',
+                    style: TextStyle(color: Colors.red),
                   ),
                 ),
-              ],
-            ),
-          ],
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Próximos', icon: Icon(Icons.star_border_outlined)),
-              Tab(text: 'Semana', icon: Icon(Icons.calendar_view_week)),
-              Tab(text: 'Mes', icon: Icon(Icons.calendar_month)),
+              ),
             ],
           ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Próximos', icon: Icon(Icons.star_border_outlined)),
+            Tab(text: 'Semana', icon: Icon(Icons.calendar_view_week)),
+            Tab(text: 'Mes', icon: Icon(Icons.calendar_month)),
+          ],
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => context.push('/new_order'),
-          child: const Icon(Icons.add),
-        ),
-        body: const TabBarView(
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => context.push('/new_order'),
+        child: const Icon(Icons.add),
+      ),
+      body: TabBarView(
+        controller: _tabController, // Usa nuestro controlador
+        children: const [
+          OrderListView(filter: DateFilter.today),
+          OrderListView(filter: DateFilter.week),
+          OrderListView(filter: DateFilter.month),
+        ],
+      ),
+    );
+  }
+
+  VoidCallback _showProgressSheet({
+    String message = 'Buscando actualización...',
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            OrderListView(filter: DateFilter.today),
-            OrderListView(filter: DateFilter.week),
-            OrderListView(filter: DateFilter.month),
+            const SizedBox(height: 4),
+            const Icon(Icons.system_update_alt, size: 28),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            const LinearProgressIndicator(),
           ],
         ),
       ),
     );
+
+    // función para cerrar el sheet
+    return () {
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    };
+  }
+
+  Future<void> _showResultSheet({
+    required IconData icon,
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 28),
+            const SizedBox(height: 12),
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _versionPillMenu() {
+    return PopupMenuButton<String>(
+      tooltip: 'Versión',
+      onSelected: (value) async {
+        if (value == 'check_update') {
+          await _checkForUpdate(interactive: true);
+        }
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          enabled: false,
+          child: ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Versión instalada'),
+            subtitle: Text(
+              (_versionName.isEmpty && _buildNumber.isEmpty)
+                  ? '—'
+                  : _versionName,
+            ),
+          ),
+        ),
+        if (kFlavor == 'dev') const PopupMenuDivider(),
+        if (kFlavor == 'dev')
+          const PopupMenuItem<String>(
+            value: 'check_update',
+            child: ListTile(
+              leading: Icon(Icons.system_update_alt),
+              title: Text('Buscar actualización'),
+            ),
+          ),
+      ],
+      // Botón "moderno" como trigger del menú
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF4A4A4A), Color(0xFF6A6A6A)],
+          ),
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: const [
+            BoxShadow(
+              blurRadius: 8,
+              offset: Offset(0, 2),
+              color: Colors.black12,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.bolt_rounded, size: 16, color: Colors.white70),
+            const SizedBox(width: 6),
+            Text(
+              _versionName.isEmpty ? 'versión' : 'v$_versionName',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _autoCheckForUpdateIfEnabled() async {
+    if (!Platform.isAndroid || kFlavor != 'dev') return;
+
+    final prefs = await SharedPreferences.getInstance();
+    const key = 'fad_explainer_shown';
+    final enabled = prefs.getBool(key) ?? false;
+    if (!enabled) return; // aún no habilitó modo pruebas → no molestar
+
+    // Si no tiene permiso de notificaciones, no intentamos (evita prompts)
+    final granted = await Permission.notification.isGranted;
+    if (!granted) return;
+
+    try {
+      // Si hay update, el SDK muestra su UI. Si no hay, no muestra nada.
+      await checkTesterUpdate();
+    } catch (_) {
+      // silencioso: no mostramos nada en auto-check
+    }
   }
 }
 

@@ -27,39 +27,40 @@ class _LoadingPageState extends ConsumerState<LoadingPage> {
     // Aseguramos que el widget todavía esté "montado" antes de continuar
     if (!mounted) return;
 
-    print("--- Verificando sesión ---");
+    debugPrint("--- Verificando sesión ---");
     final authRepo = ref.read(authRepoProvider);
-    
+
     try {
       final token = await authRepo.getToken();
 
       if (token != null && token.isNotEmpty) {
-        print("✅ Token encontrado. Intentando obtener datos del usuario...");
-        
+        debugPrint(
+          "✅ Token encontrado. Intentando obtener datos del usuario...",
+        );
+
         // Si hay token, lo re-inicializamos en Dio para usarlo en la siguiente petición
         await authRepo.init();
-        
+
         // Pedimos los datos del usuario
         final user = await authRepo.me();
-        print("✅ Usuario '${user.name}' obtenido correctamente.");
-        
+        debugPrint("✅ Usuario '${user.name}' obtenido correctamente.");
+
         // Actualizamos el estado de la app
         ref.read(authStateProvider.notifier).setUser(user);
-        
-        // Navegamos al home
-        print("🚀 Navegando a la página principal...");
-        if (mounted) context.go('/');
 
+        // Navegamos al home
+        debugPrint("🚀 Navegando a la página principal...");
+        if (mounted) context.go('/');
       } else {
         // Si no hay token, vamos al login
-        print("❌ No se encontró token. Navegando al login...");
+        debugPrint("❌ No se encontró token. Navegando al login...");
         if (mounted) context.go('/login');
       }
     } catch (e) {
       // Si el token es inválido o la API falla, vamos al login
-      print("🚨 Error durante el auto-login: $e");
-      print("❌ Navegando al login...");
-      
+      debugPrint("🚨 Error durante el auto-login: $e");
+      debugPrint("❌ Navegando al login...");
+
       // Es buena práctica limpiar un token que ya no sirve
       await ref.read(authRepoProvider).logout();
 

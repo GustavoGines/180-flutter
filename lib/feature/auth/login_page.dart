@@ -15,6 +15,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _password = TextEditingController();
   bool _loading = false;
   String? _error;
+  bool _passwordVisible = false; // <-- 1. AÑADE LA VARIABLE DE ESTADO
 
   // Definir los colores basados en tu logo
   static const Color primaryPink = Color(0xFFF9C0C0); // Rosa claro del logo
@@ -27,6 +28,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   void initState() {
     super.initState();
     ref.read(authRepoProvider).init();
+    _passwordVisible =
+        false; // <-- 2. INICIALIZA (OPCIONAL PERO BUENA PRÁCTICA)
   }
 
   Future<void> _submit() async {
@@ -117,6 +120,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             // --- CAMPO CONTRASEÑA ---
             TextField(
               controller: _password,
+              obscureText:
+                  !_passwordVisible, // <-- 3. USA LA VARIABLE DE ESTADO
               decoration: InputDecoration(
                 labelText: 'Contraseña',
                 labelStyle: TextStyle(color: lightBrownText),
@@ -134,8 +139,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: primaryPink.withAlpha(77)),
                 ),
+                // --- 4. AÑADE EL ICONO SUFIJO ---
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    // Elige el icono basado en el estado
+                    _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                    color: lightBrownText,
+                  ),
+                  onPressed: () {
+                    // Actualiza el estado al ser presionado
+                    setState(() {
+                      _passwordVisible = !_passwordVisible;
+                    });
+                  },
+                ),
+                // --- FIN DEL CAMBIO ---
               ),
-              obscureText: true,
               style: const TextStyle(color: darkBrown),
             ),
             const SizedBox(height: 24),

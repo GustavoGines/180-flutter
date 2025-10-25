@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -74,7 +75,9 @@ class OrdersRepository {
       final response = await _dio.post('/orders/upload-photo', data: formData);
       return response.data['url'] as String?;
     } catch (e) {
-      print('Error al subir la imagen: $e');
+      if (kDebugMode) {
+        print('Error al subir la imagen: $e');
+      }
       return null;
     }
   }
@@ -87,7 +90,9 @@ class OrdersRepository {
       );
       return Order.fromJson(response.data);
     } catch (e) {
-      print('Error al actualizar estado: $e');
+      if (kDebugMode) {
+        print('Error al actualizar estado: $e');
+      }
       return null;
     }
   }
@@ -100,7 +105,9 @@ class OrdersRepository {
       );
       return Order.fromJson(response.data);
     } catch (e) {
-      print('Error al marcar como pagado: $e');
+      if (kDebugMode) {
+        print('Error al marcar como pagado: $e');
+      }
       return null;
     }
   }
