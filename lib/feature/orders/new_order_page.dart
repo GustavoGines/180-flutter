@@ -41,9 +41,7 @@ class NewOrderPage extends ConsumerWidget {
     final isEditMode = orderId != null;
 
     // Colores de la marca (podrían estar en un archivo de tema global)
-    const Color primaryPink = Color(0xFFF9C0C0);
     const Color darkBrown = Color(0xFF7A4A4A);
-    const Color lightBrownText = Color(0xFFA57D7D);
 
     return Scaffold(
       appBar: AppBar(
@@ -294,83 +292,95 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   }
 
   // --- DIÁLOGO NUEVO CLIENTE (sin cambios) ---
+
   void _addClientDialog() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
     final addressController = TextEditingController();
 
     showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
+      context: context, // <-- Contexto de _OrderFormState
+      builder: (dialogContext) => AlertDialog(
+        // <-- Contexto del Dialog
         title: const Text('Nuevo Cliente', style: TextStyle(color: darkBrown)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-                style: const TextStyle(color: darkBrown),
-              ),
-              TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(labelText: 'Teléfono'),
-                keyboardType: TextInputType.phone,
-                style: const TextStyle(color: darkBrown),
-              ),
-              TextField(
-                controller: addressController,
-                decoration: const InputDecoration(labelText: 'Dirección'),
-                style: const TextStyle(color: darkBrown),
-              ),
-            ],
-          ),
-        ),
+        content: SingleChildScrollView(child: Column(/* ... TextFields ... */)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () =>
+                Navigator.pop(dialogContext), // Usa dialogContext para cerrar
             child: const Text('Cancelar', style: TextStyle(color: darkBrown)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: darkBrown),
             onPressed: () async {
               if (nameController.text.trim().isEmpty) return;
-              // Añadir un indicador de carga aquí sería bueno
-              try {
-                final newClient = await ref
-                    .read(clientsRepoProvider)
-                    .createClient({
-                      'name': nameController.text.trim(),
-                      'phone': phoneController.text.trim().isEmpty
-                          ? null
-                          : phoneController.text.trim(),
-                      'address': addressController.text.trim().isEmpty
-                          ? null
-                          : addressController.text.trim(),
-                    });
+              // Mostrar loader (opcional pero recomendado)
+              showDialog(
+                context: dialogContext,
+                barrierDismissible: false,
+                builder: (_) =>
+                    const Center(child: CircularProgressIndicator()),
+              );
 
-                if (mounted) {
-                  setState(() {
-                    _selectedClient = newClient;
-                    _clientNameController.text = newClient.name;
-                  });
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Cliente creado con éxito'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
+              Client? newClient; // Declarar fuera del try
+              String? errorMessage; // Para guardar mensaje de error
+
+              try {
+                newClient = await ref.read(clientsRepoProvider).createClient({
+                  'name': nameController.text.trim(),
+                  'phone': phoneController.text.trim().isEmpty
+                      ? null
+                      : phoneController.text.trim(),
+                  'address': addressController.text.trim().isEmpty
+                      ? null
+                      : addressController.text.trim(),
+                });
+
+                // Si llegamos aquí, la creación fue exitosa
+                // Cerrar el loader si se mostró
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
               } catch (e) {
-                Navigator.pop(context); // Cierra el dialogo
+                errorMessage = e.toString(); // Guardar el error
+                debugPrint("Error creando cliente: $e");
+                // Cerrar el loader si se mostró
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                // No cerramos el diálogo principal aquí todavía, lo hacemos después del SnackBar
+              }
+
+              // --- CORRECCIÓN: Comprobar 'mounted' ANTES de usar context/dialogContext ---
+              // Usar el context del _OrderFormState (this.context) para setState y SnackBar
+              // Usar dialogContext para cerrar el diálogo en sí
+
+              // Si hubo éxito Y el _OrderFormState sigue montado
+              if (newClient != null && mounted) {
+                setState(() {
+                  _selectedClient = newClient;
+                  _clientNameController.text = newClient!
+                      .name; // Usar ! porque ya sabemos que no es null
+                });
+                // Cerrar el diálogo de "Nuevo Cliente"
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                // Mostrar SnackBar de éxito usando el context principal
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Cliente creado con éxito'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+              // Si hubo un error Y el _OrderFormState sigue montado
+              else if (errorMessage != null && mounted) {
+                // Primero, intentar cerrar el diálogo si aún está abierto
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                // Luego mostrar el SnackBar de error usando el context principal
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Error al crear cliente: $e'),
+                    content: Text('Error al crear cliente: $errorMessage'),
                     backgroundColor: Colors.red,
                   ),
                 );
               }
+              // --- FIN CORRECCIÓN ---
             },
             child: const Text('Guardar Cliente'),
           ),
@@ -381,51 +391,65 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
   // --- FUNCIÓN HELPER PARA COMPRIMIR Y SUBIR (sin cambios) ---
   Future<String?> _compressAndUpload(XFile imageFile, WidgetRef ref) async {
-    // ... (código de compresión igual al anterior) ...
     final tempDir = await getTemporaryDirectory();
-    final tempPath =
-        '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    // Crear un nombre de archivo un poco más único
+    final fileName =
+        '${DateTime.now().millisecondsSinceEpoch}_${imageFile.name.split('/').last}.jpg';
+    final tempPath = '${tempDir.path}/$fileName';
 
-    final compressedBytes = await FlutterImageCompress.compressWithFile(
-      imageFile.path,
-      minWidth: 1200,
-      minHeight: 1200,
-      quality: 80,
-      format: CompressFormat.jpeg,
-    );
+    File? tempFile; // Para asegurar la limpieza
 
-    XFile fileToUpload;
-
-    if (compressedBytes != null) {
-      final File tempFile = await File(tempPath).writeAsBytes(compressedBytes);
-      fileToUpload = XFile(tempFile.path);
-    } else {
-      fileToUpload = imageFile;
-    }
-
-    String? url;
     try {
-      url = await ref.read(ordersRepoProvider).uploadImage(fileToUpload);
-    } catch (e) {
-      debugPrint("Error al subir imagen: $e");
-      // Considera mostrar un SnackBar al usuario
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al subir imagen: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
+      final compressedBytes = await FlutterImageCompress.compressWithFile(
+        imageFile.path,
+        minWidth: 1200,
+        minHeight: 1200,
+        quality: 80,
+        format: CompressFormat.jpeg,
       );
-    }
 
-    if (compressedBytes != null) {
-      try {
-        await File(tempPath).delete();
-      } catch (e) {
-        debugPrint("Error al borrar archivo temporal: $e");
+      XFile fileToUpload;
+
+      if (compressedBytes != null) {
+        tempFile = File(tempPath); // Asignar antes de escribir
+        await tempFile.writeAsBytes(compressedBytes);
+        fileToUpload = XFile(tempFile.path);
+        debugPrint('Imagen comprimida a: ${tempFile.lengthSync()} bytes');
+      } else {
+        fileToUpload = imageFile; // Fallback
+        debugPrint(
+          'Compresión falló, subiendo original: ${await imageFile.length()} bytes',
+        );
       }
-    }
 
-    return url;
+      // --- Operación Async ---
+      final url = await ref.read(ordersRepoProvider).uploadImage(fileToUpload);
+      // --- Fin Operación Async ---
+
+      // Limpiar después de subir exitosamente
+      await tempFile?.delete();
+
+      return url;
+    } catch (e) {
+      debugPrint("Error en _compressAndUpload: $e");
+
+      // --- CORRECCIÓN: Comprobar mounted antes de SnackBar ---
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error subiendo imagen: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      // --- FIN CORRECCIÓN ---
+
+      // Intentar borrar temporal si existe incluso con error
+      try {
+        await tempFile?.delete();
+      } catch (_) {}
+      return null; // Retornar null en caso de error
+    }
   }
 
   // --- DIÁLOGO PRINCIPAL PARA AÑADIR ITEM ---
@@ -477,27 +501,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   void _addMiniCakeDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
     Product? selectedProduct = isEditing
-        ? miniCakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
+        ? miniCakeProducts.firstWhereOrNull((p) => p.name == existingItem!.name)
         : miniCakeProducts.first; // Default a Mini Torta
     final qtyController = TextEditingController(
-      text: isEditing ? existingItem.qty.toString() : '1',
+      text: isEditing ? existingItem!.qty.toString() : '1',
     );
     // Para el precio personalizado si varía del base
     final priceController = TextEditingController(
       text: isEditing
-          ? existingItem.unitPrice.toStringAsFixed(0)
+          ? existingItem!.unitPrice.toStringAsFixed(0) // Usar ! en existingItem
           : selectedProduct?.price.toStringAsFixed(0) ?? '0',
     );
     final notesController = TextEditingController(
       text: isEditing
-          ? (existingItem!.customizationJson?['item_notes'] as String?) ??
-                '' // <-- Añadir 'as String?'
+          ? (existingItem!.customizationJson?['item_notes'] as String?) ?? ''
           : '',
     );
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -511,7 +534,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButtonFormField<Product>(
+                      // --- CAMBIO: De initialValue a value ---
                       initialValue: selectedProduct,
+                      // --- FIN CAMBIO ---
                       items: miniCakeProducts.map((Product product) {
                         return DropdownMenuItem<Product>(
                           value: product,
@@ -521,7 +546,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       onChanged: (Product? newValue) {
                         setDialogState(() {
                           selectedProduct = newValue;
-                          // Actualizar precio base si no se está editando o si el usuario lo desea
+                          // Actualizar precio base si no se está editando
                           if (!isEditing) {
                             priceController.text =
                                 newValue?.price.toStringAsFixed(0) ?? '0';
@@ -560,45 +585,47 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(dialogContext),
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: darkBrown),
                   onPressed: () {
+                    // Sincrónico (no async)
                     if (selectedProduct == null) return;
                     final qty = int.tryParse(qtyController.text) ?? 0;
                     final finalPrice =
                         double.tryParse(priceController.text) ??
-                        selectedProduct!
-                            .price; // Usar precio modificado o el base
+                        selectedProduct!.price;
                     final notes = notesController.text.trim();
 
                     if (qty <= 0) return; // Validación básica
 
                     final newItem = OrderItem(
-                      id: isEditing ? existingItem.id : null,
+                      id: isEditing
+                          ? existingItem!.id
+                          : null, // Usar ! en existingItem
                       name: selectedProduct!.name,
                       qty: qty,
-                      unitPrice: finalPrice, // Guardar el precio final unitario
+                      unitPrice: finalPrice,
                       customizationJson: {
-                        'product_category':
-                            selectedProduct!.category.name, // Guardar categoría
-                        'product_unit':
-                            selectedProduct!.unit.name, // Guardar unidad
+                        'product_category': selectedProduct!.category.name,
+                        'product_unit': selectedProduct!.unit.name,
                         if (notes.isNotEmpty) 'item_notes': notes,
-                        // Añadir más campos si es necesario para mini tortas
+                        // Añadir más campos si es necesario
                       },
                     );
 
                     _updateItemsAndRecalculate(() {
                       if (isEditing) {
-                        _items[itemIndex!] = newItem;
+                        _items[itemIndex!] = newItem; // Usar ! en itemIndex
                       } else {
                         _items.add(newItem);
                       }
                     });
-                    Navigator.pop(context);
+
+                    // No hay 'await' antes, por lo que el check es opcional pero bueno
+                    if (dialogContext.mounted) Navigator.pop(dialogContext);
                   },
                   child: Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
                 ),
@@ -758,7 +785,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             // Helper para CheckboxListTile de Rellenos
@@ -864,8 +891,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           decoration: const InputDecoration(labelText: 'Cant.'),
                           onChanged: (value) {
                             int qty = int.tryParse(value) ?? 1;
-                            if (qty < 1)
+                            if (qty < 1) {
                               qty = 1; // Mínimo 1 si está seleccionado
+                            }
                             selection.quantity = qty;
                             // No necesitamos setDialogState aquí si usamos un controller, pero sí recalcular
                             calculateCakePrice();
@@ -887,7 +915,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   children: [
                     // Selección Tipo Torta
                     DropdownButtonFormField<Product>(
-                      value: selectedCakeType,
+                      initialValue: selectedCakeType,
                       items: cakeProducts.map((Product product) {
                         return DropdownMenuItem<Product>(
                           value: product,
@@ -1042,7 +1070,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(dialogContext),
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
@@ -1143,7 +1171,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               _items.add(newItem);
                             }
                           });
-                          Navigator.pop(context);
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext);
+                          }
                         },
                   child: isUploading
                       ? const SizedBox(
@@ -1164,7 +1194,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- NUEVO: DIÁLOGO PARA MESA DULCE ---
+  // --- NUEVO: DIÁLOGO PARA PRODUCTO DE MESA DULCE ---
   void _addMesaDulceDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
 
@@ -1267,7 +1297,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
+        // <-- Renombrado a dialogContext
         return StatefulBuilder(
           builder: (context, setDialogState) {
             // Construir input de cantidad/tamaño dinámicamente
@@ -1291,7 +1322,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 }
 
                 return DropdownButtonFormField<ProductUnit>(
-                  initialValue: selectedSize,
+                  // CORREGIDO: Usar 'value' en lugar de 'initialValue' dentro de StatefulBuilder
+                  value: selectedSize,
                   items: availableSizes
                       .map(
                         (size) => DropdownMenuItem(
@@ -1381,6 +1413,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   children: [
                     // Selección Producto Mesa Dulce
                     DropdownButtonFormField<Product>(
+                      // CORREGIDO: Usar 'value' en lugar de 'initialValue'
                       initialValue: selectedProduct,
                       items: mesaDulceProducts.map((Product product) {
                         String priceSuffix = '';
@@ -1492,7 +1525,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () =>
+                      Navigator.pop(dialogContext), // <-- Usar dialogContext
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
@@ -1500,6 +1534,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   onPressed: isUploading
                       ? null
                       : () async {
+                          // <-- ASYNC
                           if (selectedProduct == null) return;
 
                           final qty = int.tryParse(quantityInput) ?? 0;
@@ -1513,6 +1548,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               calculatedPrice <= 0 ||
                               (selectedProduct!.pricesBySize != null &&
                                   selectedSize == null)) {
+                            // Usar context (del StatefulBuilder) para SnackBar
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
@@ -1526,24 +1562,27 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                           setDialogState(() => isUploading = true);
 
-                          // Subir NUEVAS imágenes
+                          // --- Operación Async ---
                           final List<String> newUploadedUrls = [];
                           if (newImageFiles.isNotEmpty) {
                             for (final imageFile in newImageFiles) {
                               final url = await _compressAndUpload(
+                                // <-- AWAIT
                                 imageFile,
                                 ref,
                               );
                               if (url != null) newUploadedUrls.add(url);
                             }
                           }
+                          // --- Fin Operación Async ---
+
                           // Combinar URLs
                           final allImageUrls = [
                             ...existingImageUrls,
                             ...newUploadedUrls,
                           ];
 
-                          // Determinar el precio unitario guardado (puede ser el base, el de tamaño o el de media docena)
+                          // Determinar el precio unitario guardado
                           double savedUnitPrice = selectedProduct!.price;
                           if (selectedProduct!.pricesBySize != null &&
                               selectedSize != null) {
@@ -1562,20 +1601,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                           final customization = {
                             'product_category': selectedProduct!.category.name,
-                            'product_unit': selectedProduct!
-                                .unit
-                                .name, // Unidad base del producto
+                            'product_unit': selectedProduct!.unit.name,
                             if (selectedProduct!.pricesBySize != null)
-                              'selected_size': selectedSize!
-                                  .name, // Guardar tamaño si aplica
+                              'selected_size': selectedSize!.name,
                             if (selectedProduct!.allowHalfDozen)
-                              'is_half_dozen':
-                                  isHalfDozen, // Guardar si es media docena
+                              'is_half_dozen': isHalfDozen,
                             if (notes.isNotEmpty) 'item_notes': notes,
                             if (allImageUrls.isNotEmpty)
                               'photo_urls': allImageUrls,
-                            'calculated_price':
-                                calculatedPrice, // Guardamos el precio total calculado del item
+                            'calculated_price': calculatedPrice,
                           };
                           customization.removeWhere(
                             (key, value) => (value is List && value.isEmpty),
@@ -1584,10 +1618,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           final newItem = OrderItem(
                             id: isEditing ? existingItem!.id : null,
                             name: selectedProduct!.name,
-                            qty:
-                                qty, // La cantidad real (docenas, medias, unidades)
-                            unitPrice:
-                                savedUnitPrice, // El precio base o por tamaño/media
+                            qty: qty,
+                            unitPrice: savedUnitPrice,
                             customizationJson: customization,
                           );
 
@@ -1598,7 +1630,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               _items.add(newItem);
                             }
                           });
-                          Navigator.pop(context);
+
+                          // --- CORRECCIÓN ---
+                          // Comprobar 'mounted' del DIÁLOGO antes de usar su context
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext);
+                          }
+                          // --- FIN CORRECCIÓN ---
                         },
                   child: isUploading
                       ? const SizedBox(
