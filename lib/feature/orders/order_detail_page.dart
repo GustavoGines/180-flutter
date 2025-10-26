@@ -942,7 +942,7 @@ class OrderDetailPage extends ConsumerWidget {
                                 ),
                               );
                               ref.invalidate(
-                                ordersByFilterProvider,
+                                ordersWindowProvider,
                               ); // Invalida la lista
                               context.go('/'); // Vuelve a la página principal
                             }

@@ -1841,7 +1841,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           // Invalidar caché para refrescar vistas
           ref.invalidate(orderByIdProvider(widget.order!.id));
           ref.invalidate(
-            ordersByFilterProvider,
+            ordersWindowProvider,
           ); // Asume que este provider existe
           context.pop(); // Volver a la pantalla anterior
         }
@@ -1855,7 +1855,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             ),
           );
           ref.invalidate(
-            ordersByFilterProvider,
+            ordersWindowProvider,
           ); // Asume que este provider existe
           context.pop(); // Volver a la pantalla anterior
         }
