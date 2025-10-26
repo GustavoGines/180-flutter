@@ -19,7 +19,7 @@ final goRouterNotifierProvider = Provider((ref) => GoRouterNotifier(ref));
 class GoRouterNotifier extends ChangeNotifier {
   final Ref _ref;
   GoRouterNotifier(this._ref) {
-    _ref.listen<AuthState>(authStateProvider, (_, __) => notifyListeners());
+    _ref.listen<AuthState>(authStateProvider, (_, _) => notifyListeners());
   }
 }
 

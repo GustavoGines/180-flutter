@@ -501,20 +501,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   void _addMiniCakeDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
     Product? selectedProduct = isEditing
-        ? miniCakeProducts.firstWhereOrNull((p) => p.name == existingItem!.name)
+        ? miniCakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : miniCakeProducts.first; // Default a Mini Torta
     final qtyController = TextEditingController(
-      text: isEditing ? existingItem!.qty.toString() : '1',
+      text: isEditing ? existingItem.qty.toString() : '1',
     );
     // Para el precio personalizado si varía del base
     final priceController = TextEditingController(
       text: isEditing
-          ? existingItem!.unitPrice.toStringAsFixed(0) // Usar ! en existingItem
+          ? existingItem.unitPrice.toStringAsFixed(0) // Usar ! en existingItem
           : selectedProduct?.price.toStringAsFixed(0) ?? '0',
     );
     final notesController = TextEditingController(
       text: isEditing
-          ? (existingItem!.customizationJson?['item_notes'] as String?) ?? ''
+          ? (existingItem.customizationJson?['item_notes'] as String?) ?? ''
           : '',
     );
 
@@ -603,7 +603,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                     final newItem = OrderItem(
                       id: isEditing
-                          ? existingItem!.id
+                          ? existingItem.id
                           : null, // Usar ! en existingItem
                       name: selectedProduct!.name,
                       qty: qty,
@@ -644,12 +644,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     // 1. Obtener datos de forma segura, con valores por defecto
     Map<String, dynamic> customData = isEditing
-        ? (existingItem!.customizationJson ?? {})
+        ? (existingItem.customizationJson ?? {})
         : {};
 
     Product? selectedCakeType = isEditing
         ? cakeProducts.firstWhereOrNull(
-            (p) => p.name == existingItem!.name,
+            (p) => p.name == existingItem.name,
           ) // Buscar por nombre
         : cakeProducts.first; // Default para nuevo
 
@@ -1200,12 +1200,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     // 1. Obtener datos de forma segura, con valores por defecto
     Map<String, dynamic> customData = isEditing
-        ? (existingItem!.customizationJson ?? {})
+        ? (existingItem.customizationJson ?? {})
         : {};
 
     Product? selectedProduct = isEditing
         ? mesaDulceProducts.firstWhereOrNull(
-            (p) => p.name == existingItem!.name,
+            (p) => p.name == existingItem.name,
           ) // Buscar por nombre
         : mesaDulceProducts.first; // Default para nuevo
 
@@ -1223,7 +1223,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
     }
 
-    String quantityInput = isEditing ? existingItem!.qty.toString() : '1';
+    String quantityInput = isEditing ? existingItem.qty.toString() : '1';
 
     // Usar 'as bool?' para el cast seguro antes del ??
     bool isHalfDozen = isEditing
@@ -1323,7 +1323,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                 return DropdownButtonFormField<ProductUnit>(
                   // CORREGIDO: Usar 'value' en lugar de 'initialValue' dentro de StatefulBuilder
-                  value: selectedSize,
+                  initialValue: selectedSize,
                   items: availableSizes
                       .map(
                         (size) => DropdownMenuItem(
@@ -1616,7 +1616,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           );
 
                           final newItem = OrderItem(
-                            id: isEditing ? existingItem!.id : null,
+                            id: isEditing ? existingItem.id : null,
                             name: selectedProduct!.name,
                             qty: qty,
                             unitPrice: savedUnitPrice,

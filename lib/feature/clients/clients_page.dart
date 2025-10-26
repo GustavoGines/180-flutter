@@ -57,7 +57,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.separated(
                     itemCount: _items.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (_, i) {
                       final c = _items[i];
                       return ListTile(

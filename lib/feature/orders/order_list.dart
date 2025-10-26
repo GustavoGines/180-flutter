@@ -35,7 +35,7 @@ class OrderList extends ConsumerWidget {
       data: (orders) => ListView.separated(
         padding: const EdgeInsets.all(12),
         itemCount: orders.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
+        separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
           final o = orders[i];
           return ListTile(

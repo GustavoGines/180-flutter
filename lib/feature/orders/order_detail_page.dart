@@ -203,9 +203,9 @@ class OrderDetailPage extends ConsumerWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: ink.withOpacity(0.15),
+                            color: ink.withAlpha(38),
                             borderRadius: BorderRadius.circular(99),
-                            border: Border.all(color: ink.withOpacity(0.4)),
+                            border: Border.all(color: ink.withAlpha(102)),
                           ),
                           child: Text(
                             (statusTranslations[order.status] ?? order.status)
@@ -313,7 +313,7 @@ class OrderDetailPage extends ConsumerWidget {
                           children: [
                             ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: darkBrown.withOpacity(0.1),
+                                backgroundColor: darkBrown.withAlpha(26),
                                 child: Text(
                                   '${item.qty}',
                                   style: const TextStyle(
@@ -610,16 +610,14 @@ class OrderDetailPage extends ConsumerWidget {
                               horizontal: 4,
                               vertical: 0,
                             ),
-                            backgroundColor: darkBrown.withOpacity(0.08),
+                            backgroundColor: darkBrown.withAlpha(204),
                             labelStyle: TextStyle(
                               fontSize: 12,
-                              color: darkBrown.withOpacity(0.9),
+                              color: darkBrown.withAlpha(230),
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(6),
-                              side: BorderSide(
-                                color: darkBrown.withOpacity(0.2),
-                              ),
+                              side: BorderSide(color: darkBrown.withAlpha(51)),
                             ),
                           ),
                         )
@@ -1036,7 +1034,7 @@ class OrderDetailPage extends ConsumerWidget {
     Widget? trailing,
   }) {
     return ListTile(
-      leading: Icon(icon, color: darkBrown.withOpacity(0.8), size: 26),
+      leading: Icon(icon, color: darkBrown.withAlpha(204), size: 26),
       title: Text(
         title,
         style: const TextStyle(
