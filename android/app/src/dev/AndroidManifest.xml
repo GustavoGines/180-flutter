@@ -3,6 +3,6 @@
 
     <!-- NO tocar android:icon, así usa @mipmap/ic_launcher normal -->
     <application
-        android:label="@string/app_name"
+        android:label="180 App"
         tools:replace="android:label" />
 </manifest>

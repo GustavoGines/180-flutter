@@ -23,10 +23,22 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
+  // <-- 1. AÑADE LAS VARIABLES DE ESTADO PARA LOS OJOS
+  bool _passwordVisible = false;
+  bool _passwordConfirmationVisible = false;
+
   // Paleta de colores de la app
   static const Color primaryPink = Color(0xFFF9C0C0);
   static const Color darkBrown = Color(0xFF7A4A4A);
   static const Color lightBrownText = Color(0xFFA57D7D);
+
+  @override
+  void initState() {
+    super.initState();
+    // <-- 2. INICIALÍZALAS (OPCIONAL PERO RECOMENDADO)
+    _passwordVisible = false;
+    _passwordConfirmationVisible = false;
+  }
 
   @override
   void dispose() {
@@ -110,8 +122,24 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
               // Campo de Nueva Contraseña
               TextFormField(
                 controller: _passwordController,
-                obscureText: true,
-                decoration: _buildInputDecoration('Nueva Contraseña'),
+                obscureText: !_passwordVisible, // <-- 3. USA LA VARIABLE
+                decoration: _buildInputDecoration('Nueva Contraseña').copyWith(
+                  // <-- 4. USA .copyWith()
+                  // --- AÑADE EL ICONO SUFIJO ---
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _passwordVisible
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                      color: lightBrownText,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _passwordVisible = !_passwordVisible;
+                      });
+                    },
+                  ),
+                ),
                 style: const TextStyle(color: darkBrown),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
@@ -128,8 +156,27 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
               // Campo de Confirmar Contraseña
               TextFormField(
                 controller: _passwordConfirmationController,
-                obscureText: true,
-                decoration: _buildInputDecoration('Confirmar Contraseña'),
+                obscureText:
+                    !_passwordConfirmationVisible, // <-- 3. USA LA OTRA VARIABLE
+                decoration: _buildInputDecoration('Confirmar Contraseña')
+                    .copyWith(
+                      // <-- 4. USA .copyWith()
+                      // --- AÑADE EL OTRO ICONO SUFIJO ---
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _passwordConfirmationVisible
+                              ? Icons.visibility
+                              : Icons.visibility_off,
+                          color: lightBrownText,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _passwordConfirmationVisible =
+                                !_passwordConfirmationVisible;
+                          });
+                        },
+                      ),
+                    ),
                 style: const TextStyle(color: darkBrown),
                 validator: (value) {
                   if (value == null || value.isEmpty) {

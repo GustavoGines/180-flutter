@@ -11,10 +11,13 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 Future<void> pingApi() async {
   try {
     final dio = DioClient().dio;
-    // Usa un endpoint simple: si tu API base es /api, probá '/'
-    final res = await dio.get('/');
-    debugPrint('PING API → HTTP ${res.statusCode}');
+    // Llama al nuevo endpoint /ping
+    final res = await dio.get('/ping'); // <-- CAMBIAR '/' por '/ping'
+    debugPrint(
+      'PING API → HTTP ${res.statusCode} ${res.data}',
+    ); // Muestra la respuesta
   } catch (e) {
+    // El error ahora podría ser 401 si no estás logueado y pusiste /ping dentro del middleware
     debugPrint('PING API ERROR → $e');
   }
 }

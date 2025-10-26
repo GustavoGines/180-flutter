@@ -41,7 +41,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ForgotPasswordPage(),
       ),
       GoRoute(
-        path: '/app/reset-password', // Ruta para el deep link
+        path: '/reset-password', // Ruta para el deep link
         builder: (context, state) {
           final token = state.uri.queryParameters['token'];
           final email = state.uri.queryParameters['email'];
@@ -93,7 +93,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isGoingToLogin = location == '/login';
       final isGoingToLoading = location == '/loading';
       final isGoingToForgotPassword = location == '/forgot-password';
-      final isGoingToReset = location == '/app/reset-password';
+      final isGoingToReset = location == '/reset-password';
 
       if (!isLoggedIn &&
           !isGoingToLogin &&
