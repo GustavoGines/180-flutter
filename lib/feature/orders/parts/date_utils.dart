@@ -1,7 +1,6 @@
 part of '../home_page.dart';
 
 DateTime _dayKey(DateTime d) => DateTime(d.year, d.month, d.day);
-DateTime _monthKey(DateTime d) => DateTime(d.year, d.month, 1);
 
 DateTime _weekStartSunday(DateTime d) {
   final k = _dayKey(d);

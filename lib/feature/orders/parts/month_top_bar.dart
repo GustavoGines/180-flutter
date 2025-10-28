@@ -83,7 +83,6 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     }
 
     final viewport = RenderAbstractViewport.of(ro);
-    if (viewport == null) return; // Añadido por seguridad
 
     final target = viewport.getOffsetToReveal(ro, 0.5).offset;
     final clamped = target.clamp(

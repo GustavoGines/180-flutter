@@ -3,8 +3,6 @@ part of orders_home;
 
 /// ===============================================================
 /// Mes seleccionado (MODERNO: NotifierProvider)
-/// - Estado = primer día del mes
-/// - Métodos: setTo/next/prev (lógica fuera de la UI)
 /// ===============================================================
 class SelectedMonth extends rp.Notifier<DateTime> {
   @override
@@ -23,31 +21,25 @@ final selectedMonthProvider = rp.NotifierProvider<SelectedMonth, DateTime>(
 );
 
 /// Ventana de meses alrededor del seleccionado
-// Años atrás (en meses)
-const int _kBackMonths = 33; // 2 años
-// Años adelante (en meses)
-const int _kFwdMonths = 50; // 3 años
+const int _kBackMonths = 33;
+const int _kFwdMonths = 50;
 
 /// ===============================================================
 /// Ventana de pedidos (SIMPLE: FutureProvider)
-/// - Carga pedidos entre [sel-6m, sel+6m] y ordena ascendente
-/// - Refrescar: ref.invalidate(ordersWindowProvider)
 /// ===============================================================
 final ordersWindowProvider = rp.FutureProvider.autoDispose<List<Order>>((
   ref,
 ) async {
   final repository = ref.watch(ordersRepoProvider);
-  // 1. NO mires 'selectedMonthProvider'. Usa DateTime.now() como centro.
   final now = DateTime.now();
   final centerMonth = DateTime(now.year, now.month, 1);
 
-  // 2. Carga la ventana completa UNA SOLA VEZ
   final from = DateTime(centerMonth.year, centerMonth.month - _kBackMonths, 1);
   final to = DateTime(centerMonth.year, centerMonth.month + _kFwdMonths + 1, 1);
 
   final orders = await repository.getOrders(from: from, to: to);
 
-  // Orden ascendente por día, luego hora, luego prioridad de estado
+  // (Tu lógica de 'sort' va aquí, sin cambios)
   const statusOrder = {
     'confirmed': 1,
     'ready': 2,
@@ -75,4 +67,71 @@ final ordersWindowProvider = rp.FutureProvider.autoDispose<List<Order>>((
   });
 
   return orders;
+});
+
+/// ===============================================================
+/// Cálculo de ingresos para el mes seleccionado
+/// ===============================================================
+final monthlyIncomeProvider = rp.Provider.autoDispose<double>((ref) {
+  final ordersAsync = ref.watch(ordersWindowProvider);
+  final selMonth = ref.watch(selectedMonthProvider);
+
+  return ordersAsync.when(
+    data: (orders) {
+      double ingresosMes = 0;
+      final mesFrom = DateTime(selMonth.year, selMonth.month, 1);
+      final mesTo = DateTime(
+        selMonth.year,
+        selMonth.month + 1,
+        1,
+      ).subtract(const Duration(seconds: 1));
+
+      for (final o in orders) {
+        final d = _dayKey(o.eventDate);
+        if (d.isBefore(mesFrom) || d.isAfter(mesTo)) continue;
+        final v = o.total ?? 0;
+
+        if (v >= 0) {
+          ingresosMes += v;
+        }
+      }
+      return ingresosMes;
+    },
+    loading: () => 0.0,
+    error: (_, __) => 0.0,
+  );
+});
+
+/// ===============================================================
+/// 👇 NUEVO: Conteo de pedidos (ingresos) para el mes
+/// ===============================================================
+final monthlyOrdersCountProvider = rp.Provider.autoDispose<int>((ref) {
+  final ordersAsync = ref.watch(ordersWindowProvider);
+  final selMonth = ref.watch(selectedMonthProvider);
+
+  return ordersAsync.when(
+    data: (orders) {
+      int count = 0;
+      final mesFrom = DateTime(selMonth.year, selMonth.month, 1);
+      final mesTo = DateTime(
+        selMonth.year,
+        selMonth.month + 1,
+        1,
+      ).subtract(const Duration(seconds: 1));
+
+      for (final o in orders) {
+        final d = _dayKey(o.eventDate);
+        if (d.isBefore(mesFrom) || d.isAfter(mesTo)) continue;
+        final v = o.total ?? 0;
+
+        // Contamos solo los pedidos que son ingresos
+        if (v >= 0) {
+          count++;
+        }
+      }
+      return count;
+    },
+    loading: () => 0,
+    error: (_, __) => 0,
+  );
 });

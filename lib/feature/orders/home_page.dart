@@ -45,11 +45,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   final ItemPositionsListener _itemPositionsListener =
       ItemPositionsListener.create();
 
-  // 👇 AQUÍ ESTÁ EL CAMBIO:
-  // 1. Declaramos el nuevo Map de ÍNDICES
   final Map<DateTime, int> _monthIndexMap = {};
-  // 2. Eliminamos el viejo Map de GlobalKeys
-  // final Map<DateTime, GlobalKey> _monthAnchors = {}; // <--- ELIMINADO
 
   String _versionName = '';
   String _buildNumber = '';
@@ -72,20 +68,16 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  // 👇 Esta función ahora funciona porque _monthIndexMap está declarado
   void _jumpToMonth(DateTime m) {
     final monthKey = DateTime(m.year, m.month, 1);
-
-    // 1. Busca el ÍNDICE del mes en el Map
     final index = _monthIndexMap[monthKey];
 
     if (index != null) {
-      // 2. Salta a ese índice
       _itemScrollController.scrollTo(
         index: index,
         duration: const Duration(milliseconds: 450),
         curve: Curves.easeOut,
-        alignment: 0.08, // Tu alineación
+        alignment: 0.08,
       );
     }
   }
@@ -143,17 +135,63 @@ class _HomePageState extends ConsumerState<HomePage> {
             ],
           ),
         ],
-        // Topbar de meses con scroll (reemplaza tabs)
+        // 👇 AQUÍ ESTÁ EL CAMBIO MODERNO
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
-          child: _MonthTopBar(
-            onSelect: (m) {
-              // ✅ ahora usamos método del Notifier moderno (sin legacy)
-              ref
-                  .read(selectedMonthProvider.notifier)
-                  .setTo(DateTime(m.year, m.month, 1));
-              _jumpToMonth(m);
-            },
+          // 1. Altura: Card(aprox 80) + Padding(12) + MonthBar(56) = 148
+          preferredSize: const Size.fromHeight(148),
+          child: Column(
+            children: [
+              // 2. Usamos un Consumer para escuchar los providers
+              Consumer(
+                builder: (context, ref, child) {
+                  // 3. Obtenemos AMBOS valores
+                  final totalIncome = ref.watch(monthlyIncomeProvider);
+                  final totalOrders = ref.watch(monthlyOrdersCountProvider);
+                  final cs = Theme.of(context).colorScheme;
+
+                  // 4. Usamos un Row para ponerlos lado a lado
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: Row(
+                      children: [
+                        // Tarjeta de Ingresos
+                        Expanded(
+                          child: _SummaryCard(
+                            title: 'Ingresos',
+                            value: totalIncome,
+                            isCurrency: true, // 👈 Formato de moneda
+                            icon: Icons.trending_up,
+                            color: cs.tertiary, // Verde/Azul de Material 3
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Tarjeta de Pedidos
+                        Expanded(
+                          child: _SummaryCard(
+                            title: 'Pedidos',
+                            value: totalOrders
+                                .toDouble(), // Convertir Int a Double
+                            isCurrency: false, // 👈 Formato de número
+                            icon:
+                                Icons.shopping_bag_outlined, // Icono de pedidos
+                            color: cs.tertiary, // Color primario
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              // 5. Mantenemos el selector de mes
+              _MonthTopBar(
+                onSelect: (m) {
+                  ref
+                      .read(selectedMonthProvider.notifier)
+                      .setTo(DateTime(m.year, m.month, 1));
+                  _jumpToMonth(m);
+                },
+              ),
+            ],
           ),
         ),
       ),
@@ -161,16 +199,15 @@ class _HomePageState extends ConsumerState<HomePage> {
         onPressed: () => context.push('/new_order'),
         child: const Icon(Icons.add),
       ),
-      // 👇 El body ahora recibe el Map de ÍNDICES
       body: _UnifiedOrdersList(
-        // Pasa los nuevos controladores
         itemScrollController: _itemScrollController,
         itemPositionsListener: _itemPositionsListener,
-        // Pasa el Map para que la lista lo "rellene"
         monthIndexMap: _monthIndexMap,
       ),
     );
   }
+
+  // (El resto de tu código de Update Checker y _versionPillMenu va aquí, sin cambios)
 
   // --------------------- Update Checker + Sheets ---------------------
 

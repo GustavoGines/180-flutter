@@ -2,7 +2,6 @@ part of '../home_page.dart';
 
 class _UnifiedOrdersList extends ConsumerStatefulWidget {
   const _UnifiedOrdersList({
-    // 2. Acepta los nuevos controladores
     required this.itemScrollController,
     required this.itemPositionsListener,
     required this.monthIndexMap,
@@ -17,35 +16,25 @@ class _UnifiedOrdersList extends ConsumerStatefulWidget {
 }
 
 class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
-  // 3. Necesitamos "aplanar" la lista.
-  // Esta lista contendrá TODOS los items (headers, pedidos, etc.)
-  // en un solo lugar.
   final List<_ListItem> _flatList = [];
 
-  // Objeto helper para la lista
   late final _listBuilder = _FlatListBuilder(
     widget.monthIndexMap,
     ref.read(selectedMonthProvider),
     _flatList,
   );
 
-  // 4. Esta función reconstruye la lista "plana" cuando los datos cambian
   void _rebuildFlatList(List<Order> orders, DateTime selMonth) {
-    // Resetea los mapas y la lista
     widget.monthIndexMap.clear();
     _flatList.clear();
-
-    // Le pasamos los datos al "builder" para que genere la lista plana
     _listBuilder.build(orders: orders, selMonth: selMonth);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Removed WidgetRef ref from here
     final ordersAsync = ref.watch(ordersWindowProvider);
     final selMonth = ref.watch(selectedMonthProvider);
 
-    // 5. Detectamos si el mes seleccionado cambió, para actualizar el Map
     ref.listen(selectedMonthProvider, (_, next) {
       if (ordersAsync is AsyncData<List<Order>>) {
         setState(() {
@@ -58,34 +47,28 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('Error al cargar pedidos: $err')),
       data: (orders) {
-        // 6. (Re)Construimos la lista plana la primera vez o si los datos se refrescan
         if (_flatList.isEmpty) {
           _rebuildFlatList(orders, selMonth);
         }
 
         return RefreshIndicator(
           onRefresh: () async {
-            // Al refrescar, reseteamos la lista y el provider
             setState(() => _flatList.clear());
             await ref.refresh(ordersWindowProvider.future);
           },
-          // 7. Reemplazamos CustomScrollView por ScrollablePositionedList
           child: ScrollablePositionedList.builder(
             itemScrollController: widget.itemScrollController,
             itemPositionsListener: widget.itemPositionsListener,
             physics: const AlwaysScrollableScrollPhysics(),
-
-            // 8. El total de items es el tamaño de nuestra lista plana
             itemCount: _flatList.length,
-
-            // 9. El itemBuilder solo tiene que "traducir" el item
             itemBuilder: (context, index) {
               final item = _flatList[index];
 
-              // 10. Lógica de traducción (ver helper abajo)
+              // Lógica de traducción
               switch (item.type) {
-                case _ItemType.summary:
-                  return _buildSummaryCards(item.data);
+                // 👇 ELIMINADO
+                // case _ItemType.summary:
+                //   return _buildSummaryCards(item.data);
                 case _ItemType.monthBanner:
                   return _MonthBanner(date: item.data);
                 case _ItemType.weekSeparator:
@@ -113,32 +96,11 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
 
   // --- Widgets que extrajiste de los Slivers ---
 
-  Widget _buildSummaryCards(Map<String, double> data) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: _SummaryCard(
-              title: 'Ingresos',
-              value: data['ingresos']!,
-              positive: true,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _SummaryCard(
-              title: 'Gastos',
-              value: data['gastos']!,
-              positive: false,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // 👇 ELIMINADO
+  // Widget _buildSummaryCards(Map<String, double> data) { ... }
 
   Widget _buildOrderCard(BuildContext context, WidgetRef ref, Order order) {
+    // (Tu código de _buildOrderCard va aquí, sin cambios)
     return Dismissible(
       key: ValueKey(order.id),
       direction: DismissDirection.endToStart,
@@ -222,7 +184,7 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
 // Define los tipos de items en tu lista
 enum _ItemType {
   padding,
-  summary,
+  // summary, // 👈 ELIMINADO
   monthBanner,
   weekSeparator,
   dayHeader,
@@ -269,39 +231,17 @@ class _FlatListBuilder {
       );
     }
 
-    double ingresosMes = 0, gastosMes = 0;
-    final mesFrom = DateTime(selMonth.year, selMonth.month, 1);
-    final mesTo = DateTime(
-      selMonth.year,
-      selMonth.month + 1,
-      1,
-    ).subtract(const Duration(seconds: 1));
-    for (final o in orders) {
-      final d = _dayKey(o.eventDate);
-      if (d.isBefore(mesFrom) || d.isAfter(mesTo)) continue;
-      final v = o.total ?? 0;
-      if (v >= 0) {
-        ingresosMes += v;
-      } else {
-        gastosMes += v;
-      }
-    }
+    // --- 👇 ELIMINADO bloque de cálculo de ingresos/gastos ---
 
     // --- Ahora, en lugar de 'slivers.add', usamos 'flatList.add' ---
 
-    flatList.add(_ListItem(_ItemType.padding, 8.0));
-    flatList.add(
-      _ListItem(_ItemType.summary, {
-        'ingresos': ingresosMes,
-        'gastos': gastosMes,
-      }),
-    );
+    // 👇 ELIMINADO el 'add' de las tarjetas de resumen
+
+    // Añadimos un padding inicial (como tenías en tus slivers)
     flatList.add(_ListItem(_ItemType.padding, 8.0));
 
     for (final month in months) {
-      // 12. ¡AQUÍ ESTÁ LA MAGIA!
-      // Guardamos el índice actual (flatList.length) en el Map
-      // que le pasamos a HomePage.
+      // (El resto de tu lógica de 'build' va aquí, sin cambios)
       monthIndexMap[month] = flatList.length;
       flatList.add(_ListItem(_ItemType.monthBanner, month));
 
@@ -337,7 +277,6 @@ class _FlatListBuilder {
 
           flatList.add(_ListItem(_ItemType.dayHeader, day));
 
-          // Agregamos cada pedido como un item individual
           for (final order in list) {
             flatList.add(_ListItem(_ItemType.orderCard, order));
           }
