@@ -1253,8 +1253,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   .trim(), // Notas generales del item
                             if (allImageUrls.isNotEmpty)
                               'photo_urls': allImageUrls,
-                            'calculated_base_price':
-                                calculatedBasePrice, // Guardar el base calculado
                           };
                           // Limpiar nulos o listas vacías si prefieres
                           customization.removeWhere(
@@ -1732,8 +1730,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
                             if (allImageUrls.isNotEmpty)
                               'photo_urls': allImageUrls,
-                            // 👇 Guarda el precio base unitario calculado (antes de ajustes)
-                            'calculated_base_price': basePrice,
                           };
                           customization.removeWhere(
                             (key, value) => (value is List && value.isEmpty),
@@ -1937,6 +1933,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       'items': _items.map((item) => item.toJson()).toList(),
       // No enviar 'total', el backend lo recalcula.
     };
+
+    // 👇 AÑADE ESTO PARA VER QUÉ SE ENVÍA
+    print('--- Payload a Enviar ---');
+    print(payload);
+    // ----------------------------
 
     try {
       if (isEditMode) {

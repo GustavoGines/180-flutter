@@ -77,7 +77,12 @@ class OrderItem {
     // Opción 2: Enviar solo el precio final calculado (si la API solo espera 'unit_price')
     // 'unit_price': finalUnitPrice,
     'customization_notes': customizationNotes,
-    'customization_json': customizationJson,
+    'customization_json': {
+      // Guarda detalles calculados DENTRO del JSON
+      ...?customizationJson,
+      // Es bueno guardar esto para referencia, pero no son campos principales
+      'calculated_final_unit_price': finalUnitPrice,
+    },
   };
 
   // --- MÉTODO COPYWITH ---
@@ -105,5 +110,6 @@ class OrderItem {
       // Nota: orderId no está aquí porque usualmente no cambia al copiar un item DENTRO de una orden
     );
   }
+
   // --- FIN COPYWITH ---
 }
