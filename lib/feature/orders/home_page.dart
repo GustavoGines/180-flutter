@@ -27,14 +27,14 @@ import 'package:pasteleria_180_flutter/core/app_distribution.dart';
 import 'package:pasteleria_180_flutter/core/config.dart' show kFlavor;
 
 // ============================ PARTS ============================
-part 'parts-home/state_providers.dart';
-part 'parts-home/date_utils.dart';
-part 'parts-home/month_top_bar.dart';
-part 'parts-home/unified_orders_list.dart';
-part 'parts-home/delegates_and_sections.dart';
-part 'parts-home/summary_card.dart';
-part 'parts-home/order_card.dart';
-part 'parts-home/update_helpers.dart';
+part 'parts/state_providers.dart';
+part 'parts/date_utils.dart';
+part 'parts/month_top_bar.dart';
+part 'parts/unified_orders_list.dart';
+part 'parts/delegates_and_sections.dart';
+part 'parts/summary_card.dart';
+part 'parts/order_card.dart';
+part 'parts/update_helpers.dart';
 
 // ============================== HOME ==============================
 
