@@ -4,7 +4,7 @@ class _UnifiedOrdersList extends ConsumerStatefulWidget {
   const _UnifiedOrdersList({
     required this.itemScrollController,
     required this.itemPositionsListener,
-    required this.monthIndexMap,
+    required this.monthIndexMap, required Map<DateTime, int> dayIndexMap,
   });
 
   final ItemScrollController itemScrollController;

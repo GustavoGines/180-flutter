@@ -2,7 +2,7 @@
 part of orders_home;
 
 class _MonthTopBar extends ConsumerStatefulWidget {
-  const _MonthTopBar({required this.onSelect});
+  const _MonthTopBar({super.key, required this.onSelect});
   final void Function(DateTime) onSelect;
 
   @override
@@ -11,12 +11,10 @@ class _MonthTopBar extends ConsumerStatefulWidget {
 
 class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
   final _ctrl = ScrollController();
-
   late final List<DateTime> _months;
   final Map<DateTime, GlobalKey> _chipKeys = {};
 
-  bool _didInitialCenter = false;
-  DateTime? _lastCentered;
+  final bool _didInitialScroll = false; // 🔹 flag importante
 
   @override
   void initState() {
@@ -28,57 +26,64 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     for (final m in _months) {
       _chipKeys[m] = GlobalKey();
     }
+
+    // 🔥 Esperar un frame adicional antes de centrar
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.delayed(const Duration(milliseconds: 350));
+      if (!mounted) return;
+
+      final selected = ref.read(selectedMonthProvider);
+      await scrollToCurrentMonth(selected, animate: false);
+    });
   }
 
-  String _monthName(DateTime m) =>
-      DateFormat('MMM', 'es_AR').format(m).replaceAll('.', '').toUpperCase();
+  Future<void> scrollToCurrentMonth(
+    DateTime month, {
+    bool animate = true,
+  }) async {
+    if (!_ctrl.hasClients) return;
 
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+    final key = _chipKeys[DateTime(month.year, month.month, 1)];
+    if (key == null) return;
 
-  Future<void> _centerChipAsync(DateTime m, {bool animate = true}) async {
-    final monthKey = DateTime(m.year, m.month, 1);
-
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-
-    final key = _chipKeys[monthKey];
-    final ctx = key?.currentContext;
-    final ro = ctx?.findRenderObject();
-
-    if (ctx == null || ro == null || !_ctrl.hasClients) {
-      if (kDebugMode) {
-        print('Error al centrar: no se encontró contexto para $monthKey');
-      }
-      return;
+    // Esperar hasta que el chip tenga contexto
+    BuildContext? ctx;
+    for (int i = 0; i < 10; i++) {
+      ctx = key.currentContext;
+      if (ctx != null) break;
+      await Future.delayed(const Duration(milliseconds: 40));
     }
+    if (ctx == null || !mounted) return;
 
-    final viewport = RenderAbstractViewport.of(ro);
+    final box = ctx.findRenderObject() as RenderBox?;
+    final parentBox = context.findRenderObject() as RenderBox?;
+    if (box == null || parentBox == null) return;
 
-    final target = viewport.getOffsetToReveal(ro, 0.5).offset;
-    final clamped = target.clamp(
+    final position = box.localToGlobal(Offset.zero, ancestor: parentBox);
+    final viewportWidth = parentBox.size.width;
+
+    // 🌀 Movimiento centrado tipo “carrusel”
+    final targetOffset =
+        _ctrl.offset + position.dx - (viewportWidth / 2 - box.size.width / 2);
+
+    final clamped = targetOffset.clamp(
       _ctrl.position.minScrollExtent,
       _ctrl.position.maxScrollExtent,
     );
 
-    if (_lastCentered == monthKey && (clamped - _ctrl.offset).abs() < 0.5) {
-      return;
-    }
-    _lastCentered = monthKey;
-
     if (animate) {
       await _ctrl.animateTo(
         clamped,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeInOutCubicEmphasized, // más natural, tipo carrusel
       );
     } else {
       _ctrl.jumpTo(clamped);
     }
   }
+
+  String _monthName(DateTime m) =>
+      DateFormat('MMM', 'es_AR').format(m).replaceAll('.', '').toUpperCase();
 
   Widget _buildChip(DateTime m, DateTime selected) {
     final cs = Theme.of(context).colorScheme;
@@ -91,15 +96,8 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     return InkWell(
       key: _chipKeys[m],
       borderRadius: BorderRadius.circular(12),
-
-      // 👇 ÚNICO CAMBIO: La lógica de 'onTap'
       onTap: () {
         final firstDay = DateTime(m.year, m.month, 1);
-
-        // 1. ELIMINAMOS el 'await _centerChipAsync'.
-        // El 'ref.listen' de abajo se encargará de esto.
-
-        // 2. SOLO notificamos a la página.
         widget.onSelect(firstDay);
       },
       child: Container(
@@ -154,24 +152,20 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
   Widget build(BuildContext context) {
     final selected = ref.watch(selectedMonthProvider);
 
-    if (!_didInitialCenter) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        await _centerChipAsync(selected, animate: false);
-        _didInitialCenter = true;
-      });
-    }
-
-    // Este listener ahora es el ÚNICO responsable
-    // de centrar la barra de chips.
+    // 🔁 Si cambia el mes, centramos el chip correspondiente
     ref.listen<DateTime>(selectedMonthProvider, (prev, next) {
       if (!mounted || prev == next) return;
-      final targetMonth = DateTime(next.year, next.month, 1);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _centerChipAsync(targetMonth, animate: true);
-      });
+      final target = DateTime(next.year, next.month, 1);
+      scrollToCurrentMonth(target, animate: true);
     });
+
+    // 🔥 Si al inicio aún no se centró, lo hacemos (fallback)
+    if (!_didInitialScroll) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final current = DateTime(selected.year, selected.month, 1);
+        scrollToCurrentMonth(current);
+      });
+    }
 
     return Container(
       height: 60,
