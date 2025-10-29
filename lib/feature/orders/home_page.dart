@@ -3,16 +3,10 @@ library orders_home;
 
 import 'dart:collection';
 import 'dart:io' show Platform;
-// ignore: unnecessary_import
-import 'dart:ui'
-    as ui; // Asegúrate de que esta línea NO esté si no la necesitas explícitamente
-
-import 'package:flutter/foundation.dart';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:riverpod/riverpod.dart'
-    as rp; // 👈 alias para providers modernos (usado en los parts)
+import 'package:riverpod/riverpod.dart' as rp;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -50,43 +44,32 @@ class _HomePageState extends ConsumerState<HomePage> {
       ItemPositionsListener.create();
 
   final Map<DateTime, int> _monthIndexMap = {};
+  final Map<DateTime, int> _dayIndexMap = {}; // 👈 Nuevo mapa para días
 
-  // Estas variables se quedan aquí, son usadas por el 'part' update_helpers
   String _versionName = '';
   String _buildNumber = '';
-
-  // 👇 Semáforo para controlar el scroll programático vs. manual
   bool _isJumpingToMonth = false;
-
-  // 👇 Bandera para asegurar que el scroll inicial solo ocurra una vez
   bool _didPerformInitialScroll = false;
 
   @override
   void initState() {
     super.initState();
-    _loadVersion(); // Llama al método que ahora está en 'update_helpers.dart'
-    // Llama al método de 'update_helpers.dart' después del primer frame
+    _loadVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoCheckForUpdateIfEnabled();
     });
 
-    // Sincroniza el scroll de la lista con la barra de mes
     _itemPositionsListener.itemPositions.addListener(_onScrollPositionChanged);
   }
 
-  // Función para saltar a un mes (llamada por _MonthTopBar)
   Future<void> _jumpToMonth(DateTime m) async {
     final monthKey = DateTime(m.year, m.month, 1);
     final index = _monthIndexMap[monthKey];
 
     if (index != null) {
-      // 1. Activar semáforo
       _isJumpingToMonth = true;
-
-      // 2. Actualizar provider seleccionado
       ref.read(selectedMonthProvider.notifier).setTo(monthKey);
 
-      // 3. Animar la lista
       await _itemScrollController.scrollTo(
         index: index,
         duration: const Duration(milliseconds: 450),
@@ -94,19 +77,15 @@ class _HomePageState extends ConsumerState<HomePage> {
         alignment: 0.08,
       );
 
-      // 4. Desactivar semáforo (usamos Future.delayed para asegurar que termine después de la animación)
       Future.delayed(const Duration(milliseconds: 500), () {
         _isJumpingToMonth = false;
       });
     }
   }
 
-  // Función que escucha el scroll manual de la lista
   void _onScrollPositionChanged() {
-    // Si estamos saltando programáticamente, no hacer nada
     if (_isJumpingToMonth) return;
 
-    // Obtiene el item más visible arriba
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isEmpty) return;
 
@@ -117,7 +96,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         )
         .index;
 
-    // Busca a qué mes pertenece ese índice
     DateTime? currentMonth;
     int closestIndex = -1;
     for (final entry in _monthIndexMap.entries) {
@@ -129,7 +107,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
     }
 
-    // Actualiza el provider si el mes cambió
     if (currentMonth != null) {
       final selected = ref.read(selectedMonthProvider);
       if (selected.year != currentMonth.year ||
@@ -139,39 +116,60 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
+  final GlobalKey<_MonthTopBarState> _monthBarKey =
+      GlobalKey<_MonthTopBarState>();
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
-
-    // Escucha la carga inicial de datos para hacer el scroll al mes actual
     final ordersAsync = ref.watch(ordersWindowProvider);
 
-    // Si tenemos datos Y AÚN NO hemos hecho el scroll inicial...
     if (ordersAsync is AsyncData && !_didPerformInitialScroll) {
-      // Marcamos la bandera INMEDIATAMENTE
       _didPerformInitialScroll = true;
 
-      // Hacemos el scroll DESPUÉS de que este build termine
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
 
         final now = DateTime.now();
         final currentMonthKey = DateTime(now.year, now.month, 1);
-        final initialIndex = _monthIndexMap[currentMonthKey];
+        final todayKey = DateTime(now.year, now.month, now.day);
 
-        if (initialIndex != null && _itemScrollController.isAttached) {
-          _itemScrollController.jumpTo(index: initialIndex, alignment: 0.08);
+        final dayIndex = _dayIndexMap[todayKey];
+        final monthIndex = _monthIndexMap[currentMonthKey];
+
+        if (_itemScrollController.isAttached) {
+          if (dayIndex != null) {
+            // 🟢 Ir directamente al día actual
+            _itemScrollController.jumpTo(index: dayIndex, alignment: 0.15);
+          } else if (monthIndex != null) {
+            // Fallback: al inicio del mes actual
+            _itemScrollController.jumpTo(index: monthIndex, alignment: 0.08);
+          }
+
+          // Actualiza el mes seleccionado
           ref.read(selectedMonthProvider.notifier).setTo(currentMonthKey);
+
+          // 🔄 Forzar centrado del chip del mes actual
+          Future.delayed(const Duration(milliseconds: 400), () async {
+            if (!mounted) return;
+            final currentMonth = DateTime(now.year, now.month, 1);
+            ref.read(selectedMonthProvider.notifier).setTo(currentMonth);
+
+            // 🔥 Forzar centrado visual en el top bar
+            await _monthBarKey.currentState?.scrollToCurrentMonth(
+              currentMonth,
+              animate: true,
+            );
+          });
         }
       });
     }
-    // --- FIN LÓGICA SCROLL INICIAL ---
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Resumen de Pedidos'),
         actions: [
-          _versionPillMenu(), // Llama al método que ahora está en 'update_helpers.dart'
+          _versionPillMenu(),
           PopupMenuButton<String>(
             onSelected: (value) async {
               switch (value) {
@@ -253,8 +251,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                   );
                 },
               ),
-              // Pasa la función _jumpToMonth a la barra superior
               _MonthTopBar(
+                key: _monthBarKey,
                 onSelect: (m) {
                   _jumpToMonth(m);
                 },
@@ -271,10 +269,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         itemScrollController: _itemScrollController,
         itemPositionsListener: _itemPositionsListener,
         monthIndexMap: _monthIndexMap,
+        // 🔥 Añadí soporte para día actual
+        dayIndexMap: _dayIndexMap,
       ),
     );
   }
-
-  // (El método _loadVersion y toda la lógica de Update Checker
-  // están ahora en 'parts/update_helpers.dart')
-} // Fin _HomePageState
+}
