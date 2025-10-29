@@ -301,7 +301,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       builder: (dialogContext) => AlertDialog(
         // <-- Contexto del Dialog
         title: const Text('Nuevo Cliente', style: TextStyle(color: darkBrown)),
-        content: SingleChildScrollView(child: Column(/* ... TextFields ... */)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Nombre'),
+              ),
+              TextField(
+                controller: phoneController,
+                decoration: const InputDecoration(labelText: 'Teléfono'),
+                keyboardType: TextInputType.phone,
+              ),
+              TextField(
+                controller: addressController,
+                decoration: const InputDecoration(labelText: 'Dirección'),
+              ),
+            ],
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () =>
@@ -522,7 +541,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     final notesController = TextEditingController(
       text: isEditing ? existingItem.customizationNotes ?? '' : '', // Usar !
     );
-    // El precio final se calcula, no se edita directamente
     final finalPriceController = TextEditingController();
     // --- Fin Inicialización ---
 
@@ -1253,6 +1271,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   .trim(), // Notas generales del item
                             if (allImageUrls.isNotEmpty)
                               'photo_urls': allImageUrls,
+                            // 'calculated_base_price': calculatedBasePrice, // COMENTADO: Quitar campos calculados
                           };
                           // Limpiar nulos o listas vacías si prefieres
                           customization.removeWhere(
@@ -1674,7 +1693,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           if (selectedProduct == null) return;
 
                           final qty = int.tryParse(qtyController.text) ?? 0;
-                          // 👇 Usa la variable de estado correcta para el ajuste manual
+                          // 👇 CORRECCIÓN: Declaración de variables dentro del scope
                           final manualAdjustments =
                               double.tryParse(adjustmentsController.text) ??
                               0.0;
@@ -1730,6 +1749,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
                             if (allImageUrls.isNotEmpty)
                               'photo_urls': allImageUrls,
+                            // 'calculated_base_price': basePrice, // NO ENVIAR CALCULADOS
                           };
                           customization.removeWhere(
                             (key, value) => (value is List && value.isEmpty),

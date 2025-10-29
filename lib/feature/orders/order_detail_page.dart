@@ -670,14 +670,17 @@ class OrderDetailPage extends ConsumerWidget {
   }
 
   // ====== Acciones (MODIFICADO para usar FAB extendido y dialogos mejorados) ======
-  void _showActionsModal(BuildContext context, WidgetRef ref, Order order) {
-    // Usar el total del backend directamente para la comprobación
+  void _showActionsModal(
+    BuildContext parentContext,
+    WidgetRef ref,
+    Order order,
+  ) {
     final bool isPaid = (order.deposit ?? 0.0) >= (order.total ?? 0.0) - 0.01;
 
     showModalBottomSheet(
-      context: context,
+      context: parentContext,
+      useRootNavigator: true,
       shape: const RoundedRectangleBorder(
-        // Bordes redondeados
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
@@ -691,24 +694,20 @@ class OrderDetailPage extends ConsumerWidget {
                 ),
                 title: const Text('Cambiar Estado'),
                 onTap: () {
-                  Navigator.pop(context); // Cierra modal
-                  _showStatusDialog(
-                    context,
-                    ref,
-                    order,
-                  ); // Abre diálogo de estado
+                  Navigator.pop(context);
+                  _showStatusDialog(parentContext, ref, order);
                 },
               ),
-              if (!isPaid) // Mostrar solo si no está pagado
+              if (!isPaid)
                 ListTile(
                   leading: const Icon(Icons.price_check, color: Colors.green),
                   title: const Text('Marcar como Pagado Totalmente'),
                   onTap: () async {
-                    Navigator.pop(context); // Cierra modal
-                    // Mostrar diálogo de confirmación antes de marcar como pagado
-                    bool confirm =
+                    Navigator.pop(context);
+
+                    final bool confirm =
                         await showDialog<bool>(
-                          context: context,
+                          context: parentContext,
                           builder: (ctx) => AlertDialog(
                             title: const Text('Confirmar Pago Total'),
                             content: const Text(
@@ -726,23 +725,25 @@ class OrderDetailPage extends ConsumerWidget {
                             ],
                           ),
                         ) ??
-                        false; // Default a false si se cierra sin seleccionar
+                        false;
 
                     if (confirm) {
                       try {
-                        // Mostrar indicador de carga sería ideal aquí
                         await ref.read(ordersRepoProvider).markAsPaid(order.id);
-                        ref.invalidate(
-                          orderByIdProvider(order.id),
-                        ); // Refrescar datos
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ref.invalidate(orderByIdProvider(order.id));
+
+                        if (!parentContext.mounted) return;
+
+                        ScaffoldMessenger.of(parentContext).showSnackBar(
                           const SnackBar(
                             content: Text('Pedido marcado como pagado.'),
                             backgroundColor: Colors.green,
                           ),
                         );
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        if (!parentContext.mounted) return;
+
+                        ScaffoldMessenger.of(parentContext).showSnackBar(
                           SnackBar(
                             content: Text('Error al marcar como pagado: $e'),
                             backgroundColor: Colors.red,
@@ -756,16 +757,11 @@ class OrderDetailPage extends ConsumerWidget {
                 leading: const Icon(Icons.edit_outlined, color: darkBrown),
                 title: const Text('Modificar Pedido Completo'),
                 onTap: () {
-                  Navigator.pop(context); // Cierra modal
-                  // Navega a la ruta de edición con el ID
-                  context.push('/order/${order.id}/edit');
+                  Navigator.pop(context);
+                  parentContext.push('/order/${order.id}/edit');
                 },
               ),
-              const Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-              ), // Separador visual
+              const Divider(height: 1, indent: 16, endIndent: 16),
               ListTile(
                 leading: Icon(
                   Icons.delete_forever_outlined,
@@ -776,12 +772,8 @@ class OrderDetailPage extends ConsumerWidget {
                   style: TextStyle(color: Colors.red.shade700),
                 ),
                 onTap: () {
-                  Navigator.pop(context); // Cierra modal de acciones
-                  _showDeleteConfirmationDialog(
-                    context,
-                    ref,
-                    order,
-                  ); // Abre diálogo de confirmación
+                  Navigator.pop(context);
+                  _showDeleteConfirmationDialog(parentContext, ref, order);
                 },
               ),
             ],
