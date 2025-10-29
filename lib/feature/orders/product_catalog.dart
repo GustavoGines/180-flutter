@@ -192,7 +192,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 6000.0,
     allowHalfDozen: true,
-    halfDozenPrice: 3300.0,
+    halfDozenPrice: 3000.0,
   ),
   Product(
     name: 'Alfajores de Maicena de Colores',
@@ -200,7 +200,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 7000.0,
     allowHalfDozen: true,
-    halfDozenPrice: 3800.0,
+    halfDozenPrice: 3500.0,
   ),
   Product(
     name: 'Alfajores Bañados',
@@ -208,7 +208,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 8000.0,
     allowHalfDozen: true,
-    halfDozenPrice: 4400.0,
+    halfDozenPrice: 4000.0,
   ),
   // Brownies
   Product(
@@ -217,7 +217,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 14200.0,
     allowHalfDozen: true,
-    halfDozenPrice: 7800.0,
+    halfDozenPrice: 7100.0,
   ),
   Product(
     name: 'Brownies 6x6cm',
@@ -225,7 +225,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 20400.0,
     allowHalfDozen: true,
-    halfDozenPrice: 11200.0,
+    halfDozenPrice: 10200.0,
   ),
   Product(
     name: 'Brownie Redondo',
@@ -244,7 +244,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 17000.0,
     allowHalfDozen: true,
-    halfDozenPrice: 9300.0,
+    halfDozenPrice: 8500.0,
   ), // Asume un precio único, ajustar si varía por sabor
   // Cupcakes
   Product(
@@ -253,7 +253,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 12000.0,
     allowHalfDozen: true,
-    halfDozenPrice: 6600.0,
+    halfDozenPrice: 6000.0,
   ),
   // Chocooreos
   Product(
@@ -262,7 +262,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 12000.0,
     allowHalfDozen: true,
-    halfDozenPrice: 6600.0,
+    halfDozenPrice: 6000.0,
   ),
   // Galletitas Decoradas
   Product(
@@ -271,7 +271,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 18000.0,
     allowHalfDozen: true,
-    halfDozenPrice: 9900.0,
+    halfDozenPrice: 9000.0,
   ), // Puede variar según diseño
   // Tartas Durazno
   Product(
@@ -340,7 +340,7 @@ const List<Product> mesaDulceProducts = [
     unit: ProductUnit.dozen,
     price: 20400.0,
     allowHalfDozen: true,
-    halfDozenPrice: 11200.0,
+    halfDozenPrice: 10200.0,
   ),
 ];
 
@@ -361,7 +361,7 @@ String getUnitText(ProductUnit unit, {bool plural = false}) {
       return '18 cm';
     case ProductUnit.size24cm:
       return '24 cm';
-    }
+  }
 }
 
 // Helper para obtener precio final de tarta/pastafrola/brownie redondo por tamaño

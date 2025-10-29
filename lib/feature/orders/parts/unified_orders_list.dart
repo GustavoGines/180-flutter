@@ -18,23 +18,45 @@ class _UnifiedOrdersList extends ConsumerStatefulWidget {
 class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
   final List<_ListItem> _flatList = [];
 
+  // 👇 1. Define el mes central ESTÁTICO (basado en 'hoy')
+  late final DateTime _staticCenterMonth = () {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, 1);
+  }();
+
+  // 👇 2. Pasa el mes ESTÁTICO al constructor del builder
   late final _listBuilder = _FlatListBuilder(
     widget.monthIndexMap,
-    ref.read(selectedMonthProvider),
+    _staticCenterMonth, // 👈 Usa el mes estático
     _flatList,
   );
 
-  void _rebuildFlatList(List<Order> orders, DateTime selMonth) {
+  // 👇 3. _rebuildFlatList ya NO necesita 'selMonth'
+  void _rebuildFlatList(List<Order> orders) {
     widget.monthIndexMap.clear();
     _flatList.clear();
-    _listBuilder.build(orders: orders, selMonth: selMonth);
+    _listBuilder.build(orders: orders); // 👈 Solo pasa los pedidos
   }
 
   @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(ordersWindowProvider);
-    final selMonth = ref.watch(selectedMonthProvider);
+    // final selMonth = ref.watch(selectedMonthProvider); // 👈 Ya no se necesita aquí
 
+    // 👇 4. ESTE LISTENER ES BUENO:
+    // Reconstruye la lista si los datos cambian (ej: borrar/editar)
+    ref.listen(ordersWindowProvider, (_, next) {
+      if (next is AsyncData<List<Order>>) {
+        setState(() {
+          _rebuildFlatList(next.value);
+        });
+      }
+    });
+
+    // 👇 5. ¡¡ESTE LISTENER ERA EL BUG!!
+    // Lo eliminamos por completo. Ya no queremos reconstruir la
+    // lista cuando el mes seleccionado cambie.
+    /*
     ref.listen(selectedMonthProvider, (_, next) {
       if (ordersAsync is AsyncData<List<Order>>) {
         setState(() {
@@ -42,19 +64,29 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
         });
       }
     });
+    */
 
     return ordersAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('Error al cargar pedidos: $err')),
       data: (orders) {
+        // 👇 6. Llama a la versión simplificada en la carga inicial
         if (_flatList.isEmpty) {
-          _rebuildFlatList(orders, selMonth);
+          _rebuildFlatList(orders);
         }
 
         return RefreshIndicator(
-          onRefresh: () async {
+          onRefresh: () {
             setState(() => _flatList.clear());
-            await ref.refresh(ordersWindowProvider.future);
+
+            // 👇 7. CORRECCIÓN para 'onRefresh' con AsyncNotifier
+            // 1. Invalida el provider para forzar que se reconstruya
+            ref.invalidate(ordersWindowProvider);
+
+            // 2. Lee el nuevo 'future' y devuélvelo al RefreshIndicator.
+            // Es necesario ignorar esta advertencia específica.
+            // ignore: invalid_use_of_protected_member
+            return ref.read(ordersWindowProvider.future);
           },
           child: ScrollablePositionedList.builder(
             itemScrollController: widget.itemScrollController,
@@ -66,9 +98,6 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
 
               // Lógica de traducción
               switch (item.type) {
-                // 👇 ELIMINADO
-                // case _ItemType.summary:
-                //   return _buildSummaryCards(item.data);
                 case _ItemType.monthBanner:
                   return _MonthBanner(date: item.data);
                 case _ItemType.weekSeparator:
@@ -95,9 +124,6 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
   }
 
   // --- Widgets que extrajiste de los Slivers ---
-
-  // 👇 ELIMINADO
-  // Widget _buildSummaryCards(Map<String, double> data) { ... }
 
   Widget _buildOrderCard(BuildContext context, WidgetRef ref, Order order) {
     // (Tu código de _buildOrderCard va aquí, sin cambios)
@@ -151,8 +177,10 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
 
         if (didConfirm == true) {
           try {
-            await ref.read(ordersRepoProvider).deleteOrder(order.id);
-            ref.invalidate(ordersWindowProvider);
+            // 👇 8. CORRECCIÓN DE TIPO (usa 'order.id' que es un 'int')
+            await ref.read(ordersWindowProvider.notifier).deleteOrder(order.id);
+
+            if (!context.mounted) return true; // Chequeo de seguridad
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Pedido #${order.id} eliminado.'),
@@ -161,6 +189,7 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
             );
             return true;
           } catch (e) {
+            if (!context.mounted) return false; // Chequeo de seguridad
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error al eliminar: $e'),
@@ -203,17 +232,14 @@ class _ListItem {
 class _FlatListBuilder {
   final Map<DateTime, int> monthIndexMap;
   final List<_ListItem> flatList;
-  DateTime selMonth;
+  // 👇 9. Cambia 'selMonth' por 'staticCenterMonth'
+  final DateTime staticCenterMonth;
 
-  _FlatListBuilder(this.monthIndexMap, this.selMonth, this.flatList);
+  _FlatListBuilder(this.monthIndexMap, this.staticCenterMonth, this.flatList);
 
-  void build({required List<Order> orders, required DateTime selMonth}) {
-    this.selMonth = selMonth;
-
-    // --- Toda tu lógica de procesamiento de 'data:' va aquí ---
-    final from = DateTime(selMonth.year, selMonth.month - _kBackMonths, 1);
-    final to = DateTime(selMonth.year, selMonth.month + _kFwdMonths, 1);
-    final months = _monthsBetween(from, to);
+  // 👇 10. El método build ya NO recibe 'selMonth'
+  void build({required List<Order> orders}) {
+    // this.selMonth = selMonth; // 👈 LÍNEA ELIMINADA
 
     final byDay = SplayTreeMap<DateTime, List<Order>>((a, b) => a.compareTo(b));
     for (final o in orders) {
@@ -231,18 +257,19 @@ class _FlatListBuilder {
       );
     }
 
-    // --- 👇 ELIMINADO bloque de cálculo de ingresos/gastos ---
-
-    // --- Ahora, en lugar de 'slivers.add', usamos 'flatList.add' ---
-
-    // 👇 ELIMINADO el 'add' de las tarjetas de resumen
+    // 👇 11. ¡LA SOLUCIÓN!
+    // La ventana de 49 meses se construye usando el mes central ESTÁTICO,
+    // no el mes seleccionado.
+    final allMonthsInWindow = _monthsAroundWindow(staticCenterMonth);
 
     // Añadimos un padding inicial (como tenías en tus slivers)
     flatList.add(_ListItem(_ItemType.padding, 8.0));
 
-    for (final month in months) {
+    // Iteramos sobre TODOS los 49 meses
+    for (final month in allMonthsInWindow) {
       // (El resto de tu lógica de 'build' va aquí, sin cambios)
-      monthIndexMap[month] = flatList.length;
+      monthIndexMap[month] =
+          flatList.length; // 👈 Esto ahora pobla el map completo
       flatList.add(_ListItem(_ItemType.monthBanner, month));
 
       final weeks = _weeksInsideMonth(month);
@@ -265,9 +292,13 @@ class _FlatListBuilder {
             'ws': ws,
             'we': we,
             'total': total,
-            'muted': !weekHasOrders,
+            'muted':
+                !weekHasOrders, // 👈 'muted' se pondrá true si no hay pedidos
           }),
         );
+
+        // Si no hay pedidos en la semana, no intentes dibujar los días
+        if (!weekHasOrders) continue;
 
         for (int i = 0; i < 7; i++) {
           final day = ws.add(Duration(days: i));

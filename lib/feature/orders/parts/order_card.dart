@@ -105,8 +105,7 @@ class OrderCard extends ConsumerWidget {
                 }).toList(),
                 onChanged: (String? newValue) async {
                   if (newValue != null && newValue != order.status) {
-                    await ref.read(ordersRepoProvider).updateStatus(order.id, newValue);
-                    ref.invalidate(ordersWindowProvider);
+                    await ref.read(ordersWindowProvider.notifier).updateOrderStatus(order.id, newValue);
                   }
                 },
               ),

@@ -35,12 +35,15 @@ class OrderList extends ConsumerWidget {
       data: (orders) => ListView.separated(
         padding: const EdgeInsets.all(12),
         itemCount: orders.length,
+        shrinkWrap: true, // 👈 se ajusta al contenido
+        physics:
+            const NeverScrollableScrollPhysics(), // 👈 no hace scroll propio
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
           final o = orders[i];
           return ListTile(
             title: Text(
-              '${o.startTime}–${o.endTime} • ${o.status.toUpperCase()}',
+              '${DateFormat.Hm().format(o.startTime)} – ${DateFormat.Hm().format(o.endTime)} • ${o.status.toUpperCase()}',
             ),
             subtitle: Text('Cliente #${o.clientId} • ${o.notes ?? ""}'),
             trailing: Text(

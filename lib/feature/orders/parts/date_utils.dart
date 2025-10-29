@@ -11,17 +11,15 @@ DateTime _weekStartSunday(DateTime d) {
 DateTime _weekEndSunday(DateTime d) =>
     _weekStartSunday(d).add(const Duration(days: 6));
 
-List<DateTime> _monthsBetween(DateTime from, DateTime to) {
-  final start = DateTime(from.year, from.month, 1);
-  final end = DateTime(to.year, to.month, 1);
-  final list = <DateTime>[];
-  var cur = start;
-  while (!(cur.year == end.year && cur.month == end.month)) {
-    list.add(cur);
-    cur = DateTime(cur.year, cur.month + 1, 1);
-  }
-  list.add(end);
-  return list;
+// 👇 NUEVA FUNCIÓN (Movida desde month_top_bar.dart)
+// Genera la lista estática de 49 meses
+List<DateTime> _monthsAroundWindow(DateTime center) {
+  final centerMonth = DateTime(center.year, center.month, 1);
+  final start = DateTime(centerMonth.year, centerMonth.month - _kBackMonths, 1);
+  // Total de meses: 24 atrás + 24 adelante + 1 (actual) = 49
+  final total = _kBackMonths + _kFwdMonths + 1;
+
+  return List.generate(total, (i) => DateTime(start.year, start.month + i, 1));
 }
 
 List<DateTime> _weeksInsideMonth(DateTime monthFirstDay) {

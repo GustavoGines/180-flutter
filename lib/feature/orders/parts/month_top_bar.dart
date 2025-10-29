@@ -11,49 +11,27 @@ class _MonthTopBar extends ConsumerStatefulWidget {
 class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
   final _ctrl = ScrollController();
 
-  // --- 👇 CAMBIOS AQUÍ ---
-  // 1. Declaramos la lista de meses y las keys como 'late final'
-  //    (se inicializarán en initState)
   late final List<DateTime> _months;
   final Map<DateTime, GlobalKey> _chipKeys = {};
-  // --- Fin Cambios ---
 
   bool _didInitialCenter = false;
   DateTime? _lastCentered;
 
-  List<DateTime> _monthsAround(DateTime center) {
-    final centerMonth = DateTime(center.year, center.month, 1);
-    final start = DateTime(
-      centerMonth.year,
-      centerMonth.month - _kBackMonths,
-      1,
-    );
-    final total = _kBackMonths + _kFwdMonths + 1;
+  // 👇 ELIMINAMOS LA FUNCIÓN _monthsAround (AHORA ESTÁ EN DATE_UTILS)
 
-    return List.generate(
-      total,
-      (i) => DateTime(start.year, start.month + i, 1),
-    );
-  }
-
-  // --- 👇 CAMBIO AQUÍ ---
-  // 2. Creamos initState para generar la lista UNA SOLA VEZ
   @override
   void initState() {
     super.initState();
 
-    // Obtenemos el mes inicial usando ref.read (NO watch)
     final initialMonth = ref.read(selectedMonthProvider);
 
-    // Generamos la lista de meses estática
-    _months = _monthsAround(initialMonth);
+    // 👇 USAMOS LA NUEVA FUNCIÓN DE DATE_UTILS
+    _months = _monthsAroundWindow(initialMonth);
 
-    // Generamos las GlobalKeys estáticas
     for (final m in _months) {
       _chipKeys[m] = GlobalKey();
     }
   }
-  // --- Fin Cambios ---
 
   String _monthName(DateTime m) =>
       DateFormat('MMM', 'es_AR').format(m).replaceAll('.', '').toUpperCase();
@@ -64,7 +42,6 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     super.dispose();
   }
 
-  // Esta función de centrado está perfecta
   Future<void> _centerChipAsync(DateTime m, {bool animate = true}) async {
     final monthKey = DateTime(m.year, m.month, 1);
 
@@ -110,8 +87,6 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     final cs = Theme.of(context).colorScheme;
     final isSel = m.year == selected.year && m.month == selected.month;
 
-    // Tuve que cambiar esto (surfaceVariant) porque el 'fileName' que me pasaste lo tenía así.
-    // Si usas Material 3, 'surfaceVariant' es lo normal.
     final bg = isSel ? cs.primary.withOpacity(.20) : cs.surfaceContainerHighest;
     final brd = isSel ? cs.primary : cs.outlineVariant;
     final txt = isSel ? cs.primary : cs.onSurface.withOpacity(.80);
@@ -121,10 +96,7 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
       borderRadius: BorderRadius.circular(12),
       onTap: () async {
         final firstDay = DateTime(m.year, m.month, 1);
-        // 1. Centra el chip
         await _centerChipAsync(m, animate: true);
-        // 2. Notifica a la página (esto disparará el rebuild,
-        //    pero ahora el rebuild es seguro)
         if (mounted) widget.onSelect(firstDay);
       },
       child: Container(
@@ -177,33 +149,21 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
 
   @override
   Widget build(BuildContext context) {
-    // Solo 'miramos' el mes seleccionado para saber CUAL pintar
     final selected = ref.watch(selectedMonthProvider);
-
-    // --- 👇 CAMBIO AQUÍ ---
-    // 3. Ya NO generamos la lista de meses ni las keys aquí.
-    //    Usamos la lista estática '_months' de nuestro state.
-    // final months = _monthsAround(selected); // <--- ELIMINADO
-    // _chipKeys.clear(); // <--- ELIMINADO
-    // --- Fin Cambios ---
 
     if (!_didInitialCenter) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
-        // Centramos el mes seleccionado INICIAL
         await _centerChipAsync(selected, animate: false);
         _didInitialCenter = true;
       });
     }
 
-    // Este listener se dispara cuando la lista PRINCIPAL scrollea
-    // y actualiza el provider.
     ref.listen<DateTime>(selectedMonthProvider, (prev, next) {
       if (!mounted || prev == next) return;
       final targetMonth = DateTime(next.year, next.month, 1);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        // Centramos el chip (esto es seguro ahora)
         _centerChipAsync(targetMonth, animate: true);
       });
     });
@@ -215,7 +175,6 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
         controller: _ctrl,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        // 4. Usamos la lista estática '_months'
         children: _months.expand((m) {
           return [_buildChip(m, selected), const SizedBox(width: 8)];
         }).toList()..removeLast(),

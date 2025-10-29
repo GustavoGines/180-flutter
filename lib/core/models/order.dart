@@ -1,4 +1,6 @@
 // lib/core/models/order.dart
+import 'package:flutter/foundation.dart';
+
 import 'order_item.dart';
 import 'client.dart';
 
@@ -96,7 +98,9 @@ class Order {
             try {
               return OrderItem.fromJson(e as Map<String, dynamic>);
             } catch (itemError) {
-              print("Error parsing order item: $itemError \nItem JSON: $e");
+              if (kDebugMode) {
+                print("Error parsing order item: $itemError \nItem JSON: $e");
+              }
               // Decide qué hacer: retornar un item inválido, null, o lanzar error?
               // Por ahora, lo omitimos para no crashear
               return null;
@@ -113,6 +117,33 @@ class Order {
     );
   }
 
-  // Opcional: Añadir un método toJson si necesitas enviar el objeto Order completo al backend en algún momento
-  // Map<String, dynamic> toJson() => { ... };
+  Order copyWith({
+    int? id,
+    int? clientId,
+    DateTime? eventDate,
+    DateTime? startTime,
+    DateTime? endTime,
+    String? status,
+    double? total,
+    double? deposit,
+    double? deliveryCost,
+    String? notes,
+    List<OrderItem>? items,
+    Client? client,
+  }) {
+    return Order(
+      id: id ?? this.id,
+      clientId: clientId ?? this.clientId,
+      eventDate: eventDate ?? this.eventDate,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      status: status ?? this.status,
+      total: total ?? this.total,
+      deposit: deposit ?? this.deposit,
+      deliveryCost: deliveryCost ?? this.deliveryCost,
+      notes: notes ?? this.notes,
+      items: items ?? this.items,
+      client: client ?? this.client,
+    );
+  }
 }
