@@ -17,15 +17,11 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
   bool _didInitialCenter = false;
   DateTime? _lastCentered;
 
-  // 👇 ELIMINAMOS LA FUNCIÓN _monthsAround (AHORA ESTÁ EN DATE_UTILS)
-
   @override
   void initState() {
     super.initState();
 
     final initialMonth = ref.read(selectedMonthProvider);
-
-    // 👇 USAMOS LA NUEVA FUNCIÓN DE DATE_UTILS
     _months = _monthsAroundWindow(initialMonth);
 
     for (final m in _months) {
@@ -92,12 +88,18 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     final txt = isSel ? cs.primary : cs.onSurface.withOpacity(.80);
 
     return InkWell(
-      key: _chipKeys[m], // Usa la key estática
+      key: _chipKeys[m],
       borderRadius: BorderRadius.circular(12),
-      onTap: () async {
+
+      // 👇 ÚNICO CAMBIO: La lógica de 'onTap'
+      onTap: () {
         final firstDay = DateTime(m.year, m.month, 1);
-        await _centerChipAsync(m, animate: true);
-        if (mounted) widget.onSelect(firstDay);
+
+        // 1. ELIMINAMOS el 'await _centerChipAsync'.
+        // El 'ref.listen' de abajo se encargará de esto.
+
+        // 2. SOLO notificamos a la página.
+        widget.onSelect(firstDay);
       },
       child: Container(
         constraints: const BoxConstraints(minWidth: 80),
@@ -159,6 +161,8 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
       });
     }
 
+    // Este listener ahora es el ÚNICO responsable
+    // de centrar la barra de chips.
     ref.listen<DateTime>(selectedMonthProvider, (prev, next) {
       if (!mounted || prev == next) return;
       final targetMonth = DateTime(next.year, next.month, 1);

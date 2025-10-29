@@ -52,6 +52,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   String _versionName = '';
   String _buildNumber = '';
 
+  // 👇 CAMBIO 1: Añadimos el "semáforo"
+  bool _isJumpingToMonth = false;
+
   @override
   void initState() {
     super.initState();
@@ -65,22 +68,38 @@ class _HomePageState extends ConsumerState<HomePage> {
     _itemPositionsListener.itemPositions.addListener(_onScrollPositionChanged);
   }
 
-  void _jumpToMonth(DateTime m) {
+  // 👇 CAMBIO 2: Actualizamos _jumpToMonth
+  Future<void> _jumpToMonth(DateTime m) async {
     final monthKey = DateTime(m.year, m.month, 1);
     final index = _monthIndexMap[monthKey];
 
     if (index != null) {
-      _itemScrollController.scrollTo(
+      // 1. Ponemos el semáforo en ROJO
+      _isJumpingToMonth = true;
+
+      // 2. Actualizamos el provider PRIMERO.
+      // Esto le dice a _MonthTopBar que empiece a animarse
+      ref.read(selectedMonthProvider.notifier).setTo(monthKey);
+
+      // 3. Animamos la lista
+      await _itemScrollController.scrollTo(
         index: index,
         duration: const Duration(milliseconds: 450),
         curve: Curves.easeOut,
         alignment: 0.08,
       );
+
+      // 4. Ponemos el semáforo en VERDE
+      _isJumpingToMonth = false;
     }
   }
 
-  // 👇 MEJORA: Nuevo método para manejar el scroll de la lista
+  // 👇 CAMBIO 3: Actualizamos _onScrollPositionChanged
   void _onScrollPositionChanged() {
+    // Si el semáforo está en ROJO (porque estamos saltando),
+    // este listener no hace NADA.
+    if (_isJumpingToMonth) return;
+
     // 1. Obtiene el item que está más arriba en la pantalla
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isEmpty) return;
@@ -100,8 +119,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       final month = entry.key;
       final index = entry.value;
 
-      // Si el índice del 'MonthBanner' es menor o igual al item
-      // que está arriba, es un candidato.
       if (index <= topItemIndex && index > closestIndex) {
         closestIndex = index;
         currentMonth = month;
@@ -110,11 +127,9 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     // 3. Si encontramos un mes, actualizamos el provider
     if (currentMonth != null) {
-      // Usamos 'read' para no causar un loop de rebuilds
       final selected = ref.read(selectedMonthProvider);
       if (selected.year != currentMonth.year ||
           selected.month != currentMonth.month) {
-        // Notifica al provider (esto actualizará la _MonthTopBar)
         ref.read(selectedMonthProvider.notifier).setTo(currentMonth);
       }
     }
@@ -223,9 +238,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               // 5. Mantenemos el selector de mes
               _MonthTopBar(
                 onSelect: (m) {
-                  ref
-                      .read(selectedMonthProvider.notifier)
-                      .setTo(DateTime(m.year, m.month, 1));
+                  // Ahora SÓLO llama a _jumpToMonth.
+                  // Ya no actualiza el provider aquí.
                   _jumpToMonth(m);
                 },
               ),
