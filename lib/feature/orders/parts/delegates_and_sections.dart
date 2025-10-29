@@ -44,53 +44,98 @@ class _WeekSeparator extends StatelessWidget {
     required this.weekStart,
     required this.weekEnd,
     required this.total,
+    required this.currentDisplayMonth, // 👈 NUEVO: Recibe el mes correcto
     this.muted = false,
   });
   final DateTime weekStart;
   final DateTime weekEnd;
   final double total;
+  final DateTime currentDisplayMonth; // 👈 NUEVO
   final bool muted;
 
   @override
   Widget build(BuildContext context) {
-    final monthShort = DateFormat('MMM', 'es_AR');
-    final range =
-        '${monthShort.format(weekStart).toLowerCase()} ${weekStart.day} - ${weekEnd.day}';
-    final fmt = NumberFormat(r"'$' #,##0.00", 'es_AR');
-    final txt = total >= 0 ? '+${fmt.format(total)}' : fmt.format(total);
-    final color = total >= 0 ? Colors.green : Colors.red;
-    final txtStyle = muted
-        ? Theme.of(
-            context,
-          ).textTheme.labelLarge?.copyWith(color: Colors.white24)
-        : Theme.of(
-            context,
-          ).textTheme.labelLarge?.copyWith(color: Colors.white70);
+    // 👇 --- LÓGICA SIMPLIFICADA USANDO currentDisplayMonth ---
+    // 1. Usa SIEMPRE currentDisplayMonth para los límites y el nombre
+    final monthShort = DateFormat(
+      'MMM',
+      'es_AR',
+    ).format(currentDisplayMonth).toLowerCase();
+    final firstDayOfMonth = DateTime(
+      currentDisplayMonth.year,
+      currentDisplayMonth.month,
+      1,
+    );
+    final lastDayOfMonth = DateTime(
+      currentDisplayMonth.year,
+      currentDisplayMonth.month + 1,
+      0,
+    );
+
+    // 2. Determina la fecha de inicio a mostrar:
+    //    Es el día MÁS TARDÍO entre el inicio real de la semana (weekStart)
+    //    y el primer día del mes que estamos mostrando (firstDayOfMonth).
+    final DateTime displayStartDate = weekStart.isBefore(firstDayOfMonth)
+        ? firstDayOfMonth
+        : weekStart;
+
+    // 3. Determina la fecha de fin a mostrar:
+    //    Es el día MÁS TEMPRANO entre el fin real de la semana (weekEnd)
+    //    y el último día del mes que estamos mostrando (lastDayOfMonth).
+    final DateTime displayEndDate = weekEnd.isAfter(lastDayOfMonth)
+        ? lastDayOfMonth
+        : weekEnd;
+
+    // 4. Formatea el rango usando los días recortados y el nombre del mes que estamos mostrando
+    final startDayStr = displayStartDate.day.toString().padLeft(2);
+    final endDayStr = displayEndDate.day.toString().padLeft(2);
+    final range = '$monthShort $startDayStr - $endDayStr';
+    // --- FIN LÓGICA SIMPLIFICADA ---
+
+    final cs = Theme.of(context).colorScheme;
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: muted
+          ? cs.outline.withOpacity(0.6)
+          : cs.onSurface.withOpacity(0.7),
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final verticalPadding = muted ? 4.0 : 16.0;
+
+    // --- Lógica de Total (sin cambios) ---
+    final String txt;
+    final Color color;
+    if (!muted) {
+      final fmt = NumberFormat(r"'$' #,##0.00", 'es_AR');
+      txt = total >= 0 ? '+${fmt.format(total)}' : fmt.format(total);
+      color = total >= 0 ? Colors.green : Colors.red;
+    } else {
+      txt = '';
+      color = Colors.transparent;
+    }
+    // --- FIN Lógica de Total ---
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 6),
+      padding: EdgeInsets.fromLTRB(12, verticalPadding, 12, 6),
       child: Row(
         children: [
-          Expanded(
-            child: Text(range, textAlign: TextAlign.center, style: txtStyle),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: muted ? Colors.white10 : color.withOpacity(.12),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: muted ? Colors.white12 : color.withOpacity(.35),
+          // Layout condicional (sin cambios)
+          if (muted)
+            Expanded(
+              child: Text(range, textAlign: TextAlign.center, style: textStyle),
+            ),
+          if (!muted) ...[
+            Expanded(
+              child: Text(range, textAlign: TextAlign.center, style: textStyle),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(/* ... */),
+              child: Text(
+                txt,
+                style: TextStyle(color: color, fontWeight: FontWeight.w700),
               ),
             ),
-            child: Text(
-              muted ? '—' : txt,
-              style: TextStyle(
-                color: muted ? Colors.white38 : color,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -141,4 +186,101 @@ class _MonthBanner extends StatelessWidget {
 
   String _cap(String s) =>
       s.isEmpty ? s : (s[0].toUpperCase() + s.substring(1));
+}
+
+class _EmptyMonthPlaceholder extends StatelessWidget {
+  const _EmptyMonthPlaceholder({required this.date});
+  final DateTime date; // Primer día del mes
+
+  // Helper para calcular el ancho necesario para 2 dígitos (o el número más ancho)
+  // Helper para calcular el ancho necesario
+  double _calculateNumberWidth(BuildContext context, TextStyle style) {
+    // 👇 Obtiene la dirección del texto del contexto
+    //    (Directionality.of devuelve dart:ui's TextDirection)
+    final ui.TextDirection direction = Directionality.of(context);
+
+    final painter = TextPainter(
+      text: TextSpan(text: '00', style: style),
+      maxLines: 1,
+      // 👇 Usa el tipo con prefijo ui.TextDirection
+      textDirection: direction, // <-- Pasar la variable 'direction'
+    )..layout();
+    return painter.size.width;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final weeksInMonth = _weeksInsideMonth(date);
+    final monthShort = DateFormat('MMM', 'es_AR').format(date).toLowerCase();
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final textStyle = textTheme.bodyMedium?.copyWith(
+      color: cs.onSurface.withOpacity(0.38), // Color con opacidad
+      fontFeatures: const [
+        FontFeature.tabularFigures(),
+      ], // Mantenlo por si ayuda
+    );
+
+    // Calcula el ancho necesario para los números basado en el estilo
+    // Añadimos un pequeño extra por si acaso
+    final double numberWidth = _calculateNumberWidth(context, textStyle!) + 2.0;
+
+    final firstDayOfMonth = DateTime(date.year, date.month, 1);
+    final lastDayOfMonth = DateTime(date.year, date.month + 1, 0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center, // Centrado
+        children: weeksInMonth.map((weekStart) {
+          final weekEnd = _weekEndSunday(weekStart);
+          final displayStartDate = weekStart.isBefore(firstDayOfMonth)
+              ? firstDayOfMonth
+              : weekStart;
+          final displayEndDate = weekEnd.isAfter(lastDayOfMonth)
+              ? lastDayOfMonth
+              : weekEnd;
+
+          // No necesitamos padLeft ahora, el SizedBox se encarga
+          final startDayStr = displayStartDate.day.toString();
+          final endDayStr = displayEndDate.day.toString();
+
+          // Construye la fila para alinear
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Row(
+              mainAxisSize:
+                  MainAxisSize.min, // Para que la fila no ocupe todo el ancho
+              children: [
+                Text(
+                  '$monthShort ',
+                  style: textStyle,
+                ), // Nombre del mes + espacio
+                // SizedBox con ancho fijo para el primer número, alineado a la derecha
+                SizedBox(
+                  width: numberWidth,
+                  child: Text(
+                    startDayStr,
+                    style: textStyle,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+                Text(' - ', style: textStyle), // Separador
+                // SizedBox con ancho fijo para el segundo número, alineado a la derecha
+                SizedBox(
+                  width: numberWidth,
+                  child: Text(
+                    endDayStr,
+                    style: textStyle,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
 }

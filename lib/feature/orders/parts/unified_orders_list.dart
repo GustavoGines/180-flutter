@@ -53,19 +53,6 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
       }
     });
 
-    // 👇 5. ¡¡ESTE LISTENER ERA EL BUG!!
-    // Lo eliminamos por completo. Ya no queremos reconstruir la
-    // lista cuando el mes seleccionado cambie.
-    /*
-    ref.listen(selectedMonthProvider, (_, next) {
-      if (ordersAsync is AsyncData<List<Order>>) {
-        setState(() {
-          _rebuildFlatList(ordersAsync.value, next);
-        });
-      }
-    });
-    */
-
     return ordersAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('Error al cargar pedidos: $err')),
@@ -106,7 +93,13 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
                     weekEnd: item.data['we'],
                     total: item.data['total'],
                     muted: item.data['muted'],
+                    currentDisplayMonth: item.data['current_month'] as DateTime,
                   );
+
+                case _ItemType.emptyMonthPlaceholder:
+                  return _EmptyMonthPlaceholder(date: item.data);
+                // 👇 --- FIN ---
+
                 case _ItemType.dayHeader:
                   return _DateHeaderDelegate(
                     date: item.data,
@@ -213,11 +206,11 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
 // Define los tipos de items en tu lista
 enum _ItemType {
   padding,
-  // summary, // 👈 ELIMINADO
   monthBanner,
   weekSeparator,
   dayHeader,
   orderCard,
+  emptyMonthPlaceholder,
 }
 
 // Un objeto que representa un item en la lista
@@ -232,21 +225,17 @@ class _ListItem {
 class _FlatListBuilder {
   final Map<DateTime, int> monthIndexMap;
   final List<_ListItem> flatList;
-  // 👇 9. Cambia 'selMonth' por 'staticCenterMonth'
   final DateTime staticCenterMonth;
 
   _FlatListBuilder(this.monthIndexMap, this.staticCenterMonth, this.flatList);
 
-  // 👇 10. El método build ya NO recibe 'selMonth'
   void build({required List<Order> orders}) {
-    // this.selMonth = selMonth; // 👈 LÍNEA ELIMINADA
-
+    // --- Lógica de SplayTree y weekTotals (SIN CAMBIOS) ---
     final byDay = SplayTreeMap<DateTime, List<Order>>((a, b) => a.compareTo(b));
     for (final o in orders) {
       final k = _dayKey(o.eventDate);
       byDay.putIfAbsent(k, () => []).add(o);
     }
-
     final weekTotals = <DateTime, double>{};
     for (final o in orders) {
       final ws = _weekStartSunday(o.eventDate);
@@ -256,63 +245,75 @@ class _FlatListBuilder {
         ifAbsent: () => (o.total ?? 0),
       );
     }
+    // --- Fin de lógica sin cambios ---
 
-    // 👇 11. ¡LA SOLUCIÓN!
-    // La ventana de 49 meses se construye usando el mes central ESTÁTICO,
-    // no el mes seleccionado.
     final allMonthsInWindow = _monthsAroundWindow(staticCenterMonth);
-
-    // Añadimos un padding inicial (como tenías en tus slivers)
     flatList.add(_ListItem(_ItemType.padding, 8.0));
 
     // Iteramos sobre TODOS los 49 meses
     for (final month in allMonthsInWindow) {
-      // (El resto de tu lógica de 'build' va aquí, sin cambios)
-      monthIndexMap[month] =
-          flatList.length; // 👈 Esto ahora pobla el map completo
-      flatList.add(_ListItem(_ItemType.monthBanner, month));
+      monthIndexMap[month] = flatList.length;
+      flatList.add(
+        _ListItem(_ItemType.monthBanner, month),
+      ); // Banner se añade siempre
 
-      final weeks = _weeksInsideMonth(month);
-      for (final ws in weeks) {
-        final we = _weekEndSunday(ws);
-        final total = weekTotals[ws] ?? 0;
+      // 👇 --- ¡AQUÍ EMPIEZA LA NUEVA LÓGICA! ---
 
-        bool weekHasOrders = false;
-        for (int i = 0; i < 7; i++) {
-          final d = ws.add(Duration(days: i));
-          if (d.month != month.month) continue;
-          if (byDay[_dayKey(d)]?.isNotEmpty == true) {
-            weekHasOrders = true;
-            break;
+      // 1. Revisa si el mes tiene CUALQUIER pedido
+      final bool monthHasOrders = byDay.keys.any(
+        (day) => day.year == month.year && day.month == month.month,
+      );
+
+      if (monthHasOrders) {
+        // 2. SI TIENE PEDIDOS: Usa la lógica de semanas normal que ya tenías
+        final weeks = _weeksInsideMonth(month);
+        for (final ws in weeks) {
+          final we = _weekEndSunday(ws);
+          final total = weekTotals[ws] ?? 0;
+
+          // Revisa si la semana tiene pedidos
+          bool weekHasOrders = false;
+          for (int i = 0; i < 7; i++) {
+            final d = ws.add(Duration(days: i));
+            if (d.month != month.month) continue;
+            if (byDay[_dayKey(d)]?.isNotEmpty == true) {
+              weekHasOrders = true;
+              break;
+            }
+          }
+
+          flatList.add(
+            _ListItem(_ItemType.weekSeparator, {
+              'ws': ws,
+              'we': we,
+              'total': total,
+              'muted': !weekHasOrders,
+              'current_month': month,
+            }),
+          );
+
+          // Si no hay pedidos en la semana, no intentes dibujar los días
+          if (!weekHasOrders) continue;
+
+          // Este código solo se ejecuta si 'weekHasOrders' es 'true'
+          for (int i = 0; i < 7; i++) {
+            final day = ws.add(Duration(days: i));
+            if (day.month != month.month) continue;
+            final list = byDay[_dayKey(day)];
+            if (list == null || list.isEmpty) continue;
+
+            flatList.add(_ListItem(_ItemType.dayHeader, day));
+
+            for (final order in list) {
+              flatList.add(_ListItem(_ItemType.orderCard, order));
+            }
           }
         }
-
-        flatList.add(
-          _ListItem(_ItemType.weekSeparator, {
-            'ws': ws,
-            'we': we,
-            'total': total,
-            'muted':
-                !weekHasOrders, // 👈 'muted' se pondrá true si no hay pedidos
-          }),
-        );
-
-        // Si no hay pedidos en la semana, no intentes dibujar los días
-        if (!weekHasOrders) continue;
-
-        for (int i = 0; i < 7; i++) {
-          final day = ws.add(Duration(days: i));
-          if (day.month != month.month) continue;
-          final list = byDay[_dayKey(day)];
-          if (list == null || list.isEmpty) continue;
-
-          flatList.add(_ListItem(_ItemType.dayHeader, day));
-
-          for (final order in list) {
-            flatList.add(_ListItem(_ItemType.orderCard, order));
-          }
-        }
+      } else {
+        // 3. SI NO TIENE PEDIDOS: Añade UN SOLO placeholder para el mes
+        flatList.add(_ListItem(_ItemType.emptyMonthPlaceholder, month));
       }
+      // 👇 --- FIN DE LA NUEVA LÓGICA ---
     }
 
     flatList.add(_ListItem(_ItemType.padding, 80.0));

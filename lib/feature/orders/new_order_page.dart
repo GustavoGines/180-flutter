@@ -174,11 +174,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   void _recalculateTotals() {
     double subtotal = 0.0;
     for (var item in _items) {
-      // El precio unitario AHORA es el precio calculado DEL ITEM
-      subtotal += (item.unitPrice * item.qty);
+      // 👇 USA EL GETTER finalUnitPrice
+      subtotal += (item.finalUnitPrice * item.qty);
     }
 
-    // Usamos tryParse para evitar errores si el campo está vacío o mal formateado
     double delivery =
         double.tryParse(_deliveryCostController.text.replaceAll(',', '.')) ??
         0.0;
@@ -187,7 +186,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     double total = subtotal + delivery;
     double remaining = total - deposit;
 
-    // Actualizar el estado para que la UI refleje los nuevos totales
     // Usamos addPostFrameCallback para evitar errores de setState durante el build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -497,88 +495,140 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- NUEVO: DIÁLOGO PARA MINI TORTAS Y ACCESORIOS ---
+  // --- DIÁLOGO PARA MINI TORTAS Y ACCESORIOS (ACTUALIZADO) ---
   void _addMiniCakeDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
+
+    // --- Inicialización ---
     Product? selectedProduct = isEditing
-        ? miniCakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
-        : miniCakeProducts.first; // Default a Mini Torta
+        ? miniCakeProducts.firstWhereOrNull(
+            (p) => p.name == existingItem.name,
+          ) // Usar !
+        : miniCakeProducts.first;
+
+    double basePrice = isEditing
+        ? existingItem
+              .basePrice // Usar !
+        : selectedProduct?.price ?? 0.0; // Precio base del catálogo
+
+    double adjustments = isEditing ? existingItem.adjustments : 0.0; // Usar !
+
     final qtyController = TextEditingController(
-      text: isEditing ? existingItem.qty.toString() : '1',
+      text: isEditing ? existingItem.qty.toString() : '1', // Usar !
     );
-    // Para el precio personalizado si varía del base
-    final priceController = TextEditingController(
-      text: isEditing
-          ? existingItem.unitPrice.toStringAsFixed(0) // Usar ! en existingItem
-          : selectedProduct?.price.toStringAsFixed(0) ?? '0',
+    final adjustmentsController = TextEditingController(
+      text: adjustments.toStringAsFixed(0), // Mostrar ajuste actual
     );
     final notesController = TextEditingController(
-      text: isEditing
-          ? (existingItem.customizationJson?['item_notes'] as String?) ?? ''
-          : '',
+      text: isEditing ? existingItem.customizationNotes ?? '' : '', // Usar !
     );
+    // El precio final se calcula, no se edita directamente
+    final finalPriceController = TextEditingController();
+    // --- Fin Inicialización ---
 
+    // --- Función para calcular precio ---
+    void calculatePrice() {
+      final qty = int.tryParse(qtyController.text) ?? 0;
+      final currentAdjustments =
+          double.tryParse(adjustmentsController.text) ?? 0.0;
+      if (qty > 0) {
+        final finalUnitPrice = basePrice + currentAdjustments;
+        finalPriceController.text = (finalUnitPrice * qty).toStringAsFixed(
+          0,
+        ); // Muestra el total del item
+      } else {
+        finalPriceController.text = 'N/A';
+      }
+      // Actualizar el estado local de adjustments para guardarlo
+      adjustments = currentAdjustments;
+    }
+
+    // Calcular precio inicial
+    WidgetsBinding.instance.addPostFrameCallback((_) => calculatePrice());
+    // --- Fin Función Precio ---
     showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
+          // Necesario para Dropdown y cálculos
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text(
-                isEditing
-                    ? 'Editar Mini Torta/Accesorio'
-                    : 'Añadir Mini Torta/Accesorio',
-              ),
+              title: Text(isEditing ? 'Editar Item' : 'Añadir Item'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButtonFormField<Product>(
-                      // --- CAMBIO: De initialValue a value ---
-                      initialValue: selectedProduct,
-                      // --- FIN CAMBIO ---
+                      initialValue: selectedProduct, // Ahora usa 'value'
                       items: miniCakeProducts.map((Product product) {
                         return DropdownMenuItem<Product>(
                           value: product,
-                          child: Text(product.name),
+                          child: Text(
+                            '${product.name} (\$${product.price.toStringAsFixed(0)})',
+                          ),
                         );
                       }).toList(),
                       onChanged: (Product? newValue) {
                         setDialogState(() {
                           selectedProduct = newValue;
-                          // Actualizar precio base si no se está editando
-                          if (!isEditing) {
-                            priceController.text =
-                                newValue?.price.toStringAsFixed(0) ?? '0';
-                          }
+                          basePrice =
+                              newValue?.price ?? 0.0; // Actualiza precio base
+                          // Reinicia ajustes si cambia el producto? Opcional.
+                          // adjustmentsController.text = '0';
+                          calculatePrice(); // Recalcula
                         });
                       },
                       decoration: const InputDecoration(labelText: 'Producto'),
+                      isExpanded: true,
                     ),
-                    TextField(
+                    TextFormField(
                       controller: qtyController,
                       decoration: const InputDecoration(labelText: 'Cantidad'),
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (_) =>
+                          setDialogState(calculatePrice), // Recalcula
                     ),
-                    TextField(
-                      controller: priceController,
+                    // --- NUEVOS CAMPOS ---
+                    TextFormField(
+                      controller: adjustmentsController,
                       decoration: InputDecoration(
-                        labelText: 'Precio Final por Unidad (\$)',
-                        hintText:
-                            'Modificar si el precio varía del base (\$${selectedProduct?.price.toStringAsFixed(0) ?? '0'})',
+                        labelText: 'Ajuste Manual al Precio Unitario (\$)',
+                        hintText: 'Ej: 500 (extra), -200 (descuento)',
+                        prefixText:
+                            '${basePrice.toStringAsFixed(0)} + ', // Muestra base
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
+                        signed: true, // Permite negativo
                         decimal: false,
                       ),
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'^-?\d*'),
+                        ), // Permite '-' al inicio y dígitos
+                      ],
+                      onChanged: (_) =>
+                          setDialogState(calculatePrice), // Recalcula
                     ),
-                    TextField(
+                    TextFormField(
                       controller: notesController,
                       decoration: const InputDecoration(
-                        labelText: 'Notas Específicas (ej. diseño)',
+                        labelText: 'Notas de Ajuste/Personalización',
+                        hintText: 'Ej: Diseño especial, cambio de color, etc.',
                       ),
                       maxLines: 2,
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                    // --- FIN NUEVOS CAMPOS ---
+                    TextFormField(
+                      // Mostrar precio final (no editable)
+                      controller: finalPriceController,
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Precio Final Item (Cant * (Base + Ajuste))',
+                        prefixText: '\$',
+                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -591,40 +641,46 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: darkBrown),
                   onPressed: () {
-                    // Sincrónico (no async)
                     if (selectedProduct == null) return;
                     final qty = int.tryParse(qtyController.text) ?? 0;
-                    final finalPrice =
-                        double.tryParse(priceController.text) ??
-                        selectedProduct!.price;
-                    final notes = notesController.text.trim();
+                    // 'adjustments' ya está actualizado por el onChanged
 
-                    if (qty <= 0) return; // Validación básica
+                    if (qty <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('La cantidad debe ser mayor a 0.'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                      return;
+                    }
 
                     final newItem = OrderItem(
-                      id: isEditing
-                          ? existingItem.id
-                          : null, // Usar ! en existingItem
-                      name: selectedProduct!.name,
+                      id: isEditing ? existingItem.id : null, // Usar !
+                      name: selectedProduct!.name, // Usar !
                       qty: qty,
-                      unitPrice: finalPrice,
+                      basePrice: basePrice, // Guardar precio base
+                      adjustments: adjustments, // Guardar ajuste
+                      customizationNotes: notesController.text.trim().isEmpty
+                          ? null
+                          : notesController.text.trim(),
                       customizationJson: {
-                        'product_category': selectedProduct!.category.name,
-                        'product_unit': selectedProduct!.unit.name,
-                        if (notes.isNotEmpty) 'item_notes': notes,
-                        // Añadir más campos si es necesario
+                        // Guardar info relevante
+                        'product_category':
+                            selectedProduct!.category.name, // Usar !
+                        'product_unit': selectedProduct!.unit.name, // Usar !
+                        // Puedes añadir más si es necesario, pero evita duplicar lo que ya está en campos
                       },
                     );
 
                     _updateItemsAndRecalculate(() {
                       if (isEditing) {
-                        _items[itemIndex!] = newItem; // Usar ! en itemIndex
+                        _items[itemIndex!] = newItem; // Usar !
                       } else {
                         _items.add(newItem);
                       }
                     });
 
-                    // No hay 'await' antes, por lo que el check es opcional pero bueno
                     if (dialogContext.mounted) Navigator.pop(dialogContext);
                   },
                   child: Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
@@ -637,129 +693,123 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- NUEVO: DIÁLOGO PARA TORTAS POR KILO ---
+  // --- DIÁLOGO PARA TORTAS POR KILO (ACTUALIZADO) ---
   void _addCakeDialog({OrderItem? existingItem, int? itemIndex}) {
-    // Lógica similar a _addMiniCakeDialog para inicializar estado si es edición
     final bool isEditing = existingItem != null;
-
-    // 1. Obtener datos de forma segura, con valores por defecto
     Map<String, dynamic> customData = isEditing
         ? (existingItem.customizationJson ?? {})
-        : {};
+        : {}; // Usar !
 
+    // --- Inicialización ---
     Product? selectedCakeType = isEditing
         ? cakeProducts.firstWhereOrNull(
             (p) => p.name == existingItem.name,
-          ) // Buscar por nombre
-        : cakeProducts.first; // Default para nuevo
+          ) // Usar !
+        : cakeProducts.first;
 
-    String initialWeightText = isEditing
-        ? (customData['weight_kg']?.toString() ?? '1.0')
-        : '1.0';
-    final weightController = TextEditingController(text: initialWeightText);
+    final weightController = TextEditingController(
+      text: customData['weight_kg']?.toString() ?? '1.0',
+    );
+    // NUEVO: Controller para ajuste manual
+    final adjustmentsController = TextEditingController(
+      text: isEditing
+          ? existingItem.adjustments.toStringAsFixed(0)
+          : '0', // Usar !
+    );
+    final notesController = TextEditingController(
+      // Notas generales del item
+      text: customData['item_notes'] as String? ?? '',
+    );
+    // NUEVO: Controller para notas DEL AJUSTE
+    final adjustmentNotesController = TextEditingController(
+      text: isEditing ? existingItem.customizationNotes ?? '' : '', // Usar !
+    );
 
-    String initialNotesText = isEditing
-        ? (customData['item_notes'] as String? ?? '')
-        : '';
-    final notesController = TextEditingController(text: initialNotesText);
-
-    // 2. Inicializar listas de forma segura
-    List<Filling> selectedFillings = [];
-    if (isEditing) {
-      final names = customData['selected_fillings'] as List<dynamic>? ?? [];
-      selectedFillings = names
-          .map(
-            (name) =>
-                allFillings.firstWhereOrNull((f) => f.name == name?.toString()),
-          )
-          .whereType<Filling>() // Filtra nulos si un nombre no se encuentra
-          .toList();
-    }
-
-    List<Filling> selectedExtraFillings = [];
-    if (isEditing) {
-      final names =
-          customData['selected_extra_fillings'] as List<dynamic>? ?? [];
-      selectedExtraFillings = names
-          .map(
-            (name) => extraCostFillings.firstWhereOrNull(
-              (f) => f.name == name?.toString(),
-            ),
-          )
-          .whereType<Filling>()
-          .toList();
-    }
-
-    List<CakeExtra> selectedExtrasKg = [];
-    if (isEditing) {
-      final names = customData['selected_extras_kg'] as List<dynamic>? ?? [];
-      selectedExtrasKg = names
-          .map(
-            (name) => cakeExtras.firstWhereOrNull(
-              (ex) => ex.name == name?.toString() && !ex.isPerUnit,
-            ),
-          )
-          .whereType<CakeExtra>()
-          .toList();
-    }
-
-    List<UnitExtraSelection> selectedExtrasUnit = [];
-    if (isEditing) {
-      final dataList =
-          customData['selected_extras_unit'] as List<dynamic>? ?? [];
-      selectedExtrasUnit = dataList
-          .map((data) {
-            if (data is Map) {
-              // Validar que sea un mapa
-              final name = data['name']?.toString();
-              final extra = cakeExtras.firstWhereOrNull(
-                (ex) => ex.name == name && ex.isPerUnit,
-              );
-              if (extra != null) {
-                // Usar toInt de json_utils para parsear la cantidad de forma segura
-                final quantity = toInt(data['quantity'], fallback: 1);
-                return UnitExtraSelection(
-                  extra: extra,
-                  quantity: quantity >= 1 ? quantity : 1,
+    List<Filling> selectedFillings =
+        (customData['selected_fillings'] as List<dynamic>? ?? [])
+            .map(
+              (name) => allFillings.firstWhereOrNull(
+                (f) => f.name == name?.toString(),
+              ),
+            )
+            .whereType<Filling>()
+            .toList();
+    List<Filling> selectedExtraFillings =
+        (customData['selected_extra_fillings'] as List<dynamic>? ?? [])
+            .map(
+              (name) => extraCostFillings.firstWhereOrNull(
+                (f) => f.name == name?.toString(),
+              ),
+            )
+            .whereType<Filling>()
+            .toList();
+    List<CakeExtra> selectedExtrasKg =
+        (customData['selected_extras_kg'] as List<dynamic>? ?? [])
+            .map(
+              (name) => cakeExtras.firstWhereOrNull(
+                (ex) => ex.name == name?.toString() && !ex.isPerUnit,
+              ),
+            )
+            .whereType<CakeExtra>()
+            .toList();
+    List<UnitExtraSelection> selectedExtrasUnit =
+        (customData['selected_extras_unit'] as List<dynamic>? ?? [])
+            .map((data) {
+              if (data is Map) {
+                final name = data['name']?.toString();
+                final extra = cakeExtras.firstWhereOrNull(
+                  (ex) => ex.name == name && ex.isPerUnit,
                 );
+                if (extra != null) {
+                  final quantity = toInt(data['quantity'], fallback: 1);
+                  return UnitExtraSelection(
+                    extra: extra,
+                    quantity: quantity >= 1 ? quantity : 1,
+                  );
+                }
               }
-            }
-            return null; // Ignorar entradas inválidas
-          })
-          .whereType<UnitExtraSelection>() // Filtrar nulos
-          .toList();
-    }
+              return null;
+            })
+            .whereType<UnitExtraSelection>()
+            .toList();
 
-    // 3. Inicializar fotos
     final ImagePicker picker = ImagePicker();
-    List<String> existingImageUrls = [];
-    if (isEditing) {
-      final urls = customData['photo_urls'] as List<dynamic>? ?? [];
-      existingImageUrls = urls
-          .map((url) => url?.toString()) // Convertir cada uno a String?
-          .whereType<String>() // Filtrar los que no son String o son null
-          .toList();
-    }
+    List<String> existingImageUrls = List<String>.from(
+      customData['photo_urls'] ?? [],
+    );
     List<XFile> newImageFiles = [];
     bool isUploading = false;
 
-    // 4. Inicializar controlador de precio (se calculará después)
-    final priceController = TextEditingController();
+    // Controladores para precios (solo display)
+    final calculatedBasePriceController =
+        TextEditingController(); // Precio calculado ANTES de ajuste manual
+    final finalPriceController =
+        TextEditingController(); // Precio final DESPUÉS de ajuste manual
+    // --- Fin Inicialización ---
 
-    // --- Función para calcular precio de la torta ---
+    // --- Función para calcular precio ---
+    double calculatedBasePrice = 0.0; // Variable para guardar el base calculado
+    double manualAdjustments = 0.0; // Variable para guardar el ajuste manual
+
     void calculateCakePrice() {
       if (selectedCakeType == null) {
-        priceController.text = 'N/A';
+        calculatedBasePriceController.text = 'N/A';
+        finalPriceController.text = 'N/A';
         return;
       }
       double weight =
           double.tryParse(weightController.text.replaceAll(',', '.')) ?? 0.0;
+      manualAdjustments =
+          double.tryParse(adjustmentsController.text) ??
+          0.0; // Lee ajuste manual
+
       if (weight <= 0) {
-        priceController.text = 'N/A';
+        calculatedBasePriceController.text = 'N/A';
+        finalPriceController.text = 'N/A';
         return;
       }
 
-      double basePrice = selectedCakeType!.price * weight;
+      double base = selectedCakeType!.price * weight;
       double extraFillingsPrice = selectedExtraFillings.fold(
         0.0,
         (sum, f) => sum + (f.extraCostPerKg * weight),
@@ -773,22 +823,30 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
       );
 
-      double totalPrice =
-          basePrice + extraFillingsPrice + extrasKgPrice + extrasUnitPrice;
-      priceController.text = totalPrice.toStringAsFixed(
+      calculatedBasePrice =
+          base +
+          extraFillingsPrice +
+          extrasKgPrice +
+          extrasUnitPrice; // Base = Suma de todo lo calculado
+      double finalPrice =
+          calculatedBasePrice +
+          manualAdjustments; // Final = Base Calculado + Ajuste Manual
+
+      calculatedBasePriceController.text = calculatedBasePrice.toStringAsFixed(
         0,
-      ); // Mostrar sin decimales
+      );
+      finalPriceController.text = finalPrice.toStringAsFixed(0);
     }
 
-    // Calcular precio inicial
     WidgetsBinding.instance.addPostFrameCallback((_) => calculateCakePrice());
+    // --- Fin Función Precio ---
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            // Helper para CheckboxListTile de Rellenos
+            // ... (Helpers buildFillingCheckbox, buildExtraKgCheckbox, buildExtraUnitSelector SIN CAMBIOS) ...
             Widget buildFillingCheckbox(Filling filling, bool isExtraCost) {
               bool isSelected = isExtraCost
                   ? selectedExtraFillings.contains(filling)
@@ -825,7 +883,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               );
             }
 
-            // Helper para CheckboxListTile de Extras (por kg)
             Widget buildExtraKgCheckbox(CakeExtra extra) {
               bool isSelected = selectedExtrasKg.contains(extra);
               return CheckboxListTile(
@@ -848,7 +905,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               );
             }
 
-            // Helper para Extras (por unidad)
             Widget buildExtraUnitSelector(CakeExtra extra) {
               UnitExtraSelection? selection = selectedExtrasUnit
                   .firstWhereOrNull((sel) => sel.extra == extra);
@@ -913,7 +969,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Selección Tipo Torta
+                    // --- Campos existentes (Tipo, Peso, Rellenos, Extras, Notas, Fotos...) ---
                     DropdownButtonFormField<Product>(
                       initialValue: selectedCakeType,
                       items: cakeProducts.map((Product product) {
@@ -940,6 +996,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     const SizedBox(height: 16),
                     // Peso
                     TextFormField(
+                      // Peso
                       controller: weightController,
                       decoration: const InputDecoration(
                         labelText: 'Peso Estimado (kg)',
@@ -953,9 +1010,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           RegExp(r'^\d*[\.,]?\d{0,2}'),
                         ), // Acepta . o ,
                       ],
-                      onChanged: (_) => setDialogState(
-                        calculateCakePrice,
-                      ), // Recalcular al cambiar peso
+                      onChanged: (_) => setDialogState(calculateCakePrice),
                     ),
                     const SizedBox(height: 16),
 
@@ -964,6 +1019,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       'Rellenos Incluidos (Seleccionar)',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
+                    // Rellenos
                     ...freeFillings.map((f) => buildFillingCheckbox(f, false)),
                     const SizedBox(height: 16),
 
@@ -972,6 +1028,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       'Rellenos con Costo Extra (Seleccionar)',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
+                    // Rellenos Extra
                     ...extraCostFillings.map(
                       (f) => buildFillingCheckbox(f, true),
                     ),
@@ -982,6 +1039,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       'Extras (Costo por Kg)',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
+                    // Extras KG
                     ...cakeExtras
                         .where((ex) => !ex.isPerUnit)
                         .map(buildExtraKgCheckbox),
@@ -992,6 +1050,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       'Extras (Costo por Unidad)',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
+                    // Extras Unidad
                     ...cakeExtras
                         .where((ex) => ex.isPerUnit)
                         .map(buildExtraUnitSelector),
@@ -999,6 +1058,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                     // Notas específicas del item
                     TextField(
+                      // Notas Item
                       controller: notesController,
                       decoration: const InputDecoration(
                         labelText:
@@ -1009,11 +1069,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     const SizedBox(height: 16),
 
                     // Sección de Fotos (igual que en addItemDialog)
+                    // ... Sección de Fotos (SIN CAMBIOS) ...
                     const Divider(),
                     const Text(
                       'Fotos de Referencia (Opcional)',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
+                    // Wrap de fotos
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Wrap(
@@ -1041,6 +1103,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         ],
                       ),
                     ),
+                    // Botón Añadir Fotos
                     TextButton.icon(
                       icon: const Icon(Icons.photo_library),
                       label: const Text('Añadir Fotos'),
@@ -1054,13 +1117,56 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       },
                     ),
                     const Divider(),
+                    // --- FIN Campos existentes ---
 
-                    // Precio Calculado (solo mostrar)
-                    TextField(
-                      controller: priceController,
+                    // --- NUEVOS CAMPOS ---
+                    TextFormField(
+                      // Mostrar precio base calculado (readOnly)
+                      controller: calculatedBasePriceController,
                       readOnly: true,
                       decoration: const InputDecoration(
-                        labelText: 'Precio Calculado Item',
+                        labelText: 'Precio Base Calculado',
+                        prefixText: '\$',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      // Input para ajuste manual
+                      controller: adjustmentsController,
+                      decoration: InputDecoration(
+                        labelText: 'Ajuste Manual Adicional (\$)',
+                        hintText: 'Ej: 5000 (extra), -2000 (descuento)',
+                        prefixText:
+                            '${calculatedBasePriceController.text} + ', // Muestra base calculado
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        signed: true,
+                        decimal: false,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
+                      ],
+                      onChanged: (_) =>
+                          setDialogState(calculateCakePrice), // Recalcula
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      // Input para notas del ajuste
+                      controller: adjustmentNotesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Notas del Ajuste Manual',
+                        hintText: 'Ej: Decoración compleja, descuento especial',
+                      ),
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                    // --- FIN NUEVOS CAMPOS ---
+                    const SizedBox(height: 16),
+                    // Precio Final (readOnly)
+                    TextFormField(
+                      controller: finalPriceController,
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Precio Final Item',
                         prefixText: '\$',
                       ),
                       style: const TextStyle(fontWeight: FontWeight.bold),
@@ -1084,20 +1190,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 weightController.text.replaceAll(',', '.'),
                               ) ??
                               0.0;
-                          final notes = notesController.text.trim();
-                          final calculatedPrice =
-                              double.tryParse(priceController.text) ??
-                              0.0; // Usar el precio calculado
+                          // 'manualAdjustments' ya se actualizó en calculateCakePrice
+                          final adjustmentNotes = adjustmentNotesController.text
+                              .trim();
 
-                          if (weight <= 0 || calculatedPrice <= 0) {
+                          if (weight <= 0 || calculatedBasePrice <= 0) {
+                            // Validar base calculado
                             // Mostrar algún error si el peso o precio es inválido
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text(
-                                  'Peso y precio deben ser válidos.',
-                                ),
-                                backgroundColor: Colors.orange,
-                              ),
+                                content: Text('El peso debe ser mayor a 0.'),
+                              ), // Error
                             );
                             return;
                           }
@@ -1105,6 +1208,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           setDialogState(() => isUploading = true);
 
                           // Subir NUEVAS imágenes
+                          // ... (Lógica para subir imágenes SIN CAMBIOS) ...
                           final List<String> newUploadedUrls = [];
                           if (newImageFiles.isNotEmpty) {
                             for (final imageFile in newImageFiles) {
@@ -1120,7 +1224,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             ...existingImageUrls,
                             ...newUploadedUrls,
                           ];
+                          // --- FIN Lógica subir imágenes ---
 
+                          // Construcción del customizationJson (SIN CAMBIOS, ya incluía todo)
                           final customization = {
                             'product_category': selectedCakeType!.category.name,
                             'cake_type': selectedCakeType!.name,
@@ -1142,11 +1248,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   },
                                 )
                                 .toList(),
-                            if (notes.isNotEmpty) 'item_notes': notes,
+                            if (notesController.text.trim().isNotEmpty)
+                              'item_notes': notesController.text
+                                  .trim(), // Notas generales del item
                             if (allImageUrls.isNotEmpty)
                               'photo_urls': allImageUrls,
-                            'calculated_price':
-                                calculatedPrice, // Guardamos el precio calculado
+                            'calculated_base_price':
+                                calculatedBasePrice, // Guardar el base calculado
                           };
                           // Limpiar nulos o listas vacías si prefieres
                           customization.removeWhere(
@@ -1154,13 +1262,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           );
 
                           final newItem = OrderItem(
-                            id: isEditing ? existingItem.id : null,
+                            id: isEditing ? existingItem.id : null, // Usar !
                             name: selectedCakeType!
                                 .name, // Nombre base de la torta
                             qty:
                                 1, // Para tortas, la cantidad suele ser 1, el precio depende del peso/extras
-                            unitPrice:
-                                calculatedPrice, // El precio unitario ES el precio calculado total
+                            basePrice:
+                                calculatedBasePrice, // El base es el calculado
+                            adjustments:
+                                manualAdjustments, // El ajuste es el manual
+                            customizationNotes: adjustmentNotes.isEmpty
+                                ? null
+                                : adjustmentNotes, // Notas del ajuste
                             customizationJson: customization,
                           );
 
@@ -1184,7 +1297,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             color: Colors.white,
                           ),
                         )
-                      : Text(isEditing ? 'Guardar Cambios' : 'Agregar Torta'),
+                      : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
                 ),
               ],
             );
@@ -1194,135 +1307,140 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- NUEVO: DIÁLOGO PARA PRODUCTO DE MESA DULCE ---
+  // --- DIÁLOGO PARA PRODUCTO DE MESA DULCE (ACTUALIZADO) ---
   void _addMesaDulceDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
-
-    // 1. Obtener datos de forma segura, con valores por defecto
     Map<String, dynamic> customData = isEditing
         ? (existingItem.customizationJson ?? {})
-        : {};
+        : {}; // Usar !
 
+    // --- Inicialización ---
     Product? selectedProduct = isEditing
         ? mesaDulceProducts.firstWhereOrNull(
             (p) => p.name == existingItem.name,
-          ) // Buscar por nombre
-        : mesaDulceProducts.first; // Default para nuevo
+          ) // Usar !
+        : mesaDulceProducts.first; // Default para nuevo item
 
-    ProductUnit? selectedSize;
-    if (isEditing) {
+    ProductUnit?
+    selectedSize; // Determinar basado en producto y datos guardados
+    double basePrice = 0.0; // Se calculará
+    double adjustments = isEditing ? existingItem.adjustments : 0.0; // Usar !
+    bool isHalfDozen = customData['is_half_dozen'] as bool? ?? false;
+
+    // Determinar tamaño inicial
+    if (selectedProduct?.pricesBySize != null) {
       final sizeName = customData['selected_size'] as String?;
       if (sizeName != null) {
-        // Usar try-catch por si el nombre guardado ya no es válido en el enum
         try {
           selectedSize = ProductUnit.values.byName(sizeName);
-        } catch (_) {
-          print("Error: Tamaño guardado '$sizeName' ya no es válido.");
-          // selectedSize permanecerá null
-        }
+        } catch (_) {}
+      }
+      // Asegurar que el tamaño sea válido para el producto actual o default
+      if (selectedSize == null ||
+          !selectedProduct!.pricesBySize!.containsKey(selectedSize)) {
+        selectedSize = selectedProduct!.pricesBySize!.keys.first;
       }
     }
 
-    String quantityInput = isEditing ? existingItem.qty.toString() : '1';
+    final qtyController = TextEditingController(
+      // Usaremos controller ahora
+      text: isEditing ? existingItem.qty.toString() : '1', // Usar !
+    );
+    final adjustmentsController = TextEditingController(
+      text: adjustments.toStringAsFixed(0),
+    );
+    final notesController = TextEditingController(
+      // Notas del ajuste
+      text: isEditing ? existingItem.customizationNotes ?? '' : '', // Usar !
+    );
+    final itemNotesController = TextEditingController(
+      // Notas generales del item
+      text: customData['item_notes'] as String? ?? '',
+    );
 
-    // Usar 'as bool?' para el cast seguro antes del ??
-    bool isHalfDozen = isEditing
-        ? (customData['is_half_dozen'] as bool? ?? false)
-        : false;
-
-    String initialNotesText = isEditing
-        ? (customData['item_notes'] as String? ?? '')
-        : '';
-    final notesController = TextEditingController(text: initialNotesText);
-
-    // 2. Inicializar fotos
     final ImagePicker picker = ImagePicker();
-    List<String> existingImageUrls = [];
-    if (isEditing) {
-      final urls = customData['photo_urls'] as List<dynamic>? ?? [];
-      existingImageUrls = urls
-          .map((url) => url?.toString()) // Convertir cada uno a String?
-          .whereType<String>() // Filtrar los que no son String o son null
-          .toList();
-    }
+    List<String> existingImageUrls = List<String>.from(
+      customData['photo_urls'] ?? [],
+    );
     List<XFile> newImageFiles = [];
     bool isUploading = false;
 
-    // 3. Inicializar controlador de precio (se calculará después)
-    final priceController = TextEditingController();
+    final finalPriceController =
+        TextEditingController(); // Precio final calculado
+    // --- Fin Inicialización ---
 
-    // --- Función para calcular precio de Mesa Dulce ---
+    // --- Función para calcular precio ---
+    double manualAdjustments = 0.0;
+
     void calculateMesaDulcePrice() {
       if (selectedProduct == null) {
-        priceController.text = 'N/A';
+        finalPriceController.text = 'N/A';
         return;
       }
 
-      double unitPrice = 0.0;
-      int qty = int.tryParse(quantityInput) ?? 0;
+      int qty = int.tryParse(qtyController.text) ?? 0;
+      manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
+
       if (qty <= 0) {
-        priceController.text = 'N/A';
+        finalPriceController.text = 'N/A';
         return;
       }
 
+      // Determinar precio base unitario
+      double unitBasePrice = 0.0;
       if (selectedProduct!.pricesBySize != null) {
-        // Producto con precios por tamaño (Tartas, Brownie Redondo)
         if (selectedSize == null) {
-          priceController.text = 'Seleccione tamaño';
+          finalPriceController.text = 'Seleccione tamaño';
           return;
         }
-        unitPrice = getPriceBySize(selectedProduct!, selectedSize!) ?? 0.0;
-        // La cantidad para estos suele ser 1 (ya que el precio es por tamaño)
-        qty = 1; // Forzar cantidad a 1 para tartas por tamaño
-        quantityInput = '1'; // Actualizar input visualmente
+        unitBasePrice = getPriceBySize(selectedProduct!, selectedSize!) ?? 0.0;
+        // Forzar qty a 1 si es por tamaño
+        if (qtyController.text != '1') {
+          qtyController.text = '1';
+          qty = 1;
+        }
       } else if (selectedProduct!.allowHalfDozen && isHalfDozen) {
-        // Producto por media docena
-        unitPrice =
-            selectedProduct!.halfDozenPrice ??
-            (selectedProduct!.price /
-                2); // Usa precio media docena si existe, si no, calcula
+        unitBasePrice =
+            selectedProduct!.halfDozenPrice ?? (selectedProduct!.price / 2);
       } else {
-        // Producto por docena o unidad estándar
-        unitPrice = selectedProduct!.price;
+        unitBasePrice = selectedProduct!.price;
       }
 
-      double totalPrice = unitPrice * qty;
-      priceController.text = totalPrice.toStringAsFixed(0);
+      basePrice = unitBasePrice; // Guardamos el base unitario determinado
+      double finalUnitPrice = basePrice + manualAdjustments;
+      double totalItemPrice = finalUnitPrice * qty;
+      finalPriceController.text = totalItemPrice.toStringAsFixed(0);
     }
 
     // Calcular precio inicial
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => calculateMesaDulcePrice(),
     );
+    // --- Fin Función Precio ---
 
+    // --- Build Dialog ---
     showDialog(
       context: context,
       builder: (dialogContext) {
-        // <-- Renombrado a dialogContext
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            // Construir input de cantidad/tamaño dinámicamente
+            // Helper para input cantidad/tamaño (SIN CAMBIOS FUNCIONALES, usa controller)
             Widget buildQuantityOrSizeInput() {
               if (selectedProduct == null) return const SizedBox.shrink();
-
               if (selectedProduct!.pricesBySize != null) {
                 // Dropdown para tamaños
                 List<ProductUnit> availableSizes = selectedProduct!
                     .pricesBySize!
                     .keys
                     .toList();
-                // Asegurar que el tamaño seleccionado sea válido para el producto actual
                 if (selectedSize == null ||
                     !availableSizes.contains(selectedSize)) {
-                  selectedSize = availableSizes
-                      .first; // Default al primer tamaño disponible
+                  selectedSize = availableSizes.first;
                   WidgetsBinding.instance.addPostFrameCallback(
                     (_) => calculateMesaDulcePrice(),
                   );
                 }
-
                 return DropdownButtonFormField<ProductUnit>(
-                  // CORREGIDO: Usar 'value' en lugar de 'initialValue' dentro de StatefulBuilder
                   initialValue: selectedSize,
                   items: availableSizes
                       .map(
@@ -1348,8 +1466,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       children: [
                         Expanded(
                           child: TextFormField(
-                            // No usar controller aquí, manejar con quantityInput y setDialogState
-                            initialValue: quantityInput,
+                            controller: qtyController,
                             decoration: InputDecoration(
                               labelText: isHalfDozen
                                   ? 'Cantidad (Medias Docenas)'
@@ -1359,11 +1476,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
                             ],
-                            onChanged: (value) {
-                              // No llamar a setDialogState aquí directamente para evitar reconstrucciones excesivas
-                              quantityInput = value;
-                              calculateMesaDulcePrice(); // Recalcular solo el precio
-                            },
+                            onChanged: (_) =>
+                                setDialogState(calculateMesaDulcePrice),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -1385,27 +1499,21 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               } else {
                 // Input numérico simple (para unidades o docenas sin media docena)
                 return TextFormField(
-                  initialValue: quantityInput,
+                  controller: qtyController,
                   decoration: InputDecoration(
                     labelText:
                         'Cantidad (${getUnitText(selectedProduct!.unit, plural: true)})',
                   ),
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (value) {
-                    quantityInput = value;
-                    calculateMesaDulcePrice();
-                  },
+                  onChanged: (_) =>
+                      setDialogState(calculateMesaDulcePrice), // Recalcula
                 );
               }
             }
 
             return AlertDialog(
-              title: Text(
-                isEditing
-                    ? 'Editar Producto Mesa Dulce'
-                    : 'Añadir Producto Mesa Dulce',
-              ),
+              title: Text(isEditing ? 'Editar Item' : 'Añadir Item Mesa Dulce'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1413,8 +1521,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   children: [
                     // Selección Producto Mesa Dulce
                     DropdownButtonFormField<Product>(
-                      // CORREGIDO: Usar 'value' en lugar de 'initialValue'
-                      initialValue: selectedProduct,
+                      initialValue: selectedProduct, // Usa 'value'
                       items: mesaDulceProducts.map((Product product) {
                         String priceSuffix = '';
                         if (product.unit == ProductUnit.dozen) {
@@ -1453,13 +1560,46 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     // Input de Cantidad/Tamaño (dinámico)
                     buildQuantityOrSizeInput(),
                     const SizedBox(height: 16),
-                    // Notas específicas del item
-                    TextField(
+                    // --- NUEVOS CAMPOS ---
+                    TextFormField(
+                      // Input para ajuste manual
+                      controller: adjustmentsController,
+                      decoration: InputDecoration(
+                        labelText: 'Ajuste Manual al Precio Unitario (\$)',
+                        hintText: 'Ej: 50 (extra), -20 (desc)',
+                        prefixText:
+                            '${basePrice.toStringAsFixed(0)} + ', // Muestra base unitario
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        signed: true,
+                        decimal: false,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
+                      ],
+                      onChanged: (_) =>
+                          setDialogState(calculateMesaDulcePrice), // Recalcula
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      // Input para notas del ajuste
                       controller: notesController,
                       decoration: const InputDecoration(
-                        labelText: 'Notas Específicas (ej. diseño galletas)',
+                        labelText: 'Notas del Ajuste',
+                        hintText: 'Ej: Diseño especial galletas, etc.',
                       ),
                       maxLines: 2,
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      // Notas generales del item
+                      controller: itemNotesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Notas Generales del Item',
+                      ),
+                      maxLines: 2,
+                      textCapitalization: TextCapitalization.sentences,
                     ),
                     const SizedBox(height: 16),
 
@@ -1511,11 +1651,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     const Divider(),
 
                     // Precio Calculado (solo mostrar)
-                    TextField(
-                      controller: priceController,
+                    TextFormField(
+                      controller: finalPriceController,
                       readOnly: true,
                       decoration: const InputDecoration(
-                        labelText: 'Precio Calculado Item',
+                        labelText: 'Precio Final Item (Total)',
                         prefixText: '\$',
                       ),
                       style: const TextStyle(fontWeight: FontWeight.bold),
@@ -1525,8 +1665,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () =>
-                      Navigator.pop(dialogContext), // <-- Usar dialogContext
+                  onPressed: () => Navigator.pop(dialogContext),
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
@@ -1534,27 +1673,29 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   onPressed: isUploading
                       ? null
                       : () async {
-                          // <-- ASYNC
                           if (selectedProduct == null) return;
 
-                          final qty = int.tryParse(quantityInput) ?? 0;
-                          final notes = notesController.text.trim();
-                          final calculatedPrice =
-                              double.tryParse(priceController.text) ??
-                              0.0; // Usar el precio calculado
+                          final qty = int.tryParse(qtyController.text) ?? 0;
+                          // 👇 Usa la variable de estado correcta para el ajuste manual
+                          final manualAdjustments =
+                              double.tryParse(adjustmentsController.text) ??
+                              0.0;
+                          final adjustmentNotes = notesController.text.trim();
+                          final itemNotes = itemNotesController.text.trim();
 
-                          // Validación
+                          // Validación (sin cambios)
                           if (qty <= 0 ||
-                              calculatedPrice <= 0 ||
+                              basePrice <=
+                                  0 || // 'basePrice' SÍ existe en el estado
                               (selectedProduct!.pricesBySize != null &&
                                   selectedSize == null)) {
-                            // Usar context (del StatefulBuilder) para SnackBar
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
                                   'Verifica la cantidad y/o tamaño.',
                                 ),
-                                backgroundColor: Colors.orange,
+                                backgroundColor:
+                                    Colors.orange, // Añadido para claridad
                               ),
                             );
                             return;
@@ -1562,43 +1703,24 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                           setDialogState(() => isUploading = true);
 
-                          // --- Operación Async ---
+                          // --- Lógica subir imágenes (SIN CAMBIOS) ---
                           final List<String> newUploadedUrls = [];
                           if (newImageFiles.isNotEmpty) {
                             for (final imageFile in newImageFiles) {
                               final url = await _compressAndUpload(
-                                // <-- AWAIT
                                 imageFile,
                                 ref,
                               );
                               if (url != null) newUploadedUrls.add(url);
                             }
                           }
-                          // --- Fin Operación Async ---
-
-                          // Combinar URLs
                           final allImageUrls = [
                             ...existingImageUrls,
                             ...newUploadedUrls,
                           ];
+                          // --- FIN Lógica subir imágenes ---
 
-                          // Determinar el precio unitario guardado
-                          double savedUnitPrice = selectedProduct!.price;
-                          if (selectedProduct!.pricesBySize != null &&
-                              selectedSize != null) {
-                            savedUnitPrice =
-                                getPriceBySize(
-                                  selectedProduct!,
-                                  selectedSize!,
-                                ) ??
-                                0.0;
-                          } else if (selectedProduct!.allowHalfDozen &&
-                              isHalfDozen) {
-                            savedUnitPrice =
-                                selectedProduct!.halfDozenPrice ??
-                                (selectedProduct!.price / 2);
-                          }
-
+                          // --- CUSTOMIZATION JSON ACTUALIZADO ---
                           final customization = {
                             'product_category': selectedProduct!.category.name,
                             'product_unit': selectedProduct!.unit.name,
@@ -1606,22 +1728,33 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               'selected_size': selectedSize!.name,
                             if (selectedProduct!.allowHalfDozen)
                               'is_half_dozen': isHalfDozen,
-                            if (notes.isNotEmpty) 'item_notes': notes,
+                            // 👇 Guarda las notas generales del item aquí
+                            if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
                             if (allImageUrls.isNotEmpty)
                               'photo_urls': allImageUrls,
-                            'calculated_price': calculatedPrice,
+                            // 👇 Guarda el precio base unitario calculado (antes de ajustes)
+                            'calculated_base_price': basePrice,
                           };
                           customization.removeWhere(
                             (key, value) => (value is List && value.isEmpty),
                           );
+                          // --- FIN CUSTOMIZATION JSON ---
 
+                          // --- CREACIÓN DEL OrderItem ACTUALIZADO ---
                           final newItem = OrderItem(
                             id: isEditing ? existingItem.id : null,
                             name: selectedProduct!.name,
                             qty: qty,
-                            unitPrice: savedUnitPrice,
+                            basePrice: basePrice, // Base unitario determinado
+                            // 👇 Usa la variable correcta para el ajuste manual
+                            adjustments: manualAdjustments,
+                            // 👇 Usa la variable correcta para las notas de ajuste
+                            customizationNotes: adjustmentNotes.isEmpty
+                                ? null
+                                : adjustmentNotes,
                             customizationJson: customization,
                           );
+                          // --- FIN CREACIÓN OrderItem ---
 
                           _updateItemsAndRecalculate(() {
                             if (isEditing) {
@@ -1631,12 +1764,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             }
                           });
 
-                          // --- CORRECCIÓN ---
-                          // Comprobar 'mounted' del DIÁLOGO antes de usar su context
                           if (dialogContext.mounted) {
                             Navigator.pop(dialogContext);
                           }
-                          // --- FIN CORRECCIÓN ---
                         },
                   child: isUploading
                       ? const SizedBox(
@@ -1647,9 +1777,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             color: Colors.white,
                           ),
                         )
-                      : Text(
-                          isEditing ? 'Guardar Cambios' : 'Agregar Producto',
-                        ),
+                      : Text(isEditing ? 'Guardar Cambios' : 'Agregar Torta'),
                 ),
               ],
             );
@@ -1793,37 +1921,21 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     String t(TimeOfDay x) =>
         '${x.hour.toString().padLeft(2, '0')}:${x.minute.toString().padLeft(2, '0')}';
 
-    // --- PAYLOAD MODIFICADO ---
+    // --- PAYLOAD ACTUALIZADO ---
     final payload = {
       'client_id': _selectedClient!.id,
       'event_date': fmt.format(_date),
       'start_time': t(_start),
       'end_time': t(_end),
-      'status': isEditMode
-          ? widget.order!.status
-          : 'confirmed', // Mantener estado si edita
+      'status': isEditMode ? widget.order!.status : 'confirmed',
       'deposit': _depositAmount, // Usar valor calculado/parseado
-      'delivery_cost': _deliveryCost > 0
-          ? _deliveryCost
-          : null, // Incluir costo envío, null si es 0
+      'delivery_cost': _deliveryCost > 0 ? _deliveryCost : null,
       'notes': _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
-      // Mapear items. La estructura interna de customizationJson ya está definida en los diálogos
-      'items': _items.map((e) {
-        // Asegurarse de que el unitPrice sea el calculado si existe, si no el base
-        double finalUnitPrice =
-            e.customizationJson?['calculated_price'] ?? e.unitPrice;
-        return {
-          'id': e.id, // Enviar ID si existe (para update)
-          'name': e.name,
-          'qty': e.qty,
-          'unit_price':
-              finalUnitPrice, // Enviar el precio unitario final del item
-          'customization_json': e.customizationJson,
-        };
-      }).toList(),
-      // No necesitamos enviar el total, el backend debería (re)calcularlo por seguridad
+      // 👇 Mapea items usando toJson() del OrderItem actualizado
+      'items': _items.map((item) => item.toJson()).toList(),
+      // No enviar 'total', el backend lo recalcula.
     };
 
     try {
@@ -2127,7 +2239,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                       if (category == ProductCategory.torta) {
                         details += '${custom['weight_kg']}kg';
-                        if (custom['selected_fillings'] != null) {
+                        if (custom['selected_fillings'] != null &&
+                            (custom['selected_fillings'] as List).isNotEmpty) {
                           details +=
                               ' | Rellenos: ${(custom['selected_fillings'] as List).join(", ")}';
                         }
@@ -2143,8 +2256,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       } else if (category == ProductCategory.miniTorta) {
                         // Detalles específicos de mini torta si los hay
                       }
-                      if (custom['item_notes'] != null) {
-                        details += ' | Notas: ${custom['item_notes']}';
+                      if (item.customizationNotes != null) {
+                        details += ' | Notas: ${item.customizationNotes}';
                       }
 
                       return Card(
@@ -2165,16 +2278,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           subtitle: Text(
                             details.isNotEmpty
                                 ? details
-                                : 'Precio: ${_currencyFormat.format(item.unitPrice)}',
+                                : 'Precio Base: ${_currencyFormat.format(item.basePrice)}', // Mostrar base si no hay detalles
                           ),
                           trailing: Row(
                             // Usar Row para precio y botón borrar
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
+                                // 👇 USA finalUnitPrice para el total del item
                                 _currencyFormat.format(
-                                  item.unitPrice * item.qty,
-                                ), // Precio total del item
+                                  item.finalUnitPrice * item.qty,
+                                ),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: darkBrown,
