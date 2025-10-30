@@ -14,7 +14,8 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
   late final List<DateTime> _months;
   final Map<DateTime, GlobalKey> _chipKeys = {};
 
-  final bool _didInitialScroll = false; // 🔹 flag importante
+  // ignore: unused_field, prefer_final_fields
+  bool _didInitialScroll = false; // 🔹 flag importante
 
   @override
   void initState() {
@@ -27,13 +28,15 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
       _chipKeys[m] = GlobalKey();
     }
 
-    // 🔥 Esperar un frame adicional antes de centrar
+    // 🔥 ESTA ES LA LÓGICA CORRECTA PARA EL CENTRADO INICIAL
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future.delayed(const Duration(milliseconds: 350));
+      await Future.delayed(const Duration(milliseconds: 600)); // Espera clave
       if (!mounted) return;
 
+      // Leemos el provider DE NUEVO por si acaso cambió
       final selected = ref.read(selectedMonthProvider);
-      await scrollToCurrentMonth(selected, animate: false);
+      await scrollToCurrentMonth(selected, animate: true);
+      _didInitialScroll = true;
     });
   }
 
@@ -156,16 +159,9 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     ref.listen<DateTime>(selectedMonthProvider, (prev, next) {
       if (!mounted || prev == next) return;
       final target = DateTime(next.year, next.month, 1);
-      scrollToCurrentMonth(target, animate: true);
+      // Solo animamos si el scroll inicial ya se hizo
+      scrollToCurrentMonth(target, animate: _didInitialScroll);
     });
-
-    // 🔥 Si al inicio aún no se centró, lo hacemos (fallback)
-    if (!_didInitialScroll) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final current = DateTime(selected.year, selected.month, 1);
-        scrollToCurrentMonth(current);
-      });
-    }
 
     return Container(
       height: 60,
