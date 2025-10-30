@@ -1,15 +1,20 @@
-part of '../home_page.dart';
+// ignore: use_string_in_part_of_directives
+part of orders_home; // 👈 ASUMO QUE ESTA ES LA DIRECTIVA CORRECTA
 
 DateTime _dayKey(DateTime d) => DateTime(d.year, d.month, d.day);
 
-DateTime _weekStartSunday(DateTime d) {
+// 👇 MODIFICADO: Ahora calcula el inicio de semana en Lunes
+DateTime _weekStartMonday(DateTime d) {
   final k = _dayKey(d);
-  final daysFromSunday = k.weekday % 7;
-  return k.subtract(Duration(days: daysFromSunday));
+  // Monday.weekday = 1 -> 1 - 1 = 0 (no resta)
+  // Sunday.weekday = 7 -> 7 - 1 = 6 (resta 6 días)
+  final daysFromMonday = k.weekday - 1;
+  return k.subtract(Duration(days: daysFromMonday));
 }
 
+// 👇 MODIFICADO: Ahora usa _weekStartMonday como base
 DateTime _weekEndSunday(DateTime d) =>
-    _weekStartSunday(d).add(const Duration(days: 6));
+    _weekStartMonday(d).add(const Duration(days: 6));
 
 // 👇 NUEVA FUNCIÓN (Movida desde month_top_bar.dart)
 // Genera la lista estática de 49 meses
@@ -22,10 +27,14 @@ List<DateTime> _monthsAroundWindow(DateTime center) {
   return List.generate(total, (i) => DateTime(start.year, start.month + i, 1));
 }
 
+// 👇 MODIFICADO: Ahora usa _weekStartMonday
 List<DateTime> _weeksInsideMonth(DateTime monthFirstDay) {
   final firstOfMonth = DateTime(monthFirstDay.year, monthFirstDay.month, 1);
   final lastOfMonth = DateTime(monthFirstDay.year, monthFirstDay.month + 1, 0);
-  var ws = _weekStartSunday(firstOfMonth);
+
+  // Usa la nueva función de inicio en Lunes
+  var ws = _weekStartMonday(firstOfMonth);
+
   final list = <DateTime>[];
   while (ws.isBefore(lastOfMonth) || ws.isAtSameMomentAs(lastOfMonth)) {
     list.add(ws);

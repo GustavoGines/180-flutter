@@ -4,12 +4,14 @@ class _UnifiedOrdersList extends ConsumerStatefulWidget {
   const _UnifiedOrdersList({
     required this.itemScrollController,
     required this.itemPositionsListener,
-    required this.monthIndexMap, required Map<DateTime, int> dayIndexMap,
+    required this.monthIndexMap,
+    required this.dayIndexMap, // 👈 Ya lo tenías, está OK
   });
 
   final ItemScrollController itemScrollController;
   final ItemPositionsListener itemPositionsListener;
   final Map<DateTime, int> monthIndexMap;
+  final Map<DateTime, int> dayIndexMap; // 👈 Ya lo tenías, está OK
 
   @override
   ConsumerState<_UnifiedOrdersList> createState() => _UnifiedOrdersListState();
@@ -24,18 +26,20 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
     return DateTime(now.year, now.month, 1);
   }();
 
-  // 👇 2. Pasa el mes ESTÁTICO al constructor del builder
+  // 👇 2. Pasa el mes ESTÁTICO y el dayIndexMap al constructor del builder
   late final _listBuilder = _FlatListBuilder(
-    widget.monthIndexMap,
-    _staticCenterMonth, // 👈 Usa el mes estático
-    _flatList,
+    monthIndexMap: widget.monthIndexMap,
+    dayIndexMap: widget.dayIndexMap, // 👈 AÑADIDO: Pasa el mapa de días
+    staticCenterMonth: _staticCenterMonth,
+    flatList: _flatList,
   );
 
-  // 👇 3. _rebuildFlatList ya NO necesita 'selMonth'
+  // 👇 3. _rebuildFlatList ahora también limpia el dayIndexMap
   void _rebuildFlatList(List<Order> orders) {
     widget.monthIndexMap.clear();
+    widget.dayIndexMap.clear(); // 👈 AÑADIDO: Limpia el mapa de días
     _flatList.clear();
-    _listBuilder.build(orders: orders); // 👈 Solo pasa los pedidos
+    _listBuilder.build(orders: orders);
   }
 
   @override
@@ -224,10 +228,16 @@ class _ListItem {
 // y la convierte en una List<_ListItem>
 class _FlatListBuilder {
   final Map<DateTime, int> monthIndexMap;
+  final Map<DateTime, int> dayIndexMap; // 👈 AÑADIDO
   final List<_ListItem> flatList;
   final DateTime staticCenterMonth;
 
-  _FlatListBuilder(this.monthIndexMap, this.staticCenterMonth, this.flatList);
+  _FlatListBuilder({
+    required this.monthIndexMap,
+    required this.dayIndexMap,
+    required this.staticCenterMonth,
+    required this.flatList,
+  });
 
   void build({required List<Order> orders}) {
     // --- Lógica de SplayTree y weekTotals (SIN CAMBIOS) ---
@@ -236,9 +246,11 @@ class _FlatListBuilder {
       final k = _dayKey(o.eventDate);
       byDay.putIfAbsent(k, () => []).add(o);
     }
+    // --- Lógica de weekTotals (MODIFICADA) ---
     final weekTotals = <DateTime, double>{};
     for (final o in orders) {
-      final ws = _weekStartSunday(o.eventDate);
+      // 👇 CAMBIO AQUÍ: Usa la nueva lógica de Lunes
+      final ws = _weekStartMonday(o.eventDate);
       weekTotals.update(
         ws,
         (v) => v + (o.total ?? 0),
@@ -256,8 +268,6 @@ class _FlatListBuilder {
       flatList.add(
         _ListItem(_ItemType.monthBanner, month),
       ); // Banner se añade siempre
-
-      // 👇 --- ¡AQUÍ EMPIEZA LA NUEVA LÓGICA! ---
 
       // 1. Revisa si el mes tiene CUALQUIER pedido
       final bool monthHasOrders = byDay.keys.any(
@@ -313,7 +323,6 @@ class _FlatListBuilder {
         // 3. SI NO TIENE PEDIDOS: Añade UN SOLO placeholder para el mes
         flatList.add(_ListItem(_ItemType.emptyMonthPlaceholder, month));
       }
-      // 👇 --- FIN DE LA NUEVA LÓGICA ---
     }
 
     flatList.add(_ListItem(_ItemType.padding, 80.0));
