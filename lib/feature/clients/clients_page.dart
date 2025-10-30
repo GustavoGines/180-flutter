@@ -4,10 +4,6 @@ import '../../core/models/client.dart';
 import 'clients_repository.dart';
 import 'package:go_router/go_router.dart';
 
-final clientsRepoProvider = Provider<ClientsRepository>(
-  (_) => ClientsRepository(),
-);
-
 class ClientsPage extends ConsumerStatefulWidget {
   const ClientsPage({super.key});
   @override
@@ -31,7 +27,16 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Clientes')),
+      appBar: AppBar(
+        title: const Text('Clientes'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Ver papelera',
+            onPressed: () => context.push('/clients/trashed'),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -63,7 +68,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                       return ListTile(
                         title: Text(c.name),
                         subtitle: Text('${c.phone ?? "-"} • ${c.email ?? "-"}'),
-                        onTap: () => context.go('/clients/${c.id}'),
+                        onTap: () => context.push('/clients/${c.id}/edit'),
                       );
                     },
                   ),
@@ -71,7 +76,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.go('/orders/new'),
+        onPressed: () => context.push('/clients/new'),
         child: const Icon(Icons.add),
       ),
     );

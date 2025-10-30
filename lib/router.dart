@@ -13,6 +13,8 @@ import 'feature/clients/clients_page.dart';
 import 'feature/auth/presentation/forgot_password_page.dart';
 import 'feature/auth/presentation/reset_password_page.dart';
 import 'feature/auth/auth_state.dart';
+import 'feature/clients/client_form_page.dart';
+import 'feature/clients/trashed_clients_page.dart';
 
 final goRouterNotifierProvider = Provider((ref) => GoRouterNotifier(ref));
 
@@ -77,6 +79,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/clients',
         builder: (context, state) => const ClientsPage(),
+      ),
+      GoRoute(
+        path: '/clients/new',
+        builder: (context, state) => const ClientFormPage(),
+      ),
+      GoRoute(
+        path: '/clients/:id/edit',
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          return ClientFormPage(clientId: id);
+        },
+      ),
+      GoRoute(
+        path: '/clients/trashed',
+        builder: (context, state) => const TrashedClientsPage(),
       ),
       GoRoute(
         path: '/order/:id',

@@ -26,11 +26,6 @@ import 'orders_repository.dart';
 import 'order_detail_page.dart';
 import 'home_page.dart'; // Para invalidar ordersByFilterProvider
 
-// Providers
-final clientsRepoProvider = Provider((_) => ClientsRepository());
-// El provider de ordersRepo ya debería existir globalmente, si no, defínelo aquí o impórtalo.
-// final ordersRepoProvider = Provider((_) => OrdersRepository());
-
 // La página principal ahora es un ConsumerWidget simple que decide si crear o editar
 class NewOrderPage extends ConsumerWidget {
   final int? orderId; // Recibe el ID, o nulo si es un pedido nuevo
@@ -518,11 +513,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   void _addMiniCakeDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
 
+    Map<String, dynamic> customData = isEditing
+        ? (existingItem.customizationJson ?? {})
+        : {};
+
     // --- Inicialización ---
     Product? selectedProduct = isEditing
         ? miniCakeProducts.firstWhereOrNull(
             (p) => p.name == existingItem.name,
-          ) // Usar !
+          ) 
         : miniCakeProducts.first;
 
     double basePrice = isEditing
@@ -538,9 +537,25 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     final adjustmentsController = TextEditingController(
       text: adjustments.toStringAsFixed(0), // Mostrar ajuste actual
     );
-    final notesController = TextEditingController(
-      text: isEditing ? existingItem.customizationNotes ?? '' : '', // Usar !
+
+    // Renombrado para claridad (estas son notas del ajuste)
+    final adjustmentNotesController = TextEditingController(
+      text: isEditing ? existingItem.customizationNotes ?? '' : '',
     );
+
+    // Notas generales del item (sabor, temática, etc.)
+    final itemNotesController = TextEditingController(
+      text: customData['item_notes'] as String? ?? '',
+    );
+
+    // Lógica para manejo de imágenes
+    final ImagePicker picker = ImagePicker();
+    List<String> existingImageUrls = List<String>.from(
+      customData['photo_urls'] ?? [],
+    );
+    List<XFile> newImageFiles = [];
+    bool isUploading = false;
+
     final finalPriceController = TextEditingController();
     // --- Fin Inicialización ---
 
@@ -575,6 +590,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start, // Alinear
                   children: [
                     DropdownButtonFormField<Product>(
                       initialValue: selectedProduct, // Ahora usa 'value'
@@ -629,7 +645,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           setDialogState(calculatePrice), // Recalcula
                     ),
                     TextFormField(
-                      controller: notesController,
+                      controller: adjustmentNotesController, // Controller renombrado
                       decoration: const InputDecoration(
                         labelText: 'Notas de Ajuste/Personalización',
                         hintText: 'Ej: Diseño especial, cambio de color, etc.',
@@ -637,7 +653,63 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       maxLines: 2,
                       textCapitalization: TextCapitalization.sentences,
                     ),
-                    // --- FIN NUEVOS CAMPOS ---
+                    // --- AÑADIDO: SECCIÓN DE NOTAS Y FOTOS ---
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: itemNotesController,
+                      decoration: const InputDecoration(
+                        labelText: 'Notas Generales del Item',
+                        hintText: 'Ej: Sabor, temática...',
+                      ),
+                      maxLines: 2,
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const Text(
+                      'Fotos de Referencia (Opcional)',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Wrap(
+                        spacing: 8.0,
+                        runSpacing: 8.0,
+                        children: [
+                          ...existingImageUrls.map(
+                            (url) => _buildImageThumbnail(
+                              url,
+                              true,
+                              () => setDialogState(
+                                () => existingImageUrls.remove(url),
+                              ),
+                            ),
+                          ),
+                          ...newImageFiles.map(
+                            (file) => _buildImageThumbnail(
+                              file,
+                              false,
+                              () => setDialogState(
+                                () => newImageFiles.remove(file),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.photo_library),
+                      label: const Text('Añadir Fotos'),
+                      onPressed: () async {
+                        final pickedFiles = await picker.pickMultiImage();
+                        if (pickedFiles.isNotEmpty) {
+                          setDialogState(
+                            () => newImageFiles.addAll(pickedFiles),
+                          );
+                        }
+                      },
+                    ),
+                    const Divider(),
                     TextFormField(
                       // Mostrar precio final (no editable)
                       controller: finalPriceController,
@@ -658,50 +730,87 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(backgroundColor: darkBrown),
-                  onPressed: () {
-                    if (selectedProduct == null) return;
-                    final qty = int.tryParse(qtyController.text) ?? 0;
-                    // 'adjustments' ya está actualizado por el onChanged
+                  onPressed: isUploading
+                      ? null
+                      : () async {
+                          if (selectedProduct == null) return;
+                          final qty = int.tryParse(qtyController.text) ?? 0;
+                          
+                          if (qty <= 0) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('La cantidad debe ser mayor a 0.'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
 
-                    if (qty <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('La cantidad debe ser mayor a 0.'),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                      return;
-                    }
+                          // --- AÑADIDO: Lógica de subida de fotos ---
+                          setDialogState(() => isUploading = true);
 
-                    final newItem = OrderItem(
-                      id: isEditing ? existingItem.id : null, // Usar !
-                      name: selectedProduct!.name, // Usar !
-                      qty: qty,
-                      basePrice: basePrice, // Guardar precio base
-                      adjustments: adjustments, // Guardar ajuste
-                      customizationNotes: notesController.text.trim().isEmpty
-                          ? null
-                          : notesController.text.trim(),
-                      customizationJson: {
-                        // Guardar info relevante
-                        'product_category':
-                            selectedProduct!.category.name, // Usar !
-                        'product_unit': selectedProduct!.unit.name, // Usar !
-                        // Puedes añadir más si es necesario, pero evita duplicar lo que ya está en campos
-                      },
-                    );
+                          final List<String> newUploadedUrls = [];
+                          if (newImageFiles.isNotEmpty) {
+                            for (final imageFile in newImageFiles) {
+                              final url =
+                                  await _compressAndUpload(imageFile, ref);
+                              if (url != null) newUploadedUrls.add(url);
+                            }
+                          }
+                          final allImageUrls = [
+                            ...existingImageUrls,
+                            ...newUploadedUrls
+                          ];
+                          final itemNotes = itemNotesController.text.trim();
+                          final adjustmentNotes =
+                              adjustmentNotesController.text.trim();
+                          // --- FIN AÑADIDO ---
 
-                    _updateItemsAndRecalculate(() {
-                      if (isEditing) {
-                        _items[itemIndex!] = newItem; // Usar !
-                      } else {
-                        _items.add(newItem);
-                      }
-                    });
+                          final newItem = OrderItem(
+                            id: isEditing ? existingItem.id : null,
+                            name: selectedProduct!.name,
+                            qty: qty,
+                            basePrice: basePrice,
+                            adjustments: adjustments,
+                            
+                            // --- MODIFICADO: Usar variables correctas ---
+                            customizationNotes: adjustmentNotes.isEmpty
+                                ? null
+                                : adjustmentNotes,
+                            customizationJson: {
+                              'product_category': selectedProduct!.category.name,
+                              'product_unit': selectedProduct!.unit.name,
+                              // --- AÑADIDO ---
+                              if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
+                              if (allImageUrls.isNotEmpty)
+                                'photo_urls': allImageUrls,
+                              // --- FIN AÑADIDO ---
+                            },
+                          );
 
-                    if (dialogContext.mounted) Navigator.pop(dialogContext);
-                  },
-                  child: Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
+                          _updateItemsAndRecalculate(() {
+                            if (isEditing) {
+                              _items[itemIndex!] = newItem;
+                            } else {
+                              _items.add(newItem);
+                            }
+                          });
+
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext);
+                          }
+                        },
+                  // --- MODIFICADO: Mostrar loader si está subiendo ---
+                  child: isUploading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
                 ),
               ],
             );
@@ -1874,12 +1983,30 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   // --- FUNCIÓN PARA ABRIR DIÁLOGO DE EDICIÓN CORRECTO ---
   void _editItemDialogRouter(int index) {
     final item = _items[index];
-    final categoryString =
-        item.customizationJson?['product_category'] as String?;
-    final category = ProductCategory.values.firstWhereOrNull(
-      (e) => e.name == categoryString,
-    );
+    final custom = item.customizationJson ?? {};
 
+    ProductCategory? category;
+
+    // 1. Intenta leer la categoría moderna (la que estás guardando ahora)
+    final categoryString = custom['product_category'] as String?;
+    if (categoryString != null) {
+      category = ProductCategory.values.firstWhereOrNull(
+        (e) => e.name == categoryString,
+      );
+    }
+
+    // 2. Si falló (es un item viejo), intenta adivinar por el nombre
+    if (category == null) {
+      if (cakeProducts.any((p) => p.name == item.name)) {
+        category = ProductCategory.torta;
+      } else if (mesaDulceProducts.any((p) => p.name == item.name)) {
+        category = ProductCategory.mesaDulce;
+      } else if (miniCakeProducts.any((p) => p.name == item.name)) {
+        category = ProductCategory.miniTorta;
+      }
+    }
+
+    // 3. Ahora sí, usa el 'category' (obtenido de una u otra forma)
     if (category == ProductCategory.torta) {
       _addCakeDialog(existingItem: item, itemIndex: index);
     } else if (category == ProductCategory.mesaDulce) {
@@ -1887,14 +2014,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     } else if (category == ProductCategory.miniTorta) {
       _addMiniCakeDialog(existingItem: item, itemIndex: index);
     } else {
-      // Fallback: Abrir diálogo genérico o mostrar error si no se reconoce
+      // Si NINGUNO de los métodos funcionó, ahora sí muestra el error
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se puede editar este tipo de item aún.'),
+        SnackBar(
+          content: Text(
+            'No se puede editar (Categoría desconocida: "${item.name}")',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
-      // O podrías tener un _addGenericItemDialog como antes para items viejos/desconocidos
     }
   }
 
