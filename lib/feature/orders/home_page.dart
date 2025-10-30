@@ -1,6 +1,7 @@
 // ignore: unnecessary_library_name
 library orders_home;
 
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io' show Platform;
 import 'dart:ui' as ui;
@@ -51,6 +52,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _isJumpingToMonth = false;
   bool _didPerformInitialScroll = false;
 
+  Timer? _jumpCooldownTimer;
+
   @override
   void initState() {
     super.initState();
@@ -62,7 +65,21 @@ class _HomePageState extends ConsumerState<HomePage> {
     _itemPositionsListener.itemPositions.addListener(_onScrollPositionChanged);
   }
 
+  // 👇 AÑADIR ESTE MÉTODO
+  @override
+  void dispose() {
+    _jumpCooldownTimer?.cancel();
+    _itemPositionsListener.itemPositions.removeListener(
+      _onScrollPositionChanged,
+    );
+    super.dispose();
+  }
+
   Future<void> _jumpToMonth(DateTime m) async {
+    // 1. Si había un temporizador de "cooldown" anterior, ¡cancélalo!
+    //    Esto permite que el nuevo clic "gane".
+    _jumpCooldownTimer?.cancel();
+
     final monthKey = DateTime(m.year, m.month, 1);
     final index = _monthIndexMap[monthKey];
 
@@ -70,15 +87,21 @@ class _HomePageState extends ConsumerState<HomePage> {
       _isJumpingToMonth = true;
       ref.read(selectedMonthProvider.notifier).setTo(monthKey);
 
-      await _itemScrollController.scrollTo(
+      // 2. Inicia la animación de scroll (dura 450ms)
+      //    No usamos 'await' para que la UI se sienta instantánea.
+      _itemScrollController.scrollTo(
         index: index,
         duration: const Duration(milliseconds: 450),
         curve: Curves.easeOut,
         alignment: 0.08,
       );
 
-      Future.delayed(const Duration(milliseconds: 500), () {
-        _isJumpingToMonth = false;
+      // 3. Inicia un NUEVO temporizador. Debe durar MÁS que la
+      //    animación (ej: 450ms + 100ms de colchón = 550ms).
+      _jumpCooldownTimer = Timer(const Duration(milliseconds: 550), () {
+        if (mounted) {
+          _isJumpingToMonth = false; // Apaga la bandera SÓLO al final
+        }
       });
     }
   }
@@ -148,19 +171,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
           // Actualiza el mes seleccionado
           ref.read(selectedMonthProvider.notifier).setTo(currentMonthKey);
-
-          // 🔄 Forzar centrado del chip del mes actual
-          Future.delayed(const Duration(milliseconds: 400), () async {
-            if (!mounted) return;
-            final currentMonth = DateTime(now.year, now.month, 1);
-            ref.read(selectedMonthProvider.notifier).setTo(currentMonth);
-
-            // 🔥 Forzar centrado visual en el top bar
-            await _monthBarKey.currentState?.scrollToCurrentMonth(
-              currentMonth,
-              animate: true,
-            );
-          });
         }
       });
     }
