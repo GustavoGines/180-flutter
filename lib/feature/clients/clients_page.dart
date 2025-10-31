@@ -47,6 +47,7 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                   child: TextField(
                     controller: _q,
                     decoration: const InputDecoration(labelText: 'Buscar'),
+                    onSubmitted: (_) => _search(), // Opcional: buscar con Enter
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -68,7 +69,9 @@ class _ClientsPageState extends ConsumerState<ClientsPage> {
                       return ListTile(
                         title: Text(c.name),
                         subtitle: Text('${c.phone ?? "-"} • ${c.email ?? "-"}'),
-                        onTap: () => context.push('/clients/${c.id}/edit'),
+                        onTap: () =>
+                            context.push('/clients/${c.id}'), // Va al detalle
+                        trailing: const Icon(Icons.chevron_right),
                       );
                     },
                   ),

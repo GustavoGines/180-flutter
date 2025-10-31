@@ -15,6 +15,7 @@ import 'feature/auth/presentation/reset_password_page.dart';
 import 'feature/auth/auth_state.dart';
 import 'feature/clients/client_form_page.dart';
 import 'feature/clients/trashed_clients_page.dart';
+import 'feature/clients/client_detail_page.dart';
 
 final goRouterNotifierProvider = Provider((ref) => GoRouterNotifier(ref));
 
@@ -78,22 +79,40 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/clients',
-        builder: (context, state) => const ClientsPage(),
-      ),
-      GoRoute(
-        path: '/clients/new',
-        builder: (context, state) => const ClientFormPage(),
-      ),
-      GoRoute(
-        path: '/clients/:id/edit',
-        builder: (context, state) {
-          final id = int.parse(state.pathParameters['id']!);
-          return ClientFormPage(clientId: id);
-        },
-      ),
-      GoRoute(
-        path: '/clients/trashed',
-        builder: (context, state) => const TrashedClientsPage(),
+        builder: (context, state) => const ClientsPage(), // Muestra la lista
+        routes: [
+          // Ruta para crear: /clients/new
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => const ClientFormPage(),
+          ),
+          // Ruta para la papelera: /clients/trashed
+          GoRoute(
+            path: 'trashed',
+            builder: (context, state) => const TrashedClientsPage(),
+          ),
+
+          // --- RUTA DE DETALLE (LA QUE FALTABA) ---
+          GoRoute(
+            path: ':id', // Esto machea /clients/1, /clients/9, etc.
+            builder: (context, state) {
+              final id = int.parse(state.pathParameters['id']!);
+              // Apunta a la PÁGINA DE DETALLE
+              return ClientDetailPage(id: id);
+            },
+            routes: [
+              // Sub-ruta para editar: /clients/:id/edit
+              GoRoute(
+                path: 'edit',
+                builder: (context, state) {
+                  final id = int.parse(state.pathParameters['id']!);
+                  // Apunta a la PÁGINA DE FORMULARIO
+                  return ClientFormPage(clientId: id);
+                },
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: '/order/:id',

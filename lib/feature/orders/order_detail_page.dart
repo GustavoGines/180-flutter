@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
-// import 'package:flutter_riverpod/legacy.dart'; // No necesitas 'legacy' si usas FutureProvider
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'package:collection/collection.dart'; // Para firstWhereOrNull
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
 
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart'; // Asegúrate que OrderItem está importado
@@ -70,57 +71,61 @@ class OrderDetailPage extends ConsumerWidget {
     final orderAsyncValue = ref.watch(orderByIdProvider(orderId));
     final currencyFormat = NumberFormat.currency(locale: 'es_AR', symbol: '\$');
 
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(title: const Text('Detalle del Pedido')),
-      floatingActionButton: orderAsyncValue.whenOrNull(
-        data: (order) {
-          final userRole = ref.watch(authStateProvider).user?.role;
-          // Permitir editar a admin y staff
-          if (userRole == 'admin' || userRole == 'staff') {
-            return FloatingActionButton.extended(
-              icon: const Icon(Icons.edit_note),
-              label: const Text('Acciones'),
-              onPressed: () => _showActionsModal(context, ref, order),
-              backgroundColor: darkBrown,
-              foregroundColor: Colors.white,
-            );
-          }
-          return null;
-        },
+    // Mueve el Scaffold DENTRO del .when()
+    // para que el FAB y el Dropdown puedan usar 'canEdit'
+    return orderAsyncValue.when(
+      loading: () => Scaffold(
+        appBar: AppBar(title: const Text('Detalle del Pedido')),
+        body: const Center(child: CircularProgressIndicator(color: darkBrown)),
       ),
-      body: orderAsyncValue.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator(color: darkBrown)),
-        error: (err, stack) => Center(/* ... (Error sin cambios) ... */),
-        data: (order) {
-          // --- Preparación de datos (ACTUALIZADO) ---
-          final itemsSubtotal = order.items.fold<double>(
-            0.0,
-            // 👇 ¡CAMBIO CLAVE! Usa finalUnitPrice
-            (sum, item) => sum + (item.finalUnitPrice * item.qty),
-          );
-          final deliveryCost = order.deliveryCost ?? 0.0;
-          // Usar el total del backend SIEMPRE si existe, es más confiable
-          final total = order.total ?? (itemsSubtotal + deliveryCost);
-          final deposit = order.deposit ?? 0.0;
-          final balance = total - deposit;
-          // --- Fin Preparación de datos ---
+      error: (err, stack) => Scaffold(
+        appBar: AppBar(title: const Text('Detalle del Pedido')),
+        body: Center(child: Text('Error al cargar el pedido: $err')),
+      ),
+      data: (order) {
+        // --- Lógica de variables ---
+        final userRole = ref.watch(authStateProvider).user?.role;
+        final bool canEdit = userRole == 'admin' || userRole == 'staff';
 
-          // Juntar todas las URLs de fotos (sin cambios)
-          final allPhotoUrls = order.items
-              .map((item) => item.customizationJson?['photo_urls'])
-              .whereNotNull()
-              .whereType<List>()
-              .expand((urls) => urls)
-              .whereType<String>()
-              .toSet()
-              .toList();
+        final itemsSubtotal = order.items.fold<double>(
+          0.0,
+          (sum, item) => sum + (item.finalUnitPrice * item.qty),
+        );
+        final deliveryCost = order.deliveryCost ?? 0.0;
+        final total = order.total ?? (itemsSubtotal + deliveryCost);
+        final deposit = order.deposit ?? 0.0;
+        final balance = total - deposit;
 
-          final ink = _statusInk[order.status] ?? Colors.grey.shade600;
-          final bg = _statusPastelBg[order.status] ?? Colors.grey.shade300;
+        final allPhotoUrls = order.items
+            .map((item) => item.customizationJson?['photo_urls'])
+            .whereNotNull()
+            .whereType<List>()
+            .expand((urls) => urls)
+            .whereType<String>()
+            .toSet()
+            .toList();
 
-          return RefreshIndicator(
+        final ink = _statusInk[order.status] ?? Colors.grey.shade600;
+        final bg = _statusPastelBg[order.status] ?? Colors.grey.shade300;
+
+        // --- Fin Lógica de variables ---
+
+        return Scaffold(
+          backgroundColor: Colors.grey[50],
+          appBar: AppBar(title: const Text('Detalle del Pedido')),
+
+          // El FAB ahora está aquí y puede ver 'canEdit'
+          floatingActionButton: canEdit
+              ? FloatingActionButton.extended(
+                  icon: const Icon(Icons.edit_note),
+                  label: const Text('Acciones'),
+                  onPressed: () => _showActionsModal(context, ref, order),
+                  backgroundColor: darkBrown,
+                  foregroundColor: Colors.white,
+                )
+              : null,
+
+          body: RefreshIndicator(
             onRefresh: () => ref.refresh(orderByIdProvider(orderId).future),
             color: darkBrown,
             child: SingleChildScrollView(
@@ -131,20 +136,23 @@ class OrderDetailPage extends ConsumerWidget {
                   // --- Card Cliente/Evento ---
                   _buildInfoCard(
                     title: 'Evento y Cliente',
-                    // AHORA USA LOS COLORES DEL ESTADO (bg y ink)
-                    backgroundColor: bg, // <-- Color DINÁMICO según estado
-                    borderColor: ink.withAlpha(
-                      77,
-                    ), // <-- Color DINÁMICO según estado
+                    backgroundColor: bg,
+                    borderColor: ink.withAlpha(77),
                     children: [
                       _buildInfoTile(
                         Icons.person_outline,
                         'Cliente',
                         order.client?.name ?? 'No especificado',
-                        trailing: Text(
-                          order.client?.phone ?? '',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
+                        trailing: (order.client?.whatsappUrl != null)
+                            ? IconButton(
+                                icon: const FaIcon(FontAwesomeIcons.whatsapp),
+                                color: Colors.green,
+                                tooltip: 'Chatear con ${order.client?.name}',
+                                onPressed: () {
+                                  launchExternalUrl(order.client!.whatsappUrl!);
+                                },
+                              )
+                            : null,
                       ),
                       if (order.client?.address != null &&
                           order.client!.address!.isNotEmpty)
@@ -152,8 +160,16 @@ class OrderDetailPage extends ConsumerWidget {
                           Icons.location_on_outlined,
                           'Dirección',
                           order.client!.address!,
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.map_outlined,
+                              color: Colors.blue,
+                            ),
+                            tooltip: 'Ver en Google Maps',
+                            onPressed: () =>
+                                launchGoogleMaps(order.client!.address!),
+                          ),
                         ),
-
                       const Divider(indent: 16, endIndent: 16, height: 1),
                       _buildInfoTile(
                         Icons.calendar_today_outlined,
@@ -168,37 +184,56 @@ class OrderDetailPage extends ConsumerWidget {
                         'Horario',
                         '${DateFormat.Hm('es_AR').format(order.startTime)} - ${DateFormat.Hm('es_AR').format(order.endTime)}',
                       ),
-                      const Divider(indent: 16, endIndent: 16, height: 1),
-                      ListTile(
-                        leading: Icon(
-                          Icons.flag_outlined,
-                          color: ink,
-                          size: 28,
-                        ),
-                        title: const Text(
-                          'Estado',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: ink.withAlpha(38),
-                            borderRadius: BorderRadius.circular(99),
-                            border: Border.all(color: ink.withAlpha(102)),
-                          ),
-                          child: Text(
-                            (statusTranslations[order.status] ?? order.status)
-                                .toUpperCase(),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              letterSpacing: .5,
-                              color: ink,
+                      // ⛔ ListTile de Estado ESTÁTICO ELIMINADO ⛔
+                    ],
+                  ),
+
+                  // ✅ NUEVO CARD DE ESTADO INTERACTIVO ✅
+                  _buildInfoCard(
+                    title: 'Estado del Pedido',
+                    backgroundColor: bg,
+                    borderColor: ink.withAlpha(77),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                        child: DropdownButtonFormField<String>(
+                          value: order.status,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white.withAlpha(180),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
                             ),
                           ),
+                          // Genera los items del dropdown
+                          items: statusTranslations.keys
+                              .where((k) => k != 'unknown')
+                              .map((String value) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  // ✅ CORREGIDO (era value.name)
+                                  child: Text(statusTranslations[value]!),
+                                );
+                              })
+                              .toList(),
+                          // Habilita el dropdown solo si el usuario puede editar
+                          onChanged: !canEdit
+                              ? null // Deshabilitado si no es admin/staff
+                              : (String? newStatus) {
+                                  if (newStatus == null ||
+                                      newStatus == order.status) {
+                                    return; // No hacer nada si no hay cambio
+                                  }
+                                  // Llama a la nueva función de lógica
+                                  _handleChangeStatus(
+                                    context,
+                                    ref,
+                                    order,
+                                    newStatus,
+                                  );
+                                },
                         ),
                       ),
                     ],
@@ -208,10 +243,8 @@ class OrderDetailPage extends ConsumerWidget {
                   if (allPhotoUrls.isNotEmpty)
                     _buildInfoCard(
                       title: 'Fotos de Referencia',
-                      backgroundColor: _kPastelLavender, // <-- Color restaurado
-                      borderColor: _kInkLavender.withAlpha(
-                        89,
-                      ), // <-- Color restaurado
+                      backgroundColor: _kPastelLavender,
+                      borderColor: _kInkLavender.withAlpha(89),
                       children: [
                         SizedBox(
                           height: 180,
@@ -227,13 +260,9 @@ class OrderDetailPage extends ConsumerWidget {
                               return Padding(
                                 padding: const EdgeInsets.only(right: 10),
                                 child: GestureDetector(
-                                  onTap: () => _showImageDialog(
-                                    context,
-                                    url,
-                                  ), // <-- Llama al diálogo
+                                  onTap: () => _showImageDialog(context, url),
                                   child: Hero(
-                                    // <-- Añadir Hero para animación (opcional)
-                                    tag: url, // <-- Usar URL como tag único
+                                    tag: url,
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(12.0),
                                       child: Image.network(
@@ -284,7 +313,6 @@ class OrderDetailPage extends ConsumerWidget {
                       final category = ProductCategory.values.firstWhereOrNull(
                         (e) => e.name == custom['product_category']?.toString(),
                       );
-                      // 👇 ¡CAMBIO CLAVE! Usa finalUnitPrice
                       final itemTotal = item.qty * item.finalUnitPrice;
 
                       return Padding(
@@ -398,21 +426,12 @@ class OrderDetailPage extends ConsumerWidget {
                       ),
                     ],
                   ),
-
-                  // --- Card Notas Generales (Sin cambios) ---
-                  if (order.notes != null && order.notes!.isNotEmpty)
-                    _buildInfoCard(
-                      title: 'Notas Generales',
-                      backgroundColor: _kPastelRose,
-                      borderColor: _kInkRose.withAlpha(89),
-                      children: [/* ... (Contenido sin cambios) ... */],
-                    ),
                 ],
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -669,7 +688,7 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // ====== Acciones (MODIFICADO para usar FAB extendido y dialogos mejorados) ======
+  // ====== Acciones (MODIFICADO) ======
   void _showActionsModal(
     BuildContext parentContext,
     WidgetRef ref,
@@ -687,17 +706,7 @@ class OrderDetailPage extends ConsumerWidget {
         return SafeArea(
           child: Wrap(
             children: <Widget>[
-              ListTile(
-                leading: const Icon(
-                  Icons.flag_circle_outlined,
-                  color: darkBrown,
-                ),
-                title: const Text('Cambiar Estado'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showStatusDialog(parentContext, ref, order);
-                },
-              ),
+              // ⛔ "Cambiar Estado" ELIMINADO DE AQUÍ ⛔
               if (!isPaid)
                 ListTile(
                   leading: const Icon(Icons.price_check, color: Colors.green),
@@ -783,76 +792,69 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // --- Diálogo Cambiar Estado (Sin cambios funcionales, quizás estilo) ---
-  void _showStatusDialog(BuildContext context, WidgetRef ref, Order order) {
-    String selectedStatus = order.status;
-
-    showDialog(
+  // --- NUEVA FUNCIÓN DE LÓGICA PARA MANEJAR EL CAMBIO DE ESTADO ---
+  Future<void> _handleChangeStatus(
+    BuildContext context,
+    WidgetRef ref,
+    Order order,
+    String newStatus,
+  ) async {
+    // 1. Pedir confirmación
+    final didConfirm = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Cambiar Estado del Pedido'),
-              content: DropdownButton<String>(
-                value: selectedStatus,
-                isExpanded: true,
-                items: statusTranslations.keys.where((k) => k != 'unknown').map(
-                  (String value) {
-                    // Ocultar 'unknown'
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(statusTranslations[value]!),
-                    );
-                  },
-                ).toList(),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    setDialogState(() => selectedStatus = newValue);
-                  }
-                },
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Cancelar',
-                    style: TextStyle(color: darkBrown),
-                  ),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: darkBrown),
-                  child: const Text('Guardar Estado'),
-                  onPressed: () async {
-                    Navigator.pop(context); // Cierra diálogo
-                    try {
-                      // Mostrar indicador de carga sería ideal
-                      await ref
-                          .read(ordersRepoProvider)
-                          .updateStatus(order.id, selectedStatus);
-                      ref.invalidate(orderByIdProvider(order.id)); // Refresca
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Estado actualizado.'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error al actualizar estado: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar Cambio de Estado'),
+        content: Text(
+          '¿Seguro que quieres cambiar el estado a "${statusTranslations[newStatus]}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: darkBrown),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
     );
+
+    // 2. Si el usuario cancela, revertir el dropdown
+    if (didConfirm != true) {
+      // Invalida el provider para forzar un rebuild y
+      // que el dropdown vuelva a su valor original.
+      ref.invalidate(orderByIdProvider(order.id));
+      return;
+    }
+
+    // 3. Si el usuario confirma, ejecutar el cambio
+    try {
+      await ref.read(ordersRepoProvider).updateStatus(order.id, newStatus);
+
+      ref.invalidate(orderByIdProvider(order.id)); // Refresca la página
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Estado actualizado.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al actualizar estado: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      // Revertir el dropdown si hay un error
+      ref.invalidate(orderByIdProvider(order.id));
+    }
   }
 
   // --- Diálogo Confirmar Eliminación (Sin cambios funcionales, quizás estilo) ---

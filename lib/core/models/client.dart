@@ -6,6 +6,7 @@ class Client {
   final String? address;
   final String? notes;
   final DateTime? deletedAt;
+  final String? whatsappUrl;
 
   Client({
     required this.id,
@@ -15,6 +16,7 @@ class Client {
     this.address,
     this.notes,
     this.deletedAt,
+    this.whatsappUrl,
   });
 
   factory Client.fromJson(Map<String, dynamic> j) => Client(
@@ -27,6 +29,7 @@ class Client {
     deletedAt: j['deleted_at'] != null
         ? DateTime.parse(j['deleted_at'] as String)
         : null,
+    whatsappUrl: j['whatsapp_url'],
   );
 
   Map<String, dynamic> toJson() => {

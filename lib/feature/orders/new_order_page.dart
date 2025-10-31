@@ -8,17 +8,18 @@ import 'package:intl/intl.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:collection/collection.dart'; // Para .firstWhereOrNull
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 // --- AÑADIDOS PARA COMPRESIÓN ---
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:pasteleria_180_flutter/core/json_utils.dart';
+import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
 import 'package:path_provider/path_provider.dart';
 // --- FIN DE AÑADIDOS ---
 
 // --- IMPORTAR EL CATÁLOGO ---
 import 'product_catalog.dart';
 // --- FIN IMPORTAR CATÁLOGO ---
-
 import '../../core/models/client.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
@@ -149,6 +150,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     // Listener para recalcular totales si cambia el costo de envío
     _deliveryCostController.addListener(_recalculateTotals);
+    _clientNameController.addListener(_onClientNameChanged);
   }
 
   @override
@@ -157,6 +159,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     _depositController.dispose();
     _deliveryCostController.dispose();
     _notesController.dispose();
+    _clientNameController.removeListener(_onClientNameChanged);
     super.dispose();
   }
 
@@ -2299,6 +2302,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                     .searchClients(pattern);
                               },
                               itemBuilder: (context, client) => ListTile(
+                                leading: Icon(Icons.person),
                                 title: Text(client.name),
                                 subtitle: Text(client.phone ?? 'Sin teléfono'),
                               ),
@@ -2315,12 +2319,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               ),
                               builder: (context, controller, focusNode) =>
                                   TextFormField(
-                                    controller: controller,
+                                    controller: _clientNameController,
                                     focusNode: focusNode,
-                                    decoration: const InputDecoration(
+                                    decoration: InputDecoration(
                                       labelText: 'Buscar cliente...',
-                                      border: OutlineInputBorder(),
-                                      prefixIcon: Icon(Icons.search),
+                                      border: const OutlineInputBorder(),
+                                      prefixIcon: const Icon(Icons.search),
                                     ),
                                     // Validación: se activa si el usuario toca y
                                     // sale del campo sin seleccionar (o si borra)
@@ -2369,18 +2373,36 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             'Tel: ${_selectedClient!.phone ?? "N/A"}',
                             style: TextStyle(color: darkBrown.withAlpha(200)),
                           ),
-                          // El botón "X" que pediste
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close, color: darkBrown),
-                            tooltip: 'Quitar cliente',
-                            onPressed: () {
-                              // Al presionarlo, limpiamos el estado y volvemos
-                              // a la vista de búsqueda
-                              setState(() {
-                                _selectedClient = null;
-                                _clientNameController.clear();
-                              });
-                            },
+
+                          // 👇 AQUÍ ESTÁ EL CAMBIO: Un Row con ambos botones
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // 1. Botón de WhatsApp
+                              if (_selectedClient!.whatsappUrl != null)
+                                IconButton(
+                                  icon: const FaIcon(FontAwesomeIcons.whatsapp),
+                                  color: Colors.green,
+                                  tooltip: 'Chatear por WhatsApp',
+                                  onPressed: () {
+                                    launchExternalUrl(
+                                      _selectedClient!.whatsappUrl!,
+                                    );
+                                  },
+                                ),
+                              // 2. Botón de Quitar Cliente
+                              IconButton(
+                                icon: const Icon(Icons.close, color: darkBrown),
+                                tooltip: 'Quitar cliente',
+                                onPressed: () {
+                                  // Al presionarlo, limpiamos el estado
+                                  setState(() {
+                                    _selectedClient = null;
+                                    _clientNameController.clear();
+                                  });
+                                },
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -2732,5 +2754,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ],
       ),
     );
+  }
+
+  /// Se llama cada vez que el usuario escribe en el campo
+  void _onClientNameChanged() {
+    // Si el texto del campo NO coincide con el nombre del cliente seleccionado
+    if (_selectedClient != null &&
+        _clientNameController.text != _selectedClient!.name) {
+      // Significa que el usuario está buscando de nuevo.
+      // Ocultamos el botón de WhatsApp.
+      setState(() {
+        _selectedClient = null;
+      });
+    }
   }
 } // Fin de _OrderFormState
