@@ -181,87 +181,106 @@ class OrderDetailPage extends ConsumerWidget {
                           'es_AR',
                         ).format(order.eventDate),
                       ),
-                      _buildInfoTile(
-                        Icons.access_time,
-                        'Horario',
-                        '${DateFormat.Hm('es_AR').format(order.startTime)} - ${DateFormat.Hm('es_AR').format(order.endTime)}',
-                      ),
+                      // --- ✅ MODIFICADO: Horario y Estado en la misma fila ---
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Columna para Horario
+                          Expanded(
+                            flex: 5, // Darle un poco más de espacio al horario
+                            child: _buildInfoTile(
+                              Icons.access_time,
+                              'Horario',
+                              '${DateFormat.Hm('es_AR').format(order.startTime)} - ${DateFormat.Hm('es_AR').format(order.endTime)}',
+                            ),
+                          ),
+                          // Columna para Estado (solo el Dropdown)
+                          Expanded(
+                            flex: 4, // Darle un poco menos de espacio
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                right: 16.0,
+                                left: 8.0,
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ), // Ajuste vertical
+                                  decoration: BoxDecoration(
+                                    color: canEdit
+                                        ? Colors.white.withAlpha(200)
+                                        : ink.withAlpha(38),
+                                    borderRadius: BorderRadius.circular(99),
+                                    border: Border.all(
+                                      color: canEdit
+                                          ? darkBrown.withAlpha(102)
+                                          : ink.withAlpha(102),
+                                    ),
+                                  ),
+                                  child: DropdownButton<String>(
+                                    value: order.status,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      letterSpacing: .5,
+                                      color: ink,
+                                    ),
+                                    icon: canEdit
+                                        ? Icon(
+                                            Icons.arrow_drop_down,
+                                            color: ink,
+                                          )
+                                        : const SizedBox(
+                                            width: 8,
+                                          ), // Espacio para alinear
+                                    isDense: true,
+                                    items: statusTranslations.keys
+                                        .where((k) => k != 'unknown')
+                                        .map((String value) {
+                                          // 1. Obtenemos el color para ESTA opción
+                                          final Color optionColor =
+                                              _statusInk[value] ?? Colors.grey;
 
-                      // --- ✅ NUEVO: ESTADO INTERACTIVO AQUÍ ---
-                      const Divider(indent: 16, endIndent: 16, height: 1),
-                      ListTile(
-                        leading: Icon(
-                          Icons.flag_outlined,
-                          color: ink,
-                          size: 28,
-                        ),
-                        title: const Text(
-                          'Estado',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        // El trailing es el dropdown interactivo
-                        trailing: DropdownButtonHideUnderline(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              // Si no puede editar, se ve como la etiqueta de antes
-                              color: canEdit
-                                  ? Colors.white.withAlpha(200)
-                                  : ink.withAlpha(38),
-                              borderRadius: BorderRadius.circular(99),
-                              // Si puede editar, tiene un borde más obvio
-                              border: Border.all(
-                                color: canEdit
-                                    ? darkBrown.withAlpha(102)
-                                    : ink.withAlpha(102),
+                                          // 2. Retornamos el DropdownMenuItem
+                                          return DropdownMenuItem<String>(
+                                            value: value,
+                                            // El 'child' es solo el texto, pero con estilo
+                                            child: Text(
+                                              statusTranslations[value]!,
+                                              style: TextStyle(
+                                                color:
+                                                    optionColor, // 👈 Color aplicado al texto
+                                                fontWeight: FontWeight
+                                                    .bold, // Texto en negrita
+                                                fontSize:
+                                                    14, // Tamaño de fuente legible
+                                              ),
+                                            ),
+                                          );
+                                        })
+                                        .toList(),
+                                    onChanged: !canEdit
+                                        ? null
+                                        : (String? newStatus) {
+                                            if (newStatus == null ||
+                                                newStatus == order.status) {
+                                              return;
+                                            }
+                                            _handleChangeStatus(
+                                              context,
+                                              ref,
+                                              order,
+                                              newStatus,
+                                            );
+                                          },
+                                  ),
+                                ),
                               ),
                             ),
-                            child: DropdownButton<String>(
-                              value: order.status,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                letterSpacing: .5,
-                                color: ink,
-                              ),
-                              // Ícono solo si se puede editar
-                              icon: canEdit
-                                  ? Icon(Icons.arrow_drop_down, color: ink)
-                                  : const SizedBox.shrink(),
-                              isDense: true,
-                              items: statusTranslations.keys
-                                  .where((k) => k != 'unknown')
-                                  .map((String value) {
-                                    return DropdownMenuItem<String>(
-                                      value: value,
-                                      child: Text(statusTranslations[value]!),
-                                    );
-                                  })
-                                  .toList(),
-                              // Deshabilitado si no es admin/staff
-                              onChanged: !canEdit
-                                  ? null
-                                  : (String? newStatus) {
-                                      if (newStatus == null ||
-                                          newStatus == order.status) {
-                                        return;
-                                      }
-                                      _handleChangeStatus(
-                                        context,
-                                        ref,
-                                        order,
-                                        newStatus,
-                                      );
-                                    },
-                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
@@ -838,57 +857,32 @@ class OrderDetailPage extends ConsumerWidget {
   }
 
   // --- NUEVA FUNCIÓN DE LÓGICA PARA MANEJAR EL CAMBIO DE ESTADO ---
+  // --- FUNCIÓN DE LÓGICA PARA MANEJAR EL CAMBIO DE ESTADO (SIN CONFIRMACIÓN) ---
   Future<void> _handleChangeStatus(
     BuildContext context,
     WidgetRef ref,
     Order order,
     String newStatus,
   ) async {
-    // 1. Pedir confirmación
-    final didConfirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar Cambio de Estado'),
-        content: Text(
-          '¿Seguro que quieres cambiar el estado a "${statusTranslations[newStatus]}"?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: darkBrown),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirmar'),
-          ),
-        ],
-      ),
-    );
-
-    // 2. Si el usuario cancela, revertir el dropdown
-    if (didConfirm != true) {
-      // Invalida el provider para forzar un rebuild y
-      // que el dropdown vuelva a su valor original.
-      ref.invalidate(orderByIdProvider(order.id));
-      return;
-    }
-
-    // 3. Si el usuario confirma, ejecutar el cambio
+    // 1. Ejecutar el cambio inmediatamente
     try {
+      // Llama al repositorio para actualizar el estado
       await ref.read(ordersRepoProvider).updateStatus(order.id, newStatus);
 
-      ref.invalidate(orderByIdProvider(order.id)); // Refresca la página
+      // Refresca la página para mostrar el nuevo estado y color
+      ref.invalidate(orderByIdProvider(order.id));
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Estado actualizado.'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 2), // Más corta
           ),
         );
       }
     } catch (e) {
+      // Si hay un error...
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -897,7 +891,7 @@ class OrderDetailPage extends ConsumerWidget {
           ),
         );
       }
-      // Revertir el dropdown si hay un error
+      // ...revierte el cambio en la UI refrescando con el valor antiguo
       ref.invalidate(orderByIdProvider(order.id));
     }
   }
