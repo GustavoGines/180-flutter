@@ -107,23 +107,25 @@ class OrderDetailPage extends ConsumerWidget {
 
         final ink = _statusInk[order.status] ?? Colors.grey.shade600;
         final bg = _statusPastelBg[order.status] ?? Colors.grey.shade300;
-
         // --- Fin Lógica de variables ---
 
         return Scaffold(
           backgroundColor: Colors.grey[50],
-          appBar: AppBar(title: const Text('Detalle del Pedido')),
+          appBar: AppBar(
+            title: const Text('Detalle del Pedido'),
+            actions: [
+              // --- ✅ NUEVO: BOTÓN DE EDITAR EN APPBAR ---
+              if (canEdit)
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Modificar Pedido',
+                  onPressed: () => context.push('/order/${order.id}/edit'),
+                ),
+            ],
+          ),
 
-          // El FAB ahora está aquí y puede ver 'canEdit'
-          floatingActionButton: canEdit
-              ? FloatingActionButton.extended(
-                  icon: const Icon(Icons.edit_note),
-                  label: const Text('Acciones'),
-                  onPressed: () => _showActionsModal(context, ref, order),
-                  backgroundColor: darkBrown,
-                  foregroundColor: Colors.white,
-                )
-              : null,
+          // --- ⛔ FLOATING ACTION BUTTON ELIMINADO ⛔ ---
+          floatingActionButton: null,
 
           body: RefreshIndicator(
             onRefresh: () => ref.refresh(orderByIdProvider(orderId).future),
@@ -184,56 +186,81 @@ class OrderDetailPage extends ConsumerWidget {
                         'Horario',
                         '${DateFormat.Hm('es_AR').format(order.startTime)} - ${DateFormat.Hm('es_AR').format(order.endTime)}',
                       ),
-                      // ⛔ ListTile de Estado ESTÁTICO ELIMINADO ⛔
-                    ],
-                  ),
 
-                  // ✅ NUEVO CARD DE ESTADO INTERACTIVO ✅
-                  _buildInfoCard(
-                    title: 'Estado del Pedido',
-                    backgroundColor: bg,
-                    borderColor: ink.withAlpha(77),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        child: DropdownButtonFormField<String>(
-                          value: order.status,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: Colors.white.withAlpha(180),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
+                      // --- ✅ NUEVO: ESTADO INTERACTIVO AQUÍ ---
+                      const Divider(indent: 16, endIndent: 16, height: 1),
+                      ListTile(
+                        leading: Icon(
+                          Icons.flag_outlined,
+                          color: ink,
+                          size: 28,
+                        ),
+                        title: const Text(
+                          'Estado',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        // El trailing es el dropdown interactivo
+                        trailing: DropdownButtonHideUnderline(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              // Si no puede editar, se ve como la etiqueta de antes
+                              color: canEdit
+                                  ? Colors.white.withAlpha(200)
+                                  : ink.withAlpha(38),
+                              borderRadius: BorderRadius.circular(99),
+                              // Si puede editar, tiene un borde más obvio
+                              border: Border.all(
+                                color: canEdit
+                                    ? darkBrown.withAlpha(102)
+                                    : ink.withAlpha(102),
+                              ),
+                            ),
+                            child: DropdownButton<String>(
+                              value: order.status,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                letterSpacing: .5,
+                                color: ink,
+                              ),
+                              // Ícono solo si se puede editar
+                              icon: canEdit
+                                  ? Icon(Icons.arrow_drop_down, color: ink)
+                                  : const SizedBox.shrink(),
+                              isDense: true,
+                              items: statusTranslations.keys
+                                  .where((k) => k != 'unknown')
+                                  .map((String value) {
+                                    return DropdownMenuItem<String>(
+                                      value: value,
+                                      child: Text(statusTranslations[value]!),
+                                    );
+                                  })
+                                  .toList(),
+                              // Deshabilitado si no es admin/staff
+                              onChanged: !canEdit
+                                  ? null
+                                  : (String? newStatus) {
+                                      if (newStatus == null ||
+                                          newStatus == order.status) {
+                                        return;
+                                      }
+                                      _handleChangeStatus(
+                                        context,
+                                        ref,
+                                        order,
+                                        newStatus,
+                                      );
+                                    },
                             ),
                           ),
-                          // Genera los items del dropdown
-                          items: statusTranslations.keys
-                              .where((k) => k != 'unknown')
-                              .map((String value) {
-                                return DropdownMenuItem<String>(
-                                  value: value,
-                                  // ✅ CORREGIDO (era value.name)
-                                  child: Text(statusTranslations[value]!),
-                                );
-                              })
-                              .toList(),
-                          // Habilita el dropdown solo si el usuario puede editar
-                          onChanged: !canEdit
-                              ? null // Deshabilitado si no es admin/staff
-                              : (String? newStatus) {
-                                  if (newStatus == null ||
-                                      newStatus == order.status) {
-                                    return; // No hacer nada si no hay cambio
-                                  }
-                                  // Llama a la nueva función de lógica
-                                  _handleChangeStatus(
-                                    context,
-                                    ref,
-                                    order,
-                                    newStatus,
-                                  );
-                                },
                         ),
                       ),
                     ],
@@ -303,7 +330,7 @@ class OrderDetailPage extends ConsumerWidget {
                       ],
                     ),
 
-                  // --- Card Detalles de Productos (ACTUALIZADO) ---
+                  // --- Card Detalles de Productos ---
                   _buildInfoCard(
                     title: 'Productos del Pedido',
                     backgroundColor: _kPastelRose,
@@ -348,7 +375,6 @@ class OrderDetailPage extends ConsumerWidget {
                                 ),
                               ),
                             ),
-                            // 👇 Llama al helper de detalles ACTUALIZADO
                             Padding(
                               padding: const EdgeInsets.only(
                                 left: 72,
@@ -376,7 +402,7 @@ class OrderDetailPage extends ConsumerWidget {
                     }).toList(),
                   ),
 
-                  // --- Card Información Financiera (ACTUALIZADO) ---
+                  // --- Card Información Financiera ---
                   _buildInfoCard(
                     title: 'Resumen Financiero',
                     backgroundColor: _kPastelRose,
@@ -384,7 +410,7 @@ class OrderDetailPage extends ConsumerWidget {
                     children: [
                       _buildSummaryRow(
                         'Subtotal Productos:',
-                        itemsSubtotal, // Usa el itemsSubtotal calculado
+                        itemsSubtotal,
                         currencyFormat,
                       ),
                       if (deliveryCost > 0)
@@ -401,14 +427,14 @@ class OrderDetailPage extends ConsumerWidget {
                       ),
                       _buildSummaryRow(
                         'TOTAL PEDIDO:',
-                        total, // Usa el total calculado
+                        total,
                         currencyFormat,
                         isTotal: true,
                       ),
                       if (deposit > 0)
                         _buildSummaryRow(
                           'Seña Recibida:',
-                          deposit, // Usa el depósito
+                          deposit,
                           currencyFormat,
                         ),
                       const Divider(
@@ -419,13 +445,82 @@ class OrderDetailPage extends ConsumerWidget {
                       ),
                       _buildSummaryRow(
                         'SALDO PENDIENTE:',
-                        balance, // Usa el saldo calculado
+                        balance,
                         currencyFormat,
                         isTotal: true,
                         highlight: balance > 0,
                       ),
+
+                      // --- ✅ NUEVO: BOTÓN MARCAR COMO PAGADO ---
+                      if (canEdit && balance > 0.01) ...[
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              icon: const Icon(Icons.price_check, size: 18),
+                              label: const Text(
+                                'Marcar como Pagado Totalmente',
+                              ),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.green[700],
+                              ),
+                              onPressed: () {
+                                _handleMarkAsPaid(context, ref, order);
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8), // Padding inferior
+                      ],
                     ],
                   ),
+
+                  // --- Card Notas Generales ---
+                  if (order.notes != null && order.notes!.isNotEmpty)
+                    _buildInfoCard(
+                      title: 'Notas Generales',
+                      backgroundColor: _kPastelRose,
+                      borderColor: _kInkRose.withAlpha(89),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            order.notes!,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                  // --- ✅ NUEVO: BOTÓN DE ELIMINAR PEDIDO ---
+                  if (canEdit) ...[
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: OutlinedButton.icon(
+                        icon: Icon(
+                          Icons.delete_forever_outlined,
+                          color: Colors.red.shade700,
+                        ),
+                        label: Text(
+                          'Eliminar Pedido',
+                          style: TextStyle(color: Colors.red.shade700),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.red.shade300),
+                        ),
+                        onPressed: () {
+                          _showDeleteConfirmationDialog(context, ref, order);
+                        },
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -688,108 +783,58 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // ====== Acciones (MODIFICADO) ======
-  void _showActionsModal(
-    BuildContext parentContext,
+  // --- ✅ NUEVA FUNCIÓN: LÓGICA PARA MARCAR COMO PAGADO ---
+  Future<void> _handleMarkAsPaid(
+    BuildContext context,
     WidgetRef ref,
     Order order,
-  ) {
-    final bool isPaid = (order.deposit ?? 0.0) >= (order.total ?? 0.0) - 0.01;
-
-    showModalBottomSheet(
-      context: parentContext,
-      useRootNavigator: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Wrap(
-            children: <Widget>[
-              // ⛔ "Cambiar Estado" ELIMINADO DE AQUÍ ⛔
-              if (!isPaid)
-                ListTile(
-                  leading: const Icon(Icons.price_check, color: Colors.green),
-                  title: const Text('Marcar como Pagado Totalmente'),
-                  onTap: () async {
-                    Navigator.pop(context);
-
-                    final bool confirm =
-                        await showDialog<bool>(
-                          context: parentContext,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Confirmar Pago Total'),
-                            content: const Text(
-                              'Esto establecerá la seña igual al total del pedido. ¿Continuar?',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Cancelar'),
-                              ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('Confirmar'),
-                              ),
-                            ],
-                          ),
-                        ) ??
-                        false;
-
-                    if (confirm) {
-                      try {
-                        await ref.read(ordersRepoProvider).markAsPaid(order.id);
-                        ref.invalidate(orderByIdProvider(order.id));
-
-                        if (!parentContext.mounted) return;
-
-                        ScaffoldMessenger.of(parentContext).showSnackBar(
-                          const SnackBar(
-                            content: Text('Pedido marcado como pagado.'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      } catch (e) {
-                        if (!parentContext.mounted) return;
-
-                        ScaffoldMessenger.of(parentContext).showSnackBar(
-                          SnackBar(
-                            content: Text('Error al marcar como pagado: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined, color: darkBrown),
-                title: const Text('Modificar Pedido Completo'),
-                onTap: () {
-                  Navigator.pop(context);
-                  parentContext.push('/order/${order.id}/edit');
-                },
+  ) async {
+    final bool confirm =
+        await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Confirmar Pago Total'),
+            content: const Text(
+              'Esto establecerá la seña igual al total del pedido. ¿Continuar?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
               ),
-              const Divider(height: 1, indent: 16, endIndent: 16),
-              ListTile(
-                leading: Icon(
-                  Icons.delete_forever_outlined,
-                  color: Colors.red.shade700,
-                ),
-                title: Text(
-                  'Eliminar Pedido',
-                  style: TextStyle(color: Colors.red.shade700),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showDeleteConfirmationDialog(parentContext, ref, order);
-                },
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: darkBrown),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Confirmar'),
               ),
             ],
           ),
+        ) ??
+        false;
+
+    if (confirm) {
+      try {
+        await ref.read(ordersRepoProvider).markAsPaid(order.id);
+        ref.invalidate(orderByIdProvider(order.id));
+
+        if (!context.mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pedido marcado como pagado.'),
+            backgroundColor: Colors.green,
+          ),
         );
-      },
-    );
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al marcar como pagado: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // --- NUEVA FUNCIÓN DE LÓGICA PARA MANEJAR EL CAMBIO DE ESTADO ---
@@ -857,7 +902,7 @@ class OrderDetailPage extends ConsumerWidget {
     }
   }
 
-  // --- Diálogo Confirmar Eliminación (Sin cambios funcionales, quizás estilo) ---
+  // --- Diálogo Confirmar Eliminación (Sin cambios) ---
   void _showDeleteConfirmationDialog(
     BuildContext context,
     WidgetRef ref,
@@ -958,7 +1003,7 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // ====== Helpers de UI (MODIFICADO _buildInfoCard para aceptar children directamente) ======
+  // ====== Helpers de UI (Sin cambios) ======
   Widget _buildInfoCard({
     String? title,
     required List<Widget> children,
@@ -997,8 +1042,6 @@ class OrderDetailPage extends ConsumerWidget {
               height: 1,
               color: borderColor ?? Colors.grey.shade300,
             ),
-          // Aplicar padding solo si hay título, los children deben manejar su propio padding interno si es necesario
-          // O envolver directamente los children en una columna con padding
           Padding(
             padding: EdgeInsets.only(
               bottom: title != null ? 8.0 : 0,
@@ -1014,7 +1057,6 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // _buildInfoTile no necesita cambios
   Widget _buildInfoTile(
     IconData icon,
     String title,
@@ -1040,34 +1082,29 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // --- NUEVA FUNCIÓN: Mostrar Diálogo con Imagen Grande ---
+  // --- _showImageDialog (Sin cambios) ---
   void _showImageDialog(BuildContext context, String imageUrl) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return Dialog(
-          // Hacer el diálogo un poco más grande
           insetPadding: const EdgeInsets.symmetric(
             horizontal: 20,
             vertical: 40,
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min, // Ajustar al contenido
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              // Usar InteractiveViewer para zoom/pan
               Expanded(
-                // Ocupar el espacio disponible
                 child: InteractiveViewer(
-                  panEnabled: true, // Habilitar pan
+                  panEnabled: true,
                   minScale: 0.5,
-                  maxScale: 4.0, // Aumentar zoom máximo
+                  maxScale: 4.0,
                   child: Hero(
-                    // <-- Añadir Hero aquí también con el mismo tag
                     tag: imageUrl,
                     child: Image.network(
                       imageUrl,
-                      fit: BoxFit.contain, // Para ver la imagen completa
-                      // Indicador de carga para la imagen grande
+                      fit: BoxFit.contain,
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
                         return Center(
@@ -1079,7 +1116,6 @@ class OrderDetailPage extends ConsumerWidget {
                           ),
                         );
                       },
-                      // Indicador de error
                       errorBuilder: (context, error, stackTrace) =>
                           const Center(
                             child: Icon(
@@ -1092,14 +1128,13 @@ class OrderDetailPage extends ConsumerWidget {
                   ),
                 ),
               ),
-              // Botón de cierre
               TextButton(
                 child: const Text("Cerrar"),
                 onPressed: () {
                   Navigator.of(context).pop();
                 },
               ),
-              const SizedBox(height: 10), // Pequeño espacio inferior
+              const SizedBox(height: 10),
             ],
           ),
         );
