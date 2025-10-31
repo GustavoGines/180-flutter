@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Para input formatters
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -292,9 +293,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     final addressController = TextEditingController();
 
     showDialog(
-      context: context, // <-- Contexto de _OrderFormState
+      context: context, // Contexto de _OrderFormState
       builder: (dialogContext) => AlertDialog(
-        // <-- Contexto del Dialog
+        // Contexto del Dialog
         title: const Text('Nuevo Cliente', style: TextStyle(color: darkBrown)),
         content: SingleChildScrollView(
           child: Column(
@@ -303,6 +304,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(labelText: 'Nombre'),
+                textCapitalization: TextCapitalization.words,
               ),
               TextField(
                 controller: phoneController,
@@ -312,6 +314,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               TextField(
                 controller: addressController,
                 decoration: const InputDecoration(labelText: 'Dirección'),
+                textCapitalization: TextCapitalization.sentences,
               ),
             ],
           ),
@@ -326,7 +329,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             style: FilledButton.styleFrom(backgroundColor: darkBrown),
             onPressed: () async {
               if (nameController.text.trim().isEmpty) return;
-              // Mostrar loader (opcional pero recomendado)
+
+              // Mostrar loader (dentro del dialogContext)
               showDialog(
                 context: dialogContext,
                 barrierDismissible: false,
@@ -334,10 +338,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     const Center(child: CircularProgressIndicator()),
               );
 
-              Client? newClient; // Declarar fuera del try
-              String? errorMessage; // Para guardar mensaje de error
+              Client? newClient;
+              String? errorMessage;
 
               try {
+                // --- INTENTO DE CREACIÓN ---
                 newClient = await ref.read(clientsRepoProvider).createClient({
                   'name': nameController.text.trim(),
                   'phone': phoneController.text.trim().isEmpty
@@ -348,57 +353,163 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       : addressController.text.trim(),
                 });
 
-                // Si llegamos aquí, la creación fue exitosa
-                // Cerrar el loader si se mostró
+                // Éxito: Cierra el loader
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
               } catch (e) {
-                errorMessage = e.toString(); // Guardar el error
-                debugPrint("Error creando cliente: $e");
-                // Cerrar el loader si se mostró
+                // --- INICIO DE LA NUEVA LÓGICA DE ERROR ---
+
+                // Cierra el loader primero
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
-                // No cerramos el diálogo principal aquí todavía, lo hacemos después del SnackBar
+
+                if (e is DioException &&
+                    (e.response?.statusCode == 409 ||
+                        e.response?.statusCode == 422)) {
+                  // Es un error 409 (restaurar) o 422 (ya existe)
+                  final responseData = e.response?.data;
+                  if (responseData is Map) {
+                    errorMessage =
+                        responseData['message'] as String? ??
+                        'Error de cliente';
+
+                    // Si es 409, Laravel nos envió el cliente para restaurar
+                    if (e.response?.statusCode == 409 &&
+                        responseData['client'] != null) {
+                      try {
+                        final clientData = responseData['client'];
+                        final clientToRestore = Client.fromJson(
+                          (clientData as Map).map(
+                            (k, v) => MapEntry(k.toString(), v),
+                          ),
+                        );
+
+                        // Cierra el diálogo de "Nuevo Cliente"
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+
+                        // Muestra el diálogo de "Restaurar"
+                        // (Usamos el 'context' de la PÁGINA)
+                        _showRestoreDialog(clientToRestore);
+                        return; // Salimos, ya estamos manejando la restauración
+                      } catch (parseError) {
+                        errorMessage = 'Error al procesar cliente duplicado.';
+                      }
+                    }
+                  } else {
+                    errorMessage = e.toString();
+                  }
+                } else {
+                  // Error genérico (sin internet, 500, etc.)
+                  errorMessage = e.toString();
+                }
+                // --- FIN DE LA NUEVA LÓGICA DE ERROR ---
+
+                debugPrint("Error creando cliente: $e");
               }
 
-              // --- CORRECCIÓN: Comprobar 'mounted' ANTES de usar context/dialogContext ---
-              // Usar el context del _OrderFormState (this.context) para setState y SnackBar
-              // Usar dialogContext para cerrar el diálogo en sí
+              // --- Lógica de Seteo/Pop ---
 
-              // Si hubo éxito Y el _OrderFormState sigue montado
+              // Si hubo éxito (newClient no es null)
               if (newClient != null && mounted) {
                 setState(() {
                   _selectedClient = newClient;
-                  _clientNameController.text = newClient!
-                      .name; // Usar ! porque ya sabemos que no es null
+                  _clientNameController.text = newClient!.name;
                 });
-                // Cerrar el diálogo de "Nuevo Cliente"
+                // Cierra el diálogo de "Nuevo Cliente"
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
-                // Mostrar SnackBar de éxito usando el context principal
+
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Cliente creado con éxito'),
+                    content: Text('Cliente creado y seleccionado'),
                     backgroundColor: Colors.green,
                   ),
                 );
               }
-              // Si hubo un error Y el _OrderFormState sigue montado
+              // Si hubo un error (y NO fue el 409 que ya manejamos)
               else if (errorMessage != null && mounted) {
-                // Primero, intentar cerrar el diálogo si aún está abierto
+                // Cierra el diálogo de "Nuevo Cliente"
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
-                // Luego mostrar el SnackBar de error usando el context principal
+
+                // Muestra el error (ej: 422 "Ya existe")
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Error al crear cliente: $errorMessage'),
+                    content: Text(errorMessage), // Muestra el mensaje de la API
                     backgroundColor: Colors.red,
                   ),
                 );
               }
-              // --- FIN CORRECCIÓN ---
+              // --- FIN Lógica de Seteo/Pop ---
             },
             child: const Text('Guardar Cliente'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _showRestoreDialog(Client clientToRestore) async {
+    final didConfirm = await showDialog<bool>(
+      context: context, // Usa el context de la página
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cliente Encontrado'),
+        content: Text(
+          'El cliente "${clientToRestore.name}" ya existe pero fue eliminado. ¿Deseas restaurarlo?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Sí, Restaurar'),
+          ),
+        ],
+      ),
+    );
+
+    if (didConfirm != true) return;
+
+    // Si confirma, llama al repositorio para restaurar
+    setState(() => _isLoading = true);
+    try {
+      final restoredClient = await ref
+          .read(clientsRepoProvider)
+          .restoreClient(clientToRestore.id);
+
+      // Invalidar listas para que se refresquen
+      ref.invalidate(clientsRepoProvider);
+      ref.invalidate(getTrashedClientsProvider);
+
+      if (mounted) {
+        // Setea el cliente restaurado en el formulario
+        setState(() {
+          _selectedClient = restoredClient;
+          _clientNameController.text = restoredClient.name;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cliente restaurado y seleccionado'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al restaurar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        // Asegúrate de que el loader del botón principal se apague
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   // --- FUNCIÓN HELPER PARA COMPRIMIR Y SUBIR (sin cambios) ---
@@ -519,9 +630,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     // --- Inicialización ---
     Product? selectedProduct = isEditing
-        ? miniCakeProducts.firstWhereOrNull(
-            (p) => p.name == existingItem.name,
-          ) 
+        ? miniCakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : miniCakeProducts.first;
 
     double basePrice = isEditing
@@ -645,7 +754,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           setDialogState(calculatePrice), // Recalcula
                     ),
                     TextFormField(
-                      controller: adjustmentNotesController, // Controller renombrado
+                      controller:
+                          adjustmentNotesController, // Controller renombrado
                       decoration: const InputDecoration(
                         labelText: 'Notas de Ajuste/Personalización',
                         hintText: 'Ej: Diseño especial, cambio de color, etc.',
@@ -735,11 +845,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       : () async {
                           if (selectedProduct == null) return;
                           final qty = int.tryParse(qtyController.text) ?? 0;
-                          
+
                           if (qty <= 0) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('La cantidad debe ser mayor a 0.'),
+                                content: Text(
+                                  'La cantidad debe ser mayor a 0.',
+                                ),
                                 backgroundColor: Colors.orange,
                               ),
                             );
@@ -752,18 +864,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           final List<String> newUploadedUrls = [];
                           if (newImageFiles.isNotEmpty) {
                             for (final imageFile in newImageFiles) {
-                              final url =
-                                  await _compressAndUpload(imageFile, ref);
+                              final url = await _compressAndUpload(
+                                imageFile,
+                                ref,
+                              );
                               if (url != null) newUploadedUrls.add(url);
                             }
                           }
                           final allImageUrls = [
                             ...existingImageUrls,
-                            ...newUploadedUrls
+                            ...newUploadedUrls,
                           ];
                           final itemNotes = itemNotesController.text.trim();
-                          final adjustmentNotes =
-                              adjustmentNotesController.text.trim();
+                          final adjustmentNotes = adjustmentNotesController.text
+                              .trim();
                           // --- FIN AÑADIDO ---
 
                           final newItem = OrderItem(
@@ -772,13 +886,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             qty: qty,
                             basePrice: basePrice,
                             adjustments: adjustments,
-                            
+
                             // --- MODIFICADO: Usar variables correctas ---
                             customizationNotes: adjustmentNotes.isEmpty
                                 ? null
                                 : adjustmentNotes,
                             customizationJson: {
-                              'product_category': selectedProduct!.category.name,
+                              'product_category':
+                                  selectedProduct!.category.name,
                               'product_unit': selectedProduct!.unit.name,
                               // --- AÑADIDO ---
                               if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
@@ -2159,104 +2274,118 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               ), // Quitar padding inferior
               children: [
                 // --- SECCIÓN CLIENTE ---
-                Row(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: TypeAheadField<Client>(
-                        controller: _clientNameController,
-                        suggestionsCallback: (pattern) async {
-                          if (pattern.length < 2) return [];
-                          // Limpiar cliente seleccionado si el texto cambia y no coincide
-                          if (_selectedClient != null &&
-                              _selectedClient!.name != pattern) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (mounted) {
-                                setState(() => _selectedClient = null);
-                              }
-                            });
-                          }
-                          return ref
-                              .read(clientsRepoProvider)
-                              .searchClients(pattern);
-                        },
-                        itemBuilder: (context, client) => ListTile(
-                          title: Text(client.name),
-                          subtitle: Text(client.phone ?? 'Sin teléfono'),
-                        ),
-                        onSelected: (client) {
-                          // Usar addPostFrameCallback para asegurar que setState ocurra después del build
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) {
-                              setState(() {
-                                _selectedClient = client;
-                                _clientNameController.text = client.name;
-                              });
-                            }
-                          });
-                        },
-                        emptyBuilder: (context) => const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('No se encontraron clientes.'),
-                        ),
-                        builder: (context, controller, focusNode) => TextFormField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          decoration: InputDecoration(
-                            labelText:
-                                'Buscar cliente *', // Marcar como obligatorio
-                            border: const OutlineInputBorder(),
-                            suffixIcon: _clientNameController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: () {
-                                      controller.clear();
-                                      _clientNameController.clear();
-                                      setState(() => _selectedClient = null);
+                    // --- LÓGICA PARA MOSTRAR/OCULTAR BUSCADOR ---
+                    if (_selectedClient == null)
+                      // --- VISTA DE BÚSQUEDA (Mostrada si NO hay cliente) ---
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TypeAheadField<Client>(
+                              controller: _clientNameController,
+                              suggestionsCallback: (pattern) async {
+                                if (pattern.length < 2) return [];
+                                // Si el usuario escribe, reseteamos el cliente seleccionado
+                                if (_selectedClient != null) {
+                                  setState(() {
+                                    _selectedClient = null;
+                                  });
+                                }
+                                return ref
+                                    .read(clientsRepoProvider)
+                                    .searchClients(pattern);
+                              },
+                              itemBuilder: (context, client) => ListTile(
+                                title: Text(client.name),
+                                subtitle: Text(client.phone ?? 'Sin teléfono'),
+                              ),
+                              onSelected: (client) {
+                                // Al seleccionar, actualizamos el estado
+                                setState(() {
+                                  _selectedClient = client;
+                                  _clientNameController.text = client.name;
+                                });
+                              },
+                              emptyBuilder: (context) => const Padding(
+                                padding: EdgeInsets.all(12.0),
+                                child: Text('No se encontraron clientes.'),
+                              ),
+                              builder: (context, controller, focusNode) =>
+                                  TextFormField(
+                                    controller: controller,
+                                    focusNode: focusNode,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Buscar cliente...',
+                                      border: OutlineInputBorder(),
+                                      prefixIcon: Icon(Icons.search),
+                                    ),
+                                    // Validación: se activa si el usuario toca y
+                                    // sale del campo sin seleccionar (o si borra)
+                                    validator: (value) {
+                                      if (_selectedClient == null) {
+                                        return 'Debes seleccionar un cliente.';
+                                      }
+                                      return null;
                                     },
-                                  )
-                                : null,
+                                  ),
+                            ),
                           ),
-                          validator: (value) {
-                            // Validar que se haya seleccionado un cliente, no solo escrito texto
-                            if (_selectedClient == null) {
-                              return 'Debes seleccionar un cliente de la lista o crear uno nuevo.';
-                            }
-                            // Opcional: validar que el texto coincida con el cliente seleccionado
-                            // if (value != _selectedClient!.name) {
-                            //   return 'El nombre no coincide con el cliente seleccionado.';
-                            // }
-                            return null;
-                          },
+                          const SizedBox(width: 8),
+                          // Botón para 'Crear nuevo cliente'
+                          IconButton.filled(
+                            icon: const Icon(Icons.add),
+                            onPressed: _addClientDialog, // Llama a tu función
+                            tooltip: 'Crear nuevo cliente',
+                            style: IconButton.styleFrom(
+                              backgroundColor: darkBrown,
+                              padding: const EdgeInsets.all(16),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      // --- VISTA "PILL" (Mostrada si SÍ hay cliente) ---
+                      Card(
+                        elevation: 0,
+                        color: primaryPink.withAlpha(51),
+                        margin: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: primaryPink.withAlpha(128)),
+                        ),
+                        child: ListTile(
+                          leading: const Icon(Icons.person, color: darkBrown),
+                          title: Text(
+                            _selectedClient!.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: darkBrown,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Tel: ${_selectedClient!.phone ?? "N/A"}',
+                            style: TextStyle(color: darkBrown.withAlpha(200)),
+                          ),
+                          // El botón "X" que pediste
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close, color: darkBrown),
+                            tooltip: 'Quitar cliente',
+                            onPressed: () {
+                              // Al presionarlo, limpiamos el estado y volvemos
+                              // a la vista de búsqueda
+                              setState(() {
+                                _selectedClient = null;
+                                _clientNameController.clear();
+                              });
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      icon: const Icon(Icons.add),
-                      onPressed: _addClientDialog,
-                      tooltip: 'Crear nuevo cliente',
-                      style: IconButton.styleFrom(backgroundColor: darkBrown),
-                      // Ajustar tamaño si es necesario
-                      // iconSize: 30,
-                      // padding: const EdgeInsets.all(14),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                if (_selectedClient != null)
-                  Card(
-                    elevation: 0,
-                    // color: Theme.of(context).colorScheme.surfaceVariant, // Un color suave del tema
-                    color: primaryPink.withAlpha(26),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Text(
-                        'Tel: ${_selectedClient!.phone ?? "N/A"} | Dir: ${_selectedClient!.address ?? "N/A"}',
-                        style: TextStyle(color: darkBrown.withAlpha(230)),
-                      ),
-                    ),
-                  ),
                 const SizedBox(height: 16),
 
                 // --- SECCIÓN FECHA Y HORA ---
@@ -2330,7 +2459,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   controller: _notesController,
                   decoration: const InputDecoration(
                     labelText: 'Notas Generales del Pedido',
-                    hintText: 'Ej: Decoración especial, alergias, etc.',
+                    hintText: 'Ej: Decoración especial, Extras, etc.',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.notes),
                   ),

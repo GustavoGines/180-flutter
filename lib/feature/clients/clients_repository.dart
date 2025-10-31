@@ -164,4 +164,14 @@ class ClientsRepository {
     }
     return Client.fromJson(map);
   }
+
+  /// DELETE /clients/{id}/force-delete
+  Future<void> forceDeleteClient(int id) async {
+    try {
+      await _dio.delete('/clients/$id/force-delete');
+    } catch (e) {
+      debugPrint('Error en forceDeleteClient: $e');
+      rethrow; // Propaga el error para que la UI lo muestre
+    }
+  }
 }
