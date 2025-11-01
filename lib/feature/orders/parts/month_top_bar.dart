@@ -10,12 +10,9 @@ class _MonthTopBar extends ConsumerStatefulWidget {
 }
 
 class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
-  final _ctrl = ScrollController();
+  // 1. USA EL CONTROLADOR DE 'ScrollablePositionedList'
+  final _itemScrollController = ItemScrollController();
   late final List<DateTime> _months;
-  final Map<DateTime, GlobalKey> _chipKeys = {};
-
-  // ignore: unused_field, prefer_final_fields
-  bool _didInitialScroll = false; // 🔹 flag importante
 
   @override
   void initState() {
@@ -24,64 +21,37 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     final initialMonth = ref.read(selectedMonthProvider);
     _months = _monthsAroundWindow(initialMonth);
 
-    for (final m in _months) {
-      _chipKeys[m] = GlobalKey();
-    }
-
-    // 🔥 ESTA ES LA LÓGICA CORRECTA PARA EL CENTRADO INICIAL
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future.delayed(const Duration(milliseconds: 600)); // Espera clave
-      if (!mounted) return;
-
-      // Leemos el provider DE NUEVO por si acaso cambió
-      final selected = ref.read(selectedMonthProvider);
-      await scrollToCurrentMonth(selected, animate: true);
-      _didInitialScroll = true;
-    });
+    // ⛔️ Ya no hay 'Future.delayed' aquí.
   }
 
+  // 4. FUNCIÓN DE SCROLL NUEVA Y SIMPLE
   Future<void> scrollToCurrentMonth(
     DateTime month, {
     bool animate = true,
   }) async {
-    if (!_ctrl.hasClients) return;
-
-    final key = _chipKeys[DateTime(month.year, month.month, 1)];
-    if (key == null) return;
-
-    // Esperar hasta que el chip tenga contexto
-    BuildContext? ctx;
-    for (int i = 0; i < 10; i++) {
-      ctx = key.currentContext;
-      if (ctx != null) break;
-      await Future.delayed(const Duration(milliseconds: 40));
-    }
-    if (ctx == null || !mounted) return;
-
-    final box = ctx.findRenderObject() as RenderBox?;
-    final parentBox = context.findRenderObject() as RenderBox?;
-    if (box == null || parentBox == null) return;
-
-    final position = box.localToGlobal(Offset.zero, ancestor: parentBox);
-    final viewportWidth = parentBox.size.width;
-
-    // 🌀 Movimiento centrado tipo “carrusel”
-    final targetOffset =
-        _ctrl.offset + position.dx - (viewportWidth / 2 - box.size.width / 2);
-
-    final clamped = targetOffset.clamp(
-      _ctrl.position.minScrollExtent,
-      _ctrl.position.maxScrollExtent,
+    final index = _months.indexWhere(
+      (m) => m.year == month.year && m.month == month.month,
     );
 
+    if (index == -1) {
+      debugPrint("--- [SCROLL] Error: No se encontró el índice para $month");
+      return;
+    }
+
+    debugPrint("--- [SCROLL] Scrolleando al ÍNDICE: $index ($month)");
+
     if (animate) {
-      await _ctrl.animateTo(
-        clamped,
+      await _itemScrollController.scrollTo(
+        index: index,
         duration: const Duration(milliseconds: 700),
-        curve: Curves.easeInOutCubicEmphasized, // más natural, tipo carrusel
+        curve: Curves.easeInOutCubicEmphasized,
+        alignment: 0.5, // 0.5 = centrado
       );
     } else {
-      _ctrl.jumpTo(clamped);
+      _itemScrollController.jumpTo(
+        index: index,
+        alignment: 0.5, // 0.5 = centrado
+      );
     }
   }
 
@@ -97,13 +67,15 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     final txt = isSel ? cs.primary : cs.onSurface.withOpacity(.80);
 
     return InkWell(
-      key: _chipKeys[m],
       borderRadius: BorderRadius.circular(12),
       onTap: () {
         final firstDay = DateTime(m.year, m.month, 1);
         widget.onSelect(firstDay);
+        // AÑADIDO: También animamos al centro al hacer tap
+        scrollToCurrentMonth(firstDay, animate: true);
       },
       child: Container(
+        // ... (Tu 'Container' y 'Column' del chip no cambian) ...
         constraints: const BoxConstraints(minWidth: 80),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
@@ -155,24 +127,41 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
   Widget build(BuildContext context) {
     final selected = ref.watch(selectedMonthProvider);
 
-    // 🔁 Si cambia el mes, centramos el chip correspondiente
+    // Esta lógica se disparará CADA VEZ que el provider cambie
+    // (excepto la primera vez, que es manejada por HomePage)
     ref.listen<DateTime>(selectedMonthProvider, (prev, next) {
+      // Si el mes no cambió (ej. en la carga inicial), no hace nada
       if (!mounted || prev == next) return;
+
       final target = DateTime(next.year, next.month, 1);
-      // Solo animamos si el scroll inicial ya se hizo
-      scrollToCurrentMonth(target, animate: _didInitialScroll);
+
+      // Espera a que el build termine ANTES de scrollear
+      // (Esto es por si acaso, pero es buena práctica)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          scrollToCurrentMonth(target, animate: true);
+        }
+      });
     });
 
     return Container(
       height: 60,
       alignment: Alignment.centerLeft,
-      child: ListView(
-        controller: _ctrl,
+      // 7. USA 'ScrollablePositionedList.builder'
+      child: ScrollablePositionedList.builder(
+        itemScrollController: _itemScrollController, // Asigna el controlador
+        itemCount: _months.length, // Usa la longitud de la lista
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        children: _months.expand((m) {
-          return [_buildChip(m, selected), const SizedBox(width: 8)];
-        }).toList()..removeLast(),
+        itemBuilder: (context, index) {
+          final m = _months[index]; // Obtiene el mes por índice
+
+          // Devuelve el chip con su espaciado
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _buildChip(m, selected),
+          );
+        },
       ),
     );
   }

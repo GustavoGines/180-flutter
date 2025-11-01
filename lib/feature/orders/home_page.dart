@@ -170,6 +170,11 @@ class _HomePageState extends ConsumerState<HomePage> {
             _itemScrollController.jumpTo(index: monthIndex, alignment: 0.08);
           }
           ref.read(selectedMonthProvider.notifier).setTo(currentMonthKey);
+          //    Usa la GlobalKey para darle la orden al child de scrollear.
+          _monthBarKey.currentState?.scrollToCurrentMonth(
+            currentMonthKey,
+            animate: true,
+          );
         }
       });
     }
