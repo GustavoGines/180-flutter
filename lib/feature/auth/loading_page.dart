@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'auth_repository.dart';
 import 'auth_state.dart';
 
+const kSplashBackgroundColor = Color(0xFFFF9999);
+
 class LoadingPage extends ConsumerStatefulWidget {
   const LoadingPage({super.key});
 
@@ -70,15 +72,25 @@ class _LoadingPageState extends ConsumerState<LoadingPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Muestra un indicador de carga mientras se verifica la sesión
+    // 👇 2. ESTA ES LA PARTE MODIFICADA
     return const Scaffold(
+      // Usa el mismo color de fondo del splash nativo
+      backgroundColor: kSplashBackgroundColor,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 20),
-            Text('Verificando sesión...'),
+            // Usa la misma imagen de logo
+            Image(
+              image: AssetImage('assets/images/launch_image_solo.png'),
+              width: 150, // <-- Ajusta el tamaño si es necesario
+            ),
+            SizedBox(height: 48),
+
+            // Indicador de carga (ahora blanco para que combine)
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
           ],
         ),
       ),

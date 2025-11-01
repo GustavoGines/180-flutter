@@ -1,14 +1,14 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
-    <!-- Si te hace falta compatibilidad pre-Android 13 -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- Notificaciones (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
@@ -45,22 +45,18 @@
             </intent-filter>
         </activity>
 
-        <!-- No borrar: lo usa Flutter -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Ícono/Color por defecto para notificaciones (FCM y otros SDKs) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_notification_vector" />
-
-        <meta-data
+            android:resource="@drawable/ic_notification_vector"
+            tools:node="replace" /> <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
-            android:resource="@color/notification_icon" /> 
-    </application>
+            android:resource="@color/notification_icon"
+            tools:node="replace" /> </application>
 
-    <!-- Package visibility (ok) -->
     <queries>
     
         <intent>
