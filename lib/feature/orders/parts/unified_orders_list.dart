@@ -94,9 +94,7 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
               // 👇 --- FIN ---
 
               case _ItemType.dayHeader:
-                return _DateHeaderDelegate(
-                  date: item.data,
-                ).build(context, 0.0, false);
+                return _DateHeader(orders: item.data);
               case _ItemType.orderCard:
                 return _buildOrderCard(context, ref, item.data);
               case _ItemType.padding:
@@ -227,24 +225,12 @@ class _FlatListBuilder {
   });
 
   void build({required List<Order> orders}) {
-    // --- Lógica de SplayTree y weekTotals (SIN CAMBIOS) ---
+    // --- Lógica de SplayTree (Se Mantiene) ---
     final byDay = SplayTreeMap<DateTime, List<Order>>((a, b) => a.compareTo(b));
     for (final o in orders) {
       final k = _dayKey(o.eventDate);
       byDay.putIfAbsent(k, () => []).add(o);
     }
-    // --- Lógica de weekTotals (MODIFICADA) ---
-    final weekTotals = <DateTime, double>{};
-    for (final o in orders) {
-      // 👇 CAMBIO AQUÍ: Usa la nueva lógica de Lunes
-      final ws = _weekStartMonday(o.eventDate);
-      weekTotals.update(
-        ws,
-        (v) => v + (o.total ?? 0),
-        ifAbsent: () => (o.total ?? 0),
-      );
-    }
-    // --- Fin de lógica sin cambios ---
 
     final allMonthsInWindow = _monthsAroundWindow(staticCenterMonth);
     flatList.add(_ListItem(_ItemType.padding, 8.0));
@@ -262,44 +248,62 @@ class _FlatListBuilder {
       );
 
       if (monthHasOrders) {
-        // 2. SI TIENE PEDIDOS: Usa la lógica de semanas normal que ya tenías
+        // 2. SI TIENE PEDIDOS: Usa la lógica de semanas
         final weeks = _weeksInsideMonth(month);
         for (final ws in weeks) {
+          // 'ws' es el Lunes de inicio de semana
           final we = _weekEndSunday(ws);
-          final total = weekTotals[ws] ?? 0;
 
-          // Revisa si la semana tiene pedidos
-          bool weekHasOrders = false;
+          // 👇 --- ¡NUEVA LÓGICA DE CÁLCULO DE TOTAL! ---
+          double weekTotalForThisMonth = 0;
+          bool weekHasOrdersInThisMonth = false;
+
+          // Itera los 7 días de esta semana
           for (int i = 0; i < 7; i++) {
-            final d = ws.add(Duration(days: i));
-            if (d.month != month.month) continue;
-            if (byDay[_dayKey(d)]?.isNotEmpty == true) {
-              weekHasOrders = true;
-              break;
+            final day = ws.add(Duration(days: i));
+
+            // ¡IMPORTANTE! Solo suma si el día pertenece al mes que estamos viendo
+            if (day.month == month.month) {
+              final ordersForThisDay =
+                  byDay[day]; // Usa 'byDay' que ya está calculado
+              if (ordersForThisDay != null && ordersForThisDay.isNotEmpty) {
+                weekHasOrdersInThisMonth = true;
+                for (final order in ordersForThisDay) {
+                  // Suma solo si el total es positivo (como en tus providers)
+                  final v = order.total ?? 0;
+                  if (v >= 0) {
+                    weekTotalForThisMonth += v;
+                  }
+                }
+              }
             }
           }
+          // --- FIN NUEVA LÓGICA ---
+
+          // 'muted' ahora usa la variable local
+          final bool muted = !weekHasOrdersInThisMonth;
 
           flatList.add(
             _ListItem(_ItemType.weekSeparator, {
               'ws': ws,
               'we': we,
-              'total': total,
-              'muted': !weekHasOrders,
+              'total': weekTotalForThisMonth, // <-- Usa el total corregido
+              'muted': muted,
               'current_month': month,
             }),
           );
 
           // Si no hay pedidos en la semana, no intentes dibujar los días
-          if (!weekHasOrders) continue;
+          if (muted) continue;
 
-          // Este código solo se ejecuta si 'weekHasOrders' es 'true'
+          // Este código solo se ejecuta si la semana tiene pedidos
           for (int i = 0; i < 7; i++) {
             final day = ws.add(Duration(days: i));
-            if (day.month != month.month) continue;
-            final list = byDay[_dayKey(day)];
+            if (day.month != month.month) continue; // Filtra días del otro mes
+            final list = byDay[day];
             if (list == null || list.isEmpty) continue;
 
-            flatList.add(_ListItem(_ItemType.dayHeader, day));
+            flatList.add(_ListItem(_ItemType.dayHeader, list));
 
             for (final order in list) {
               flatList.add(_ListItem(_ItemType.orderCard, order));

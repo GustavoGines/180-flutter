@@ -279,7 +279,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       children: [
                         Expanded(
                           child: _SummaryCard(
-                            title: 'Ingresos',
+                            title: 'Ingreso Mesual',
                             value: totalIncome,
                             isCurrency: true,
                             icon: Icons.trending_up,

@@ -1,21 +1,36 @@
 part of '../home_page.dart';
 
-class _DateHeaderDelegate extends SliverPersistentHeaderDelegate {
-  _DateHeaderDelegate({required this.date});
-  final DateTime date;
-  @override
-  double get minExtent => 44;
-  @override
-  double get maxExtent => 44;
+// 👇 REFACTORIZADO: De 'SliverPersistentHeaderDelegate' a 'StatelessWidget'
+class _DateHeader extends StatelessWidget {
+  const _DateHeader({required this.orders});
+  final List<Order> orders;
 
   @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
+  Widget build(BuildContext context) {
+    final DateTime date = orders.first.eventDate;
+    final int count = orders.length;
+
+    String totalString = '';
+
+    // (La lógica de cálculo de 'totalString' no cambia)
+    if (count >= 2) {
+      double dayTotal = 0;
+      for (final order in orders) {
+        final v = order.total ?? 0;
+        if (v >= 0) {
+          dayTotal += v;
+        }
+      }
+      final fmt = NumberFormat(r"'$' #,##0.00", 'es_AR');
+      totalString = fmt.format(dayTotal);
+    }
+
     final surface = Theme.of(context).colorScheme.surface;
+    final textTheme = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
+      height: 44,
       color: surface,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       alignment: Alignment.centerLeft,
@@ -23,20 +38,41 @@ class _DateHeaderDelegate extends SliverPersistentHeaderDelegate {
         children: [
           const Icon(Icons.calendar_today, size: 16),
           const SizedBox(width: 8),
+
+          // 1. Nombre del día
           Text(
             _prettyDayLabel(date),
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            style: textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
               letterSpacing: .2,
             ),
           ),
+
+          // 👇 --- INICIO DE CAMBIOS ---
+
+          // 2. Muestra el total (si no está vacío) JUSTO AL LADO
+          if (totalString.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(
+                left: 8.0,
+              ), // Espacio entre nombre y total
+              child: Text(
+                totalString,
+                // 3. Estilo más chiquito
+                style: textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurfaceVariant.withOpacity(0.8), // Color sutil
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+
+          const Spacer(), // 4. Mueve el Spacer al final
+          // --- FIN DE CAMBIOS ---
         ],
       ),
     );
   }
-
-  @override
-  bool shouldRebuild(covariant _DateHeaderDelegate old) => old.date != date;
 }
 
 class _WeekSeparator extends StatelessWidget {
