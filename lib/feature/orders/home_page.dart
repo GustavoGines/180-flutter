@@ -2,10 +2,12 @@
 library orders_home;
 
 import 'dart:async';
+
+import 'package:flutter/material.dart';
+
 import 'dart:collection';
 import 'dart:io' show Platform;
 import 'dart:ui' as ui;
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod/riverpod.dart' as rp;
 import 'package:go_router/go_router.dart';
@@ -14,6 +16,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+
+// 1. IMPORT DEL NUEVO PAQUETE
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 
 import 'orders_repository.dart';
 import '../../core/models/order.dart';
@@ -65,7 +70,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     _itemPositionsListener.itemPositions.addListener(_onScrollPositionChanged);
   }
 
-  // 👇 AÑADIR ESTE MÉTODO
+  // 👇 AÑADIDO: dispose (sin cambios)
   @override
   void dispose() {
     _jumpCooldownTimer?.cancel();
@@ -75,9 +80,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.dispose();
   }
 
+  // (Lógica _jumpToMonth sin cambios)
   Future<void> _jumpToMonth(DateTime m) async {
-    // 1. Si había un temporizador de "cooldown" anterior, ¡cancélalo!
-    //    Esto permite que el nuevo clic "gane".
     _jumpCooldownTimer?.cancel();
 
     final monthKey = DateTime(m.year, m.month, 1);
@@ -87,8 +91,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       _isJumpingToMonth = true;
       ref.read(selectedMonthProvider.notifier).setTo(monthKey);
 
-      // 2. Inicia la animación de scroll (dura 450ms)
-      //    No usamos 'await' para que la UI se sienta instantánea.
       _itemScrollController.scrollTo(
         index: index,
         duration: const Duration(milliseconds: 450),
@@ -96,16 +98,15 @@ class _HomePageState extends ConsumerState<HomePage> {
         alignment: 0.08,
       );
 
-      // 3. Inicia un NUEVO temporizador. Debe durar MÁS que la
-      //    animación (ej: 450ms + 100ms de colchón = 550ms).
       _jumpCooldownTimer = Timer(const Duration(milliseconds: 550), () {
         if (mounted) {
-          _isJumpingToMonth = false; // Apaga la bandera SÓLO al final
+          _isJumpingToMonth = false;
         }
       });
     }
   }
 
+  // (Lógica _onScrollPositionChanged sin cambios)
   void _onScrollPositionChanged() {
     if (_isJumpingToMonth) return;
 
@@ -147,7 +148,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     final authState = ref.watch(authStateProvider);
     final ordersAsync = ref.watch(ordersWindowProvider);
 
-    // Verifica si ya se está recargando
     final isRefreshing = ordersAsync is AsyncLoading;
 
     if (ordersAsync is AsyncData && !_didPerformInitialScroll) {
@@ -169,35 +169,36 @@ class _HomePageState extends ConsumerState<HomePage> {
           } else if (monthIndex != null) {
             _itemScrollController.jumpTo(index: monthIndex, alignment: 0.08);
           }
-          ref.read(selectedMonthProvider.notifier).setTo(currentMonthKey);
-          //    Usa la GlobalKey para darle la orden al child de scrollear.
-          _monthBarKey.currentState?.scrollToCurrentMonth(
-            currentMonthKey,
-            animate: true,
-          );
         }
+
+        ref.read(selectedMonthProvider.notifier).setTo(currentMonthKey);
+
+        // Llama al scroll inicial del carrusel de meses
+        _monthBarKey.currentState?.scrollToCurrentMonth(
+          currentMonthKey,
+          animate: true,
+        );
       });
     }
 
     return Scaffold(
       appBar: AppBar(
-        // 👇 ¡AQUÍ ESTÁ EL CAMBIO!
         title: Row(
           children: [
             Image.asset(
-              'assets/images/logo_180.png', // La ruta de tu logo
-              height: 80, // 134.0 es muy grande, prueba con 36.0 o 40.0
+              'assets/images/launch_image_solo.png', // Asegúrate que esta ruta sea correcta
+              height: 36.0,
             ),
-            const SizedBox(width: 0), // Espacio entre logo y texto
+            const SizedBox(width: 10),
             const Text('Pedidos'),
           ],
         ),
-
-        // 2. AÑADE ESTA LÍNEA para alinear a la izquierda
         centerTitle: false,
 
         actions: [
-          // El botón "moderno" de recarga
+          // 2. BOTÓN DE CLIENTES ELIMINADO DE AQUÍ
+
+          // Botón de recarga
           IconButton(
             tooltip: 'Recargar pedidos',
             onPressed: isRefreshing
@@ -211,19 +212,18 @@ class _HomePageState extends ConsumerState<HomePage> {
                     height: 24,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
+                      // Color que se vea bien en tu AppBar (ej: blanco)
                       color: Theme.of(context).colorScheme.onPrimary,
                     ),
                   )
                 : const Icon(Icons.refresh),
           ),
 
-          _versionPillMenu(),
+          _versionPillMenu(), // Tu menú de versión
+          // Menú de 3 puntos (solo con Crear Usuario y Logout)
           PopupMenuButton<String>(
             onSelected: (value) async {
               switch (value) {
-                case 'clients':
-                  context.push('/clients');
-                  break;
                 case 'create_user':
                   context.push('/create_user');
                   break;
@@ -233,13 +233,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               }
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem(
-                value: 'clients',
-                child: ListTile(
-                  leading: Icon(Icons.people_outline),
-                  title: Text('Clientes'),
-                ),
-              ),
+              // ⛔️ ITEM DE CLIENTES ELIMINADO DE AQUÍ
               if (authState.user?.isAdmin ?? false)
                 const PopupMenuItem(
                   value: 'create_user',
@@ -248,7 +242,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                     title: Text('Crear Usuario'),
                   ),
                 ),
-              const PopupMenuDivider(),
+
+              if (authState.user?.isAdmin ?? false) const PopupMenuDivider(),
+
               const PopupMenuItem(
                 value: 'logout',
                 child: ListTile(
@@ -263,7 +259,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ],
 
-        // La barra superior fija
+        // Barra inferior fija con Resumen y Meses
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(148),
           child: Column(
@@ -279,7 +275,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       children: [
                         Expanded(
                           child: _SummaryCard(
-                            title: 'Ingreso Mesual',
+                            title: 'Ingresos del Mes',
                             value: totalIncome,
                             isCurrency: true,
                             icon: Icons.trending_up,
@@ -289,7 +285,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _SummaryCard(
-                            title: 'Pedidos',
+                            title: 'Pedidos del Mes',
                             value: totalOrders.toDouble(),
                             isCurrency: false,
                             icon: Icons.shopping_bag_outlined,
@@ -311,10 +307,43 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/new_order'),
-        child: const Icon(Icons.add),
+
+      // 👇 3. REEMPLAZA EL 'FloatingActionButton' POR EL 'SpeedDial'
+      floatingActionButton: SpeedDial(
+        icon: Icons.add, // Icono principal cuando está cerrado
+        activeIcon: Icons.close, // Icono cuando está abierto
+        backgroundColor: Theme.of(
+          context,
+        ).colorScheme.primary, // Color de tu marca
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        overlayColor: Colors.black,
+        overlayOpacity: 0.4,
+        spacing: 12,
+        childrenButtonSize: const Size(60.0, 60.0),
+
+        children: [
+          // Botón 1: Clientes
+          SpeedDialChild( // This is a constructor, not a method.
+            child: const Icon(Icons.people_outline),
+            label: 'Clientes',
+            labelStyle: const TextStyle(fontSize: 16),
+            backgroundColor: Colors.white,
+            foregroundColor: Theme.of(context).colorScheme.primary,
+            onTap: () => context.push('/clients'),
+          ),
+
+          // Botón 2: Nuevo Pedido
+          SpeedDialChild( // This is a constructor, not a method.
+            child: const Icon(Icons.add_shopping_cart),
+            label: 'Nuevo Pedido',
+            labelStyle: const TextStyle(fontSize: 16),
+            backgroundColor: Colors.white,
+            foregroundColor: Theme.of(context).colorScheme.primary,
+            onTap: () => context.push('/new_order'),
+          ),
+        ],
       ),
+
       body: _UnifiedOrdersList(
         itemScrollController: _itemScrollController,
         itemPositionsListener: _itemPositionsListener,

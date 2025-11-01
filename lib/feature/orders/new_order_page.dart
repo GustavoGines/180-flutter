@@ -160,6 +160,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     _deliveryCostController.dispose();
     _notesController.dispose();
     _clientNameController.removeListener(_onClientNameChanged);
+    _deliveryCostController.removeListener(_recalculateTotals);
+
     super.dispose();
   }
 
@@ -244,23 +246,31 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       context: context,
       initialTime: isStart ? _start : _end,
       initialEntryMode: TimePickerEntryMode.input, // Facilita ingreso rápido
+      // 👇 --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
       builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: darkBrown, // color header background
-              onPrimary: Colors.white,
-              surface: primaryPink, // Background selector
-              onSurface: darkBrown, // Números
+        // 1. Envuelve todo en un MediaQuery que fuerza el formato 24h
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          // 2. Tu Theme (con tus colores) va adentro
+          child: Theme(
+            data: ThemeData.light().copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: darkBrown, // color header background
+                onPrimary: Colors.white,
+                surface: primaryPink, // Background selector
+                onSurface: darkBrown, // Números
+              ),
+              timePickerTheme: TimePickerThemeData(
+                // Estilos adicionales si quieres
+              ),
             ),
-            timePickerTheme: TimePickerThemeData(
-              // Estilos adicionales si quieres
-            ),
+            child: child!,
           ),
-          child: child!,
         );
       },
+      // --- FIN DE LA CORRECCIÓN ---
     );
+
     if (t != null) {
       setState(() {
         if (isStart) {
