@@ -53,11 +53,11 @@
         <!-- Ícono/Color por defecto para notificaciones (FCM y otros SDKs) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_notification" />
+            android:resource="@drawable/ic_notification_vector" />
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
-            android:value="@color/notification_icon" />
+            android:resource="@color/notification_icon" /> 
     </application>
 
     <!-- Package visibility (ok) -->
