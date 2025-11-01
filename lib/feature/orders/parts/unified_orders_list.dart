@@ -47,7 +47,7 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
     final ordersAsync = ref.watch(ordersWindowProvider);
     // final selMonth = ref.watch(selectedMonthProvider); // 👈 Ya no se necesita aquí
 
-    // 👇 4. ESTE LISTENER ES BUENO:
+    // 👇 ESTE LISTENER ES BUENO:
     // Reconstruye la lista si los datos cambian (ej: borrar/editar)
     ref.listen(ordersWindowProvider, (_, next) {
       if (next is AsyncData<List<Order>>) {
@@ -61,65 +61,52 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => Center(child: Text('Error al cargar pedidos: $err')),
       data: (orders) {
-        // 👇 6. Llama a la versión simplificada en la carga inicial
+        // 👇 Llama a la versión simplificada en la carga inicial
         if (_flatList.isEmpty) {
           _rebuildFlatList(orders);
         }
 
-        return RefreshIndicator(
-          onRefresh: () {
-            setState(() => _flatList.clear());
+        // 👇 MODIFICADO: Se eliminó el RefreshIndicator de aquí.
+        // Ahora solo devolvemos la lista.
+        return ScrollablePositionedList.builder(
+          itemScrollController: widget.itemScrollController,
+          itemPositionsListener: widget.itemPositionsListener,
+          physics: const AlwaysScrollableScrollPhysics(),
+          itemCount: _flatList.length,
+          itemBuilder: (context, index) {
+            final item = _flatList[index];
 
-            // 👇 7. CORRECCIÓN para 'onRefresh' con AsyncNotifier
-            // 1. Invalida el provider para forzar que se reconstruya
-            ref.invalidate(ordersWindowProvider);
+            // Lógica de traducción
+            switch (item.type) {
+              case _ItemType.monthBanner:
+                return _MonthBanner(date: item.data);
+              case _ItemType.weekSeparator:
+                return _WeekSeparator(
+                  weekStart: item.data['ws'],
+                  weekEnd: item.data['we'],
+                  total: item.data['total'],
+                  muted: item.data['muted'],
+                  currentDisplayMonth: item.data['current_month'] as DateTime,
+                );
 
-            // 2. Lee el nuevo 'future' y devuélvelo al RefreshIndicator.
-            // Es necesario ignorar esta advertencia específica.
-            // ignore: invalid_use_of_protected_member
-            return ref.read(ordersWindowProvider.future);
+              case _ItemType.emptyMonthPlaceholder:
+                return _EmptyMonthPlaceholder(date: item.data);
+              // 👇 --- FIN ---
+
+              case _ItemType.dayHeader:
+                return _DateHeaderDelegate(
+                  date: item.data,
+                ).build(context, 0.0, false);
+              case _ItemType.orderCard:
+                return _buildOrderCard(context, ref, item.data);
+              case _ItemType.padding:
+                return SizedBox(height: item.data);
+            }
           },
-          child: ScrollablePositionedList.builder(
-            itemScrollController: widget.itemScrollController,
-            itemPositionsListener: widget.itemPositionsListener,
-            physics: const AlwaysScrollableScrollPhysics(),
-            itemCount: _flatList.length,
-            itemBuilder: (context, index) {
-              final item = _flatList[index];
-
-              // Lógica de traducción
-              switch (item.type) {
-                case _ItemType.monthBanner:
-                  return _MonthBanner(date: item.data);
-                case _ItemType.weekSeparator:
-                  return _WeekSeparator(
-                    weekStart: item.data['ws'],
-                    weekEnd: item.data['we'],
-                    total: item.data['total'],
-                    muted: item.data['muted'],
-                    currentDisplayMonth: item.data['current_month'] as DateTime,
-                  );
-
-                case _ItemType.emptyMonthPlaceholder:
-                  return _EmptyMonthPlaceholder(date: item.data);
-                // 👇 --- FIN ---
-
-                case _ItemType.dayHeader:
-                  return _DateHeaderDelegate(
-                    date: item.data,
-                  ).build(context, 0.0, false);
-                case _ItemType.orderCard:
-                  return _buildOrderCard(context, ref, item.data);
-                case _ItemType.padding:
-                  return SizedBox(height: item.data);
-              }
-            },
-          ),
         );
       },
     );
   }
-
   // --- Widgets que extrajiste de los Slivers ---
 
   Widget _buildOrderCard(BuildContext context, WidgetRef ref, Order order) {

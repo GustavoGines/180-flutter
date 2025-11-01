@@ -147,6 +147,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     final authState = ref.watch(authStateProvider);
     final ordersAsync = ref.watch(ordersWindowProvider);
 
+    // Verifica si ya se está recargando
+    final isRefreshing = ordersAsync is AsyncLoading;
+
     if (ordersAsync is AsyncData && !_didPerformInitialScroll) {
       _didPerformInitialScroll = true;
 
@@ -162,14 +165,10 @@ class _HomePageState extends ConsumerState<HomePage> {
 
         if (_itemScrollController.isAttached) {
           if (dayIndex != null) {
-            // 🟢 Ir directamente al día actual
             _itemScrollController.jumpTo(index: dayIndex, alignment: 0.15);
           } else if (monthIndex != null) {
-            // Fallback: al inicio del mes actual
             _itemScrollController.jumpTo(index: monthIndex, alignment: 0.08);
           }
-
-          // Actualiza el mes seleccionado
           ref.read(selectedMonthProvider.notifier).setTo(currentMonthKey);
         }
       });
@@ -177,8 +176,42 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Resumen de Pedidos'),
+        // 👇 ¡AQUÍ ESTÁ EL CAMBIO!
+        title: Row(
+          children: [
+            Image.asset(
+              'assets/images/logo_180.png', // La ruta de tu logo
+              height: 80, // 134.0 es muy grande, prueba con 36.0 o 40.0
+            ),
+            const SizedBox(width: 0), // Espacio entre logo y texto
+            const Text('Pedidos'),
+          ],
+        ),
+
+        // 2. AÑADE ESTA LÍNEA para alinear a la izquierda
+        centerTitle: false,
+
         actions: [
+          // El botón "moderno" de recarga
+          IconButton(
+            tooltip: 'Recargar pedidos',
+            onPressed: isRefreshing
+                ? null
+                : () {
+                    ref.invalidate(ordersWindowProvider);
+                  },
+            icon: isRefreshing
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                  )
+                : const Icon(Icons.refresh),
+          ),
+
           _versionPillMenu(),
           PopupMenuButton<String>(
             onSelected: (value) async {
@@ -224,6 +257,8 @@ class _HomePageState extends ConsumerState<HomePage> {
             ],
           ),
         ],
+
+        // La barra superior fija
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(148),
           child: Column(
@@ -279,7 +314,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         itemScrollController: _itemScrollController,
         itemPositionsListener: _itemPositionsListener,
         monthIndexMap: _monthIndexMap,
-        // 🔥 Añadí soporte para día actual
         dayIndexMap: _dayIndexMap,
       ),
     );
