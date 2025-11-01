@@ -9,6 +9,8 @@ import 'dart:collection';
 import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Importamos tu AppThemeMode y themeModeProvider
+import 'package:pasteleria_180_flutter/core/theme/theme_provider.dart';
 import 'package:riverpod/riverpod.dart' as rp;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -17,7 +19,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
-// 1. IMPORT DEL NUEVO PAQUETE
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 
 import 'orders_repository.dart';
@@ -50,7 +51,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ItemPositionsListener.create();
 
   final Map<DateTime, int> _monthIndexMap = {};
-  final Map<DateTime, int> _dayIndexMap = {}; // 👈 Nuevo mapa para días
+  final Map<DateTime, int> _dayIndexMap = {};
 
   String _versionName = '';
   String _buildNumber = '';
@@ -70,7 +71,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     _itemPositionsListener.itemPositions.addListener(_onScrollPositionChanged);
   }
 
-  // 👇 AÑADIDO: dispose (sin cambios)
   @override
   void dispose() {
     _jumpCooldownTimer?.cancel();
@@ -80,7 +80,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.dispose();
   }
 
-  // (Lógica _jumpToMonth sin cambios)
   Future<void> _jumpToMonth(DateTime m) async {
     _jumpCooldownTimer?.cancel();
 
@@ -106,7 +105,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-  // (Lógica _onScrollPositionChanged sin cambios)
   void _onScrollPositionChanged() {
     if (_isJumpingToMonth) return;
 
@@ -173,7 +171,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
         ref.read(selectedMonthProvider.notifier).setTo(currentMonthKey);
 
-        // Llama al scroll inicial del carrusel de meses
         _monthBarKey.currentState?.scrollToCurrentMonth(
           currentMonthKey,
           animate: true,
@@ -185,19 +182,14 @@ class _HomePageState extends ConsumerState<HomePage> {
       appBar: AppBar(
         title: Row(
           children: [
-            Image.asset(
-              'assets/images/launch_image_solo.png', // Asegúrate que esta ruta sea correcta
-              height: 36.0,
-            ),
-            const SizedBox(width: 10),
+            Image.asset('assets/images/logo_180.png', height: 80.0),
+            const SizedBox(width: 0),
             const Text('Pedidos'),
           ],
         ),
         centerTitle: false,
 
         actions: [
-          // 2. BOTÓN DE CLIENTES ELIMINADO DE AQUÍ
-
           // Botón de recarga
           IconButton(
             tooltip: 'Recargar pedidos',
@@ -212,15 +204,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                     height: 24,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      // Color que se vea bien en tu AppBar (ej: blanco)
                       color: Theme.of(context).colorScheme.onPrimary,
                     ),
                   )
                 : const Icon(Icons.refresh),
           ),
 
-          _versionPillMenu(), // Tu menú de versión
-          // Menú de 3 puntos (solo con Crear Usuario y Logout)
+          _versionPillMenu(),
+
+          // POPUPMENUBUTTON (3 PUNTOS)
           PopupMenuButton<String>(
             onSelected: (value) async {
               switch (value) {
@@ -230,32 +222,106 @@ class _HomePageState extends ConsumerState<HomePage> {
                 case 'logout':
                   ref.read(authStateProvider.notifier).logout();
                   break;
+                // Casos del tema eliminados ya que la lógica está en el itemBuilder
               }
             },
-            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              // ⛔️ ITEM DE CLIENTES ELIMINADO DE AQUÍ
-              if (authState.user?.isAdmin ?? false)
+            itemBuilder: (BuildContext context) {
+              final currentMode = ref.watch(themeModeProvider);
+              final cs = Theme.of(context).colorScheme;
+
+              // Helper para construir los 3 iconos del tema en una fila
+              Widget buildThemeIcon(AppThemeMode mode, IconData icon) {
+                final isSelected = currentMode == mode;
+                final tooltip = switch (mode) {
+                  AppThemeMode.system => 'Sistema',
+                  AppThemeMode.light => 'Claro',
+                  AppThemeMode.dark => 'Oscuro',
+                };
+
+                return Tooltip(
+                  message: tooltip,
+                  child: IconButton(
+                    icon: Icon(
+                      icon,
+                      size: 20,
+                      color: isSelected ? cs.primary : cs.onSurfaceVariant,
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context); // Cierra el menú al seleccionar
+                      ref.read(themeModeProvider.notifier).setMode(mode);
+                    },
+                  ),
+                );
+              }
+
+              return <PopupMenuEntry<String>>[
+                // --- 1. TÍTULO 'TEMA' ---
                 const PopupMenuItem(
-                  value: 'create_user',
+                  enabled: false,
+                  child: Text(
+                    'Tema',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+
+                // --- 2. FILA DE ICONOS DE TEMA (en un solo PopupMenuItem) ---
+                PopupMenuItem<String>(
+                  // Un valor ficticio para cumplir con el tipo
+                  value: 'theme_selector_row',
+                  enabled:
+                      false, // La fila en sí no se selecciona, solo los botones
+                  padding: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8.0,
+                      vertical: 0,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        buildThemeIcon(
+                          AppThemeMode.system,
+                          Icons.auto_mode_outlined,
+                        ),
+                        buildThemeIcon(
+                          AppThemeMode.light,
+                          Icons.light_mode_outlined,
+                        ),
+                        buildThemeIcon(
+                          AppThemeMode.dark,
+                          Icons.dark_mode_outlined,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const PopupMenuDivider(),
+
+                // --- FIN SELECCIÓN DE TEMA ---
+                if (authState.user?.isAdmin ?? false)
+                  const PopupMenuItem(
+                    value: 'create_user',
+                    child: ListTile(
+                      leading: Icon(Icons.person_add_alt_1),
+                      title: Text('Crear Usuario'),
+                    ),
+                  ),
+
+                if (authState.user?.isAdmin ?? false) const PopupMenuDivider(),
+
+                const PopupMenuItem(
+                  value: 'logout',
                   child: ListTile(
-                    leading: Icon(Icons.person_add_alt_1),
-                    title: Text('Crear Usuario'),
+                    leading: Icon(Icons.logout, color: Colors.red),
+                    title: Text(
+                      'Cerrar Sesión',
+                      style: TextStyle(color: Colors.red),
+                    ),
                   ),
                 ),
-
-              if (authState.user?.isAdmin ?? false) const PopupMenuDivider(),
-
-              const PopupMenuItem(
-                value: 'logout',
-                child: ListTile(
-                  leading: Icon(Icons.logout, color: Colors.red),
-                  title: Text(
-                    'Cerrar Sesión',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ),
-            ],
+              ];
+            },
           ),
         ],
 
@@ -275,7 +341,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       children: [
                         Expanded(
                           child: _SummaryCard(
-                            title: 'Ingresos del Mes',
+                            title: 'Ingreso Mes',
                             value: totalIncome,
                             isCurrency: true,
                             icon: Icons.trending_up,
@@ -285,7 +351,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _SummaryCard(
-                            title: 'Pedidos del Mes',
+                            title: 'Pedidos',
                             value: totalOrders.toDouble(),
                             isCurrency: false,
                             icon: Icons.shopping_bag_outlined,
@@ -308,13 +374,11 @@ class _HomePageState extends ConsumerState<HomePage> {
         ),
       ),
 
-      // 👇 3. REEMPLAZA EL 'FloatingActionButton' POR EL 'SpeedDial'
+      // SpeedDial para acciones flotantes
       floatingActionButton: SpeedDial(
-        icon: Icons.add, // Icono principal cuando está cerrado
-        activeIcon: Icons.close, // Icono cuando está abierto
-        backgroundColor: Theme.of(
-          context,
-        ).colorScheme.primary, // Color de tu marca
+        icon: Icons.add,
+        activeIcon: Icons.close,
+        backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
         overlayColor: Colors.black,
         overlayOpacity: 0.4,
@@ -323,7 +387,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
         children: [
           // Botón 1: Clientes
-          SpeedDialChild( // This is a constructor, not a method.
+          SpeedDialChild(
             child: const Icon(Icons.people_outline),
             label: 'Clientes',
             labelStyle: const TextStyle(fontSize: 16),
@@ -333,7 +397,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
 
           // Botón 2: Nuevo Pedido
-          SpeedDialChild( // This is a constructor, not a method.
+          SpeedDialChild(
             child: const Icon(Icons.add_shopping_cart),
             label: 'Nuevo Pedido',
             labelStyle: const TextStyle(fontSize: 16),
