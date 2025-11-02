@@ -59,11 +59,13 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _didPerformInitialScroll = false;
 
   Timer? _jumpCooldownTimer;
+  ImageProvider? _logoImageProvider;
 
   @override
   void initState() {
     super.initState();
     _loadVersion();
+    _loadLogo();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoCheckForUpdateIfEnabled();
     });
@@ -78,6 +80,25 @@ class _HomePageState extends ConsumerState<HomePage> {
       _onScrollPositionChanged,
     );
     super.dispose();
+  }
+
+  void _loadLogo() {
+    // Usamos AssetImage, que maneja el precaching
+    const logo = AssetImage('assets/images/launch_image_solo.png');
+    // Guardamos el provider en el estado
+    setState(() {
+      _logoImageProvider = logo;
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Llamamos a precacheImage aquí, donde el 'context' SÍ está disponible.
+    if (_logoImageProvider != null) {
+      precacheImage(_logoImageProvider!, context);
+    }
   }
 
   Future<void> _jumpToMonth(DateTime m) async {
@@ -410,6 +431,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         itemPositionsListener: _itemPositionsListener,
         monthIndexMap: _monthIndexMap,
         dayIndexMap: _dayIndexMap,
+        logoImageProvider: _logoImageProvider,
       ),
     );
   }
