@@ -1952,6 +1952,21 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     final valid = _formKey.currentState?.validate() ?? false;
     _recalculateTotals();
 
+    if (_depositAmount > _grandTotal + 0.01) {
+      // Añadimos una pequeña tolerancia
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El monto de la seña/depósito no puede ser mayor al TOTAL del pedido. Verifica los valores.',
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      // Detiene el proceso si el depósito es mayor al total
+      return;
+    }
+
     // --- 6a. Nueva Validación ---
     // (Añadir validación de dirección si el costo de envío es > 0)
     if (_deliveryCost > 0 && _selectedAddressId == null) {

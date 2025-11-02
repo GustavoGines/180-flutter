@@ -372,17 +372,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         childrenButtonSize: const Size(60.0, 60.0),
 
         children: [
-          // Botón 1: Clientes
-          SpeedDialChild(
-            child: const Icon(Icons.people_outline),
-            label: 'Clientes',
-            labelStyle: const TextStyle(fontSize: 16),
-            backgroundColor: Colors.white,
-            foregroundColor: Theme.of(context).colorScheme.primary,
-            onTap: () => context.push('/clients'),
-          ),
-
-          // Botón 2: Nuevo Pedido
+          // Botón 1: Nuevo Pedido
           SpeedDialChild(
             child: const Icon(Icons.add_shopping_cart),
             label: 'Nuevo Pedido',
@@ -390,6 +380,16 @@ class _HomePageState extends ConsumerState<HomePage> {
             backgroundColor: Colors.white,
             foregroundColor: Theme.of(context).colorScheme.primary,
             onTap: () => context.push('/new_order'),
+          ),
+
+          // Botón 2: Clientes
+          SpeedDialChild(
+            child: const Icon(Icons.people_outline),
+            label: 'Clientes',
+            labelStyle: const TextStyle(fontSize: 16),
+            backgroundColor: Colors.white,
+            foregroundColor: Theme.of(context).colorScheme.primary,
+            onTap: () => context.push('/clients'),
           ),
 
           // Botón 3: Usuarios (Solo visible si es Admin)

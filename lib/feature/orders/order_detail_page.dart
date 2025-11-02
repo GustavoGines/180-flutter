@@ -7,6 +7,7 @@ import 'package:collection/collection.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
 import 'package:pasteleria_180_flutter/feature/orders/home_page.dart';
+// <-- Tu nuevo generador
 
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
@@ -120,6 +121,13 @@ class OrderDetailPage extends ConsumerWidget {
           appBar: AppBar(
             title: const Text('Detalle del Pedido'),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf),
+                tooltip: 'Vista Previa PDF',
+                // Llama a la nueva ruta que configuramos en router.dart
+                onPressed: () => context.push('/order/${order.id}/pdf/preview'),
+              ),
+              // Botón "Editar"
               if (canEdit)
                 IconButton(
                   icon: const Icon(Icons.edit_outlined),
@@ -1070,12 +1078,11 @@ class OrderDetailPage extends ConsumerWidget {
 
     if (confirm) {
       try {
-        // Usamos el método optimizado del repositorio
-        await ref.read(ordersRepoProvider).updateOrder(order.id, {
-          'deposit': order.total, // Establece la seña igual al total
-        });
-        ref.invalidate(orderByIdProvider(order.id)); // Refresca esta página
-        ref.invalidate(ordersWindowProvider); // Refresca la home
+        await ref.read(ordersRepoProvider).markAsPaid(order.id);
+
+        // Invalidamos los providers para refrescar la UI
+        ref.invalidate(orderByIdProvider(order.id));
+        ref.invalidate(ordersWindowProvider);
 
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
