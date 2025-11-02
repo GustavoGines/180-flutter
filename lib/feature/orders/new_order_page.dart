@@ -9,6 +9,9 @@ import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:collection/collection.dart'; // Para .firstWhereOrNull
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 // --- AÑADIDOS PARA COMPRESIÓN ---
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -306,33 +309,163 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
-  // --- 5. DIÁLOGO NUEVO CLIENTE (MODIFICADO) ---
-  void _addClientDialog() {
+  // =========================================================================
+  // === INICIO DE MÉTODOS DEL SPEED DIAL (Reemplazan _addClientDialog) =======
+  // =========================================================================
+
+  // --- Función para obtener Cliente desde Contactos ---
+  Future<void> _selectClientFromContacts() async {
+    // 1. Pedir Permiso de Contactos
+    if (!await FlutterContacts.requestPermission(readonly: true)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Permiso de contactos denegado.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      await openAppSettings(); // Sugerir abrir configuración
+      return;
+    }
+
+    // 2. Abrir Selector Nativo
+    final Contact? contact = await FlutterContacts.openExternalPick();
+
+    if (contact != null) {
+      // 3. Extraer datos y normalizar
+      final String name = contact.displayName;
+      final String? phone = contact.phones.isNotEmpty
+          ? contact.phones.first.number
+          : null;
+
+      if (phone == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('El contacto no tiene número de teléfono.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // 4. Intentar buscar si el cliente ya existe por teléfono
+      // NOTA: Tu API debe tener una búsqueda por teléfono implementada en searchClients
+      final existingClients = await ref
+          .read(clientsRepoProvider)
+          .searchClients(query: phone);
+      final existingClient = existingClients.firstWhereOrNull(
+        (c) => c.phone == phone,
+      );
+
+      if (existingClient != null) {
+        // 5. Cliente ya existe: simplemente seleccionarlo
+        setState(() {
+          _selectedClient = existingClient;
+          _clientNameController.text = existingClient.name;
+          _selectedAddressId = null;
+          _deliveryCostController.text = '0';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cliente "${existingClient.name}" seleccionado.'),
+          ),
+        );
+      } else {
+        // 6. Cliente no existe: crear el nuevo cliente directamente
+        _createClientFromData(name: name, phone: phone);
+      }
+    }
+  }
+
+  // --- Helper: Crear Cliente desde Contacto/Manual ---
+  Future<void> _createClientFromData({
+    required String name,
+    String? phone,
+  }) async {
+    // Simula el flujo de _addClientDialog, pero sin el formulario modal
+    if (name.trim().isEmpty) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    Client? newClient;
+    String? errorMessage;
+
+    try {
+      newClient = await ref.read(clientsRepoProvider).createClient({
+        'name': name.trim(),
+        'phone': phone?.trim(),
+      });
+    } on DioException catch (e) {
+      // Si es 409 (cliente borrado), lo manejamos con el diálogo de restauración
+      if (e.response?.statusCode == 409 && e.response?.data['client'] != null) {
+        // Cierra el loader primero
+        if (context.mounted) Navigator.pop(context);
+        final clientData = e.response?.data['client'];
+        final clientToRestore = Client.fromJson(
+          (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
+        );
+        _showRestoreDialog(clientToRestore);
+        return; // Sale del try/catch
+      }
+      errorMessage =
+          e.response?.data['message'] as String? ?? 'Error al crear cliente.';
+    } catch (e) {
+      errorMessage = e.toString();
+    }
+
+    // Cerrar loader
+    if (context.mounted) Navigator.pop(context);
+
+    if (newClient != null && mounted) {
+      setState(() {
+        _selectedClient = newClient;
+        _clientNameController.text = newClient!.name;
+        _selectedAddressId = null;
+        _deliveryCostController.text = '0';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cliente creado y seleccionado'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (errorMessage != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // --- Diálogo Manual (Versión simplificada) ---
+  void _addClientManuallyDialog() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
-    // ❌ ELIMINADO: final addressController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Nuevo Cliente', style: TextStyle(color: darkBrown)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre *'),
-                textCapitalization: TextCapitalization.words,
-              ),
-              TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(labelText: 'Teléfono'),
-                keyboardType: TextInputType.phone,
-              ),
-              // ❌ ELIMINADO: TextField para 'addressController'
-            ],
-          ),
+        title: const Text(
+          'Nuevo Cliente Manual',
+          style: TextStyle(color: darkBrown),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Nombre *'),
+              textCapitalization: TextCapitalization.words,
+            ),
+            TextField(
+              controller: phoneController,
+              decoration: const InputDecoration(labelText: 'Teléfono'),
+              keyboardType: TextInputType.phone,
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -341,91 +474,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: darkBrown),
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-
-              showDialog(
-                context: dialogContext,
-                barrierDismissible: false,
-                builder: (_) =>
-                    const Center(child: CircularProgressIndicator()),
-              );
-
-              Client? newClient;
-              String? errorMessage;
-
-              try {
-                // --- 5a. Payload de Creación Modificado ---
-                newClient = await ref.read(clientsRepoProvider).createClient({
-                  'name': nameController.text.trim(),
-                  'phone': phoneController.text.trim().isEmpty
-                      ? null
-                      : phoneController.text.trim(),
-                  // ❌ ELIMINADO: 'address' ya no se envía desde aquí
-                });
-
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-              } catch (e) {
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-
-                if (e is DioException &&
-                    (e.response?.statusCode == 409 ||
-                        e.response?.statusCode == 422)) {
-                  final responseData = e.response?.data;
-                  if (responseData is Map) {
-                    errorMessage =
-                        responseData['message'] as String? ??
-                        'Error de cliente';
-
-                    if (e.response?.statusCode == 409 &&
-                        responseData['client'] != null) {
-                      try {
-                        final clientData = responseData['client'];
-                        final clientToRestore = Client.fromJson(
-                          (clientData as Map).map(
-                            (k, v) => MapEntry(k.toString(), v),
-                          ),
-                        );
-
-                        if (dialogContext.mounted) {
-                          Navigator.pop(dialogContext);
-                        }
-                        _showRestoreDialog(clientToRestore);
-                        return;
-                      } catch (parseError) {
-                        errorMessage = 'Error al procesar cliente duplicado.';
-                      }
-                    }
-                  } else {
-                    errorMessage = e.toString();
-                  }
-                } else {
-                  errorMessage = e.toString();
-                }
-                debugPrint("Error creando cliente: $e");
-              }
-
-              if (newClient != null && mounted) {
-                setState(() {
-                  _selectedClient = newClient;
-                  _clientNameController.text = newClient!.name;
-                  _selectedAddressId = null; // Resetear dirección
-                });
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Cliente creado y seleccionado'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } else if (errorMessage != null && mounted) {
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(errorMessage),
-                    backgroundColor: Colors.red,
-                  ),
+            onPressed: () {
+              if (nameController.text.trim().isNotEmpty) {
+                Navigator.pop(dialogContext); // Cierra el diálogo manual
+                _createClientFromData(
+                  name: nameController.text,
+                  phone: phoneController.text.trim().isNotEmpty
+                      ? phoneController.text
+                      : null,
                 );
               }
             },
@@ -433,6 +489,156 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           ),
         ],
       ),
+    );
+  }
+
+  // --- Selector de Cliente Completo con SpeedDial ---
+  Widget _buildClientSelector(BuildContext context) {
+    // Usamos un Builder para que el SpeedDial tenga el contexto correcto
+    return Builder(
+      builder: (context) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_selectedClient == null)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TypeAheadField<Client>(
+                      // ... (TypeAheadField se mantiene sin cambios)
+                      controller: _clientNameController,
+                      suggestionsCallback: (pattern) async {
+                        if (pattern.length < 2) return [];
+                        if (_selectedClient != null) {
+                          setState(() {
+                            _selectedClient = null;
+                          });
+                        }
+                        return ref.read(clientsListProvider(pattern).future);
+                      },
+                      itemBuilder: (context, client) => ListTile(
+                        leading: const Icon(Icons.person),
+                        title: Text(client.name),
+                        subtitle: Text(client.phone ?? 'Sin teléfono'),
+                      ),
+                      onSelected: (client) {
+                        setState(() {
+                          _selectedClient = client;
+                          _clientNameController.text = client.name;
+                          _selectedAddressId = null;
+                          _deliveryCostController.text = '0';
+                        });
+                      },
+                      emptyBuilder: (context) => const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: Text('No se encontraron clientes.'),
+                      ),
+                      builder: (context, controller, focusNode) =>
+                          TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Buscar cliente...',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            validator: (value) {
+                              if (_selectedClient == null) {
+                                return 'Debes seleccionar un cliente.';
+                              }
+                              return null;
+                            },
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // 👇 REEMPLAZO DEL BOTÓN FIJO POR EL SPEED DIAL
+                  SpeedDial(
+                    icon: Icons.add,
+                    activeIcon: Icons.close,
+                    backgroundColor: darkBrown,
+                    foregroundColor: Colors.white,
+                    spacing: 5,
+                    buttonSize: const Size(
+                      56,
+                      56,
+                    ), // Mismo tamaño que un FAB estándar
+                    childrenButtonSize: const Size(56, 56),
+                    direction: SpeedDialDirection.down,
+                    curve: Curves.easeInOut,
+
+                    children: [
+                      // Opción 1: Seleccionar desde Contactos
+                      SpeedDialChild(
+                        child: const Icon(Icons.contact_phone_outlined),
+                        label: 'Desde Contactos',
+                        onTap: _selectClientFromContacts,
+                      ),
+                      // Opción 2: Agregar Nuevo Manualmente
+                      SpeedDialChild(
+                        child: const Icon(Icons.person_add_alt_1),
+                        label: 'Nuevo Manualmente',
+                        onTap: _addClientManuallyDialog,
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            else
+              // --- VISTA "PILL" (Se mantiene sin cambios) ---
+              Card(
+                elevation: 0,
+                color: primaryPink.withAlpha(51),
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: primaryPink.withAlpha(128)),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.person, color: darkBrown),
+                  title: Text(
+                    _selectedClient!.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: darkBrown,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Tel: ${_selectedClient!.phone ?? "N/A"}',
+                    style: TextStyle(color: darkBrown.withAlpha(200)),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_selectedClient!.whatsappUrl != null)
+                        IconButton(
+                          icon: const FaIcon(FontAwesomeIcons.whatsapp),
+                          color: Colors.green,
+                          tooltip: 'Chatear por WhatsApp',
+                          onPressed: () {
+                            launchExternalUrl(_selectedClient!.whatsappUrl!);
+                          },
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: darkBrown),
+                        tooltip: 'Quitar cliente',
+                        onPressed: () {
+                          setState(() {
+                            _selectedClient = null;
+                            _clientNameController.clear();
+                            _selectedAddressId = null;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -2298,129 +2504,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           _buildSummaryAndSave(),
         ],
       ),
-    );
-  }
-
-  // --- 11. WIDGET NUEVO: SELECCIÓN DE CLIENTE ---
-  Widget _buildClientSelector(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_selectedClient == null)
-          // --- VISTA DE BÚSQUEDA (Mostrada si NO hay cliente) ---
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TypeAheadField<Client>(
-                  controller: _clientNameController,
-                  suggestionsCallback: (pattern) async {
-                    if (pattern.length < 2) return [];
-                    if (_selectedClient != null) {
-                      setState(() {
-                        _selectedClient = null;
-                      });
-                    }
-                    // Usar .future para el suggestionsCallback
-                    return ref.read(clientsListProvider(pattern).future);
-                  },
-                  itemBuilder: (context, client) => ListTile(
-                    leading: const Icon(Icons.person),
-                    title: Text(client.name),
-                    subtitle: Text(client.phone ?? 'Sin teléfono'),
-                  ),
-                  onSelected: (client) {
-                    setState(() {
-                      _selectedClient = client;
-                      _clientNameController.text = client.name;
-                      _selectedAddressId = null; // Resetear dirección
-                      _deliveryCostController.text = '0'; // Resetear costo
-                    });
-                  },
-                  emptyBuilder: (context) => const Padding(
-                    padding: EdgeInsets.all(12.0),
-                    child: Text('No se encontraron clientes.'),
-                  ),
-                  builder: (context, controller, focusNode) => TextFormField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    decoration: const InputDecoration(
-                      labelText: 'Buscar cliente...',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                    validator: (value) {
-                      if (_selectedClient == null) {
-                        return 'Debes seleccionar un cliente.';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                icon: const Icon(Icons.add),
-                onPressed: _addClientDialog,
-                tooltip: 'Crear nuevo cliente',
-                style: IconButton.styleFrom(
-                  backgroundColor: darkBrown,
-                  padding: const EdgeInsets.all(16),
-                ),
-              ),
-            ],
-          )
-        else
-          // --- VISTA "PILL" (Mostrada si SÍ hay cliente) ---
-          Card(
-            elevation: 0,
-            color: primaryPink.withAlpha(51),
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: primaryPink.withAlpha(128)),
-            ),
-            child: ListTile(
-              leading: const Icon(Icons.person, color: darkBrown),
-              title: Text(
-                _selectedClient!.name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: darkBrown,
-                ),
-              ),
-              subtitle: Text(
-                'Tel: ${_selectedClient!.phone ?? "N/A"}',
-                style: TextStyle(color: darkBrown.withAlpha(200)),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_selectedClient!.whatsappUrl != null)
-                    IconButton(
-                      icon: const FaIcon(FontAwesomeIcons.whatsapp),
-                      color: Colors.green,
-                      tooltip: 'Chatear por WhatsApp',
-                      onPressed: () {
-                        launchExternalUrl(_selectedClient!.whatsappUrl!);
-                      },
-                    ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: darkBrown),
-                    tooltip: 'Quitar cliente',
-                    onPressed: () {
-                      setState(() {
-                        _selectedClient = null;
-                        _clientNameController.clear();
-                        _selectedAddressId = null;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
     );
   }
 
