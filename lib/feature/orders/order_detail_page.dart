@@ -557,7 +557,7 @@ class OrderDetailPage extends ConsumerWidget {
 
   /// --- NUEVO WIDGET: Helper para la Dirección de Entrega ---
   Widget _buildDeliveryAddressTile(BuildContext context, Order order) {
-    final ClientAddress? address = order.deliveryAddress;
+    final ClientAddress? address = order.clientAddress;
 
     // Si no hay dirección (es null)
     if (address == null) {

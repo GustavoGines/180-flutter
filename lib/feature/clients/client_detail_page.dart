@@ -1,3 +1,6 @@
+import 'dart:math';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -94,11 +97,35 @@ class ClientDetailPage extends ConsumerWidget {
             ),
           );
         }
+      } on DioException catch (e) {
+        // 👇 --- NUEVA LÓGICA DE MANEJO DE ERRORES --- 👇
+        if (e.response?.statusCode == 409) {
+          // Error de conflicto (Dirección en uso)
+          final message =
+              e.response?.data['message'] as String? ??
+              'Conflicto desconocido. La dirección podría estar asociada a un pedido.';
+
+          if (context.mounted) {
+            _showAddressInUseDialog(context, message);
+          }
+        } else {
+          // Otro error de API
+          final message =
+              e.response?.data['message'] as String? ??
+              'Error al eliminar dirección. Intenta de nuevo.';
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(message), backgroundColor: Colors.red),
+            );
+          }
+        }
       } catch (e) {
+        // Error genérico (ej. sin conexión)
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error al eliminar: $e'),
+            const SnackBar(
+              content: Text('Error desconocido al eliminar.'),
               backgroundColor: Colors.red,
             ),
           );
@@ -167,6 +194,28 @@ class ClientDetailPage extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  /// Muestra un diálogo si la dirección está asociada a pedidos.
+  void _showAddressInUseDialog(BuildContext context, String message) {
+    final cs = Theme.of(context).colorScheme;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Dirección en Uso', style: TextStyle(color: cs.error)),
+        content: Text(message),
+        actions: [
+          FilledButton.tonal(
+            style: FilledButton.styleFrom(backgroundColor: cs.errorContainer),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Entendido',
+              style: TextStyle(color: cs.onErrorContainer),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
