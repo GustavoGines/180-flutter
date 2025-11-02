@@ -6,16 +6,18 @@ import 'package:go_router/go_router.dart';
 import 'package:collection/collection.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
+import 'package:pasteleria_180_flutter/feature/orders/home_page.dart';
 
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
+import '../../core/models/client_address.dart'; // <-- IMPORTAR ClientAddress
 import '../auth/auth_state.dart';
 import 'orders_repository.dart';
-import 'home_page.dart';
+// import 'home_page.dart'; // No parece usarse aquí
 import 'product_catalog.dart';
 
 // Provider que busca un solo pedido por su ID
-final orderByIdProvider = FutureProvider.autoDispose.family<Order, int>((
+final orderByIdProvider = FutureProvider.autoDispose.family<Order?, int>((
   ref,
   orderId,
 ) {
@@ -28,11 +30,9 @@ class OrderDetailPage extends ConsumerWidget {
   const OrderDetailPage({super.key, required this.orderId});
 
   // ======= Paleta Pastel y Traducciones (COLORES DE MARCA) =======
-  // Estos son tus colores de marca que usas en el tema
+  // (Tus colores y traducciones se mantienen intactos)
   static const Color darkBrown = Color(0xFF7A4A4A);
   static const Color accentRed = Color(0xFFE57373);
-
-  // Colores pastel (se mantienen fijos para el branding del estado)
   static const _kPastelRose = Color(0xFFFFE3E8);
   static const _kPastelLavender = Color(0xFFEDE7FF);
   static const _kInkRose = Color(0xFFF3A9B9);
@@ -55,9 +55,9 @@ class OrderDetailPage extends ConsumerWidget {
     'unknown': Colors.grey,
   };
   static const Map<String, Color> _statusInk = {
-    'confirmed': Color(0xFF83D1B9), // Tu color terciario (verde/mint)
+    'confirmed': Color(0xFF83D1B9),
     'ready': _kInkRose,
-    'delivered': Color(0xFF8CC5F5), // Tu color azul (accentBlue)
+    'delivered': Color(0xFF8CC5F5),
     'canceled': accentRed,
     'unknown': Colors.black54,
   };
@@ -69,8 +69,6 @@ class OrderDetailPage extends ConsumerWidget {
     final currencyFormat = NumberFormat.currency(locale: 'es_AR', symbol: '\$');
     final cs = Theme.of(context).colorScheme;
 
-    // ❌ ELIMINADA: final onSurfaceColor = cs.onSurface;
-
     return orderAsyncValue.when(
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('Detalle del Pedido')),
@@ -81,6 +79,16 @@ class OrderDetailPage extends ConsumerWidget {
         body: Center(child: Text('Error al cargar el pedido: $err')),
       ),
       data: (order) {
+        // --- Manejo de Pedido Nulo ---
+        if (order == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Detalle del Pedido')),
+            body: const Center(
+              child: Text('Pedido no encontrado o eliminado.'),
+            ),
+          );
+        }
+
         // --- Lógica de variables ---
         final userRole = ref.watch(authStateProvider).user?.role;
         final bool canEdit = userRole == 'admin' || userRole == 'staff';
@@ -108,7 +116,6 @@ class OrderDetailPage extends ConsumerWidget {
         // --- Fin Lógica de variables ---
 
         return Scaffold(
-          // 👇 Fondo adaptado al tema
           backgroundColor: cs.background,
           appBar: AppBar(
             title: const Text('Detalle del Pedido'),
@@ -121,12 +128,10 @@ class OrderDetailPage extends ConsumerWidget {
                 ),
             ],
           ),
-
           floatingActionButton: null,
-
           body: RefreshIndicator(
             onRefresh: () => ref.refresh(orderByIdProvider(orderId).future),
-            color: cs.primary, // Usa el primary del tema
+            color: cs.primary,
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
               child: Column(
@@ -134,16 +139,20 @@ class OrderDetailPage extends ConsumerWidget {
                 children: [
                   // --- Card Cliente/Evento ---
                   _buildInfoCard(
-                    context, // Pasar context para usar Theme.of
+                    context,
                     title: 'Evento y Cliente',
-                    backgroundColor: bg, // Fondo pastel (siempre claro)
+                    backgroundColor: bg,
                     borderColor: ink.withAlpha(77),
                     children: [
+                      // --- CLIENTE (AHORA CLICKEABLE) ---
                       _buildInfoTile(
                         context,
                         Icons.person_outline,
                         'Cliente',
                         order.client?.name ?? 'No especificado',
+                        onTap: order.client != null
+                            ? () => context.push('/clients/${order.client!.id}')
+                            : null, // Navega al detalle del cliente
                         trailing: (order.client?.whatsappUrl != null)
                             ? IconButton(
                                 icon: const FaIcon(FontAwesomeIcons.whatsapp),
@@ -155,23 +164,11 @@ class OrderDetailPage extends ConsumerWidget {
                               )
                             : null,
                       ),
-                      /*if (order.client?.address != null &&
-                          order.client!.address!.isNotEmpty)
-                        _buildInfoTile(
-                          context,
-                          Icons.location_on_outlined,
-                          'Dirección',
-                          order.client!.address!,
-                          trailing: IconButton(
-                            icon: const Icon(
-                              Icons.map_outlined,
-                              color: Colors.blue,
-                            ),
-                            tooltip: 'Ver en Google Maps',
-                            onPressed: () =>
-                                launchGoogleMaps(order.client!.address!),
-                          ),
-                        ),*/
+
+                      // --- DIRECCIÓN DE ENTREGA (NUEVA LÓGICA) ---
+                      _buildDeliveryAddressTile(context, order),
+
+                      // --- RESTO DE LA INFO ---
                       const Divider(indent: 16, endIndent: 16, height: 1),
                       _buildInfoTile(
                         context,
@@ -182,7 +179,6 @@ class OrderDetailPage extends ConsumerWidget {
                           'es_AR',
                         ).format(order.eventDate),
                       ),
-                      // --- MODIFICADO: Horario y Estado en la misma fila ---
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -211,33 +207,28 @@ class OrderDetailPage extends ConsumerWidget {
                                   decoration: BoxDecoration(
                                     color: canEdit
                                         ? cs.surface
-                                        : ink.withAlpha(38), // Fondo adaptado
+                                        : ink.withAlpha(38),
                                     borderRadius: BorderRadius.circular(99),
                                     border: Border.all(
                                       color: canEdit
-                                          ? cs.onSurfaceVariant.withOpacity(
-                                              0.4,
-                                            ) // Borde adaptado
+                                          ? cs.onSurfaceVariant.withOpacity(0.4)
                                           : ink.withAlpha(102),
                                     ),
                                   ),
                                   child: DropdownButton<String>(
                                     value: order.status,
-                                    // 👇 Icono adaptado al tema (visible en fondo)
                                     icon: canEdit
-                                        ? Icon(
+                                        ? const Icon(
                                             Icons.arrow_drop_down,
-                                            color: Colors
-                                                .black87, // FORZADO A NEGRO
+                                            color: Colors.black87,
                                           )
                                         : const SizedBox(width: 8),
                                     isDense: true,
-                                    style: TextStyle(
-                                      // Estilo del texto del chip
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 12,
                                       letterSpacing: .5,
-                                      color: Colors.black87, // FORZADO A NEGRO
+                                      color: Colors.black87,
                                     ),
                                     items: statusTranslations.keys
                                         .where((k) => k != 'unknown')
@@ -249,8 +240,7 @@ class OrderDetailPage extends ConsumerWidget {
                                             child: Text(
                                               statusTranslations[value]!,
                                               style: TextStyle(
-                                                color:
-                                                    optionColor, // Color del texto de la opción
+                                                color: optionColor,
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 14,
                                               ),
@@ -287,7 +277,7 @@ class OrderDetailPage extends ConsumerWidget {
                     _buildInfoCard(
                       context,
                       title: 'Fotos de Referencia',
-                      backgroundColor: _kPastelLavender, // Fondo pastel fijo
+                      backgroundColor: _kPastelLavender,
                       borderColor: _kInkLavender.withAlpha(89),
                       children: [
                         SizedBox(
@@ -318,9 +308,9 @@ class OrderDetailPage extends ConsumerWidget {
                                               ? child
                                               : Container(
                                                   width: 180,
-                                                  color: cs
-                                                      .surfaceContainerHigh, // Adaptado
-                                                  child: Center(
+                                                  color:
+                                                      cs.surfaceContainerHigh,
+                                                  child: const Center(
                                                     child:
                                                         CircularProgressIndicator(
                                                           strokeWidth: 2,
@@ -331,12 +321,11 @@ class OrderDetailPage extends ConsumerWidget {
                                         errorBuilder: (context, error, stack) =>
                                             Container(
                                               width: 180,
-                                              color: cs
-                                                  .surfaceContainerHigh, // Adaptado
+                                              color: cs.surfaceContainerHigh,
                                               child: Icon(
                                                 Icons.broken_image,
                                                 color: cs.onSurfaceVariant,
-                                              ), // Adaptado
+                                              ),
                                             ),
                                       ),
                                     ),
@@ -353,7 +342,7 @@ class OrderDetailPage extends ConsumerWidget {
                   _buildInfoCard(
                     context,
                     title: 'Productos del Pedido',
-                    backgroundColor: _kPastelRose, // Fondo pastel fijo
+                    backgroundColor: _kPastelRose,
                     borderColor: _kInkRose.withAlpha(89),
                     children: order.items.mapIndexed((index, item) {
                       final custom = item.customizationJson ?? {};
@@ -369,13 +358,11 @@ class OrderDetailPage extends ConsumerWidget {
                           children: [
                             ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: cs.secondary.withAlpha(
-                                  51,
-                                ), // Adaptado
+                                backgroundColor: cs.secondary.withAlpha(51),
                                 child: Text(
                                   '${item.qty}',
-                                  style: TextStyle(
-                                    color: Colors.black87, // FORZADO A NEGRO
+                                  style: const TextStyle(
+                                    color: Colors.black87,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -384,23 +371,19 @@ class OrderDetailPage extends ConsumerWidget {
                                 item.name,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black87, // FORZADO A NEGRO
+                                  color: Colors.black87,
                                 ),
                               ),
                               subtitle: Text(
-                                // ... detalles del subtítulo ...
                                 'Precio Base: ${currencyFormat.format(item.basePrice)}',
-                                style: const TextStyle(
-                                  color:
-                                      Colors.black54, // FORZADO A GRIS OSCURO
-                                ),
+                                style: const TextStyle(color: Colors.black54),
                               ),
                               trailing: Text(
                                 currencyFormat.format(itemTotal),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
-                                  color: Colors.black87, // FORZADO A NEGRO
+                                  color: Colors.black87,
                                 ),
                               ),
                             ),
@@ -416,7 +399,7 @@ class OrderDetailPage extends ConsumerWidget {
                                   item,
                                   category,
                                   currencyFormat,
-                                  context, // Pasar context
+                                  context,
                                 ),
                               ),
                             ),
@@ -425,7 +408,7 @@ class OrderDetailPage extends ConsumerWidget {
                                 indent: 16,
                                 endIndent: 16,
                                 height: 1,
-                                color: cs.outlineVariant, // Adaptado
+                                color: cs.outlineVariant,
                               ),
                           ],
                         ),
@@ -437,50 +420,49 @@ class OrderDetailPage extends ConsumerWidget {
                   _buildInfoCard(
                     context,
                     title: 'Resumen Financiero',
-                    backgroundColor: _kPastelRose, // Fondo pastel fijo
+                    backgroundColor: _kPastelRose,
                     borderColor: _kInkRose.withAlpha(89),
                     children: [
-                      // PASANDO CONTEXT A CADA LLAMADA
                       _buildSummaryRow(
                         'Subtotal Productos:',
                         itemsSubtotal,
                         currencyFormat,
-                        context: context, // PASAR CONTEXT
+                        context: context,
                       ),
                       if (deliveryCost > 0)
                         _buildSummaryRow(
                           'Costo Envío:',
                           deliveryCost,
                           currencyFormat,
-                          context: context, // PASAR CONTEXT
+                          context: context,
                         ),
                       Divider(
                         indent: 16,
                         endIndent: 16,
                         height: 8,
                         thickness: 1,
-                        color: cs.outlineVariant, // Adaptado
+                        color: cs.outlineVariant,
                       ),
                       _buildSummaryRow(
                         'TOTAL PEDIDO:',
                         total,
                         currencyFormat,
                         isTotal: true,
-                        context: context, // PASAR CONTEXT
+                        context: context,
                       ),
                       if (deposit > 0)
                         _buildSummaryRow(
                           'Seña Recibida:',
                           deposit,
                           currencyFormat,
-                          context: context, // PASAR CONTEXT
+                          context: context,
                         ),
                       Divider(
                         indent: 16,
                         endIndent: 16,
                         height: 8,
                         thickness: 1,
-                        color: cs.outlineVariant, // Adaptado
+                        color: cs.outlineVariant,
                       ),
                       _buildSummaryRow(
                         'SALDO PENDIENTE:',
@@ -488,10 +470,8 @@ class OrderDetailPage extends ConsumerWidget {
                         currencyFormat,
                         isTotal: true,
                         highlight: balance > 0,
-                        context: context, // PASAR CONTEXT
+                        context: context,
                       ),
-
-                      // --- BOTÓN MARCAR COMO PAGADO ---
                       if (canEdit && balance > 0.01) ...[
                         const SizedBox(height: 16),
                         Padding(
@@ -504,7 +484,6 @@ class OrderDetailPage extends ConsumerWidget {
                                 'Marcar como Pagado Totalmente',
                               ),
                               style: FilledButton.styleFrom(
-                                // Color fijo para el botón de acción positiva
                                 backgroundColor: Colors.green[700],
                               ),
                               onPressed: () {
@@ -515,7 +494,6 @@ class OrderDetailPage extends ConsumerWidget {
                         ),
                         const SizedBox(height: 8),
                       ],
-                      // --- FIN BOTÓN PAGADO ---
                     ],
                   ),
 
@@ -524,7 +502,7 @@ class OrderDetailPage extends ConsumerWidget {
                     _buildInfoCard(
                       context,
                       title: 'Notas Generales',
-                      backgroundColor: _kPastelRose, // Fondo pastel fijo
+                      backgroundColor: _kPastelRose,
                       borderColor: _kInkRose.withAlpha(89),
                       children: [
                         Padding(
@@ -533,7 +511,7 @@ class OrderDetailPage extends ConsumerWidget {
                             order.notes!,
                             style: const TextStyle(
                               fontSize: 15,
-                              color: Colors.black54, // FORZADO A GRIS OSCURO
+                              color: Colors.black54,
                             ),
                           ),
                         ),
@@ -543,7 +521,7 @@ class OrderDetailPage extends ConsumerWidget {
                   // --- BOTÓN DE ELIMINAR PEDIDO ---
                   if (canEdit) ...[
                     const SizedBox(height: 16),
-                    Divider(color: cs.outline), // Adaptado
+                    Divider(color: cs.outline),
                     const SizedBox(height: 16),
                     Center(
                       child: OutlinedButton.icon(
@@ -577,16 +555,82 @@ class OrderDetailPage extends ConsumerWidget {
   // === WIDGETS HELPER (MOVIDOS FUERA DEL BUILD PARA CLARIDAD) ====
   // ===============================================================
 
+  /// --- NUEVO WIDGET: Helper para la Dirección de Entrega ---
+  Widget _buildDeliveryAddressTile(BuildContext context, Order order) {
+    final ClientAddress? address = order.deliveryAddress;
+
+    // Si no hay dirección (es null)
+    if (address == null) {
+      // Si el costo de envío es 0, asumimos que retira en local
+      if ((order.deliveryCost ?? 0) == 0) {
+        return _buildInfoTile(
+          context,
+          Icons.storefront_outlined,
+          'Entrega',
+          'Retira en local',
+        );
+      }
+      // Si hay costo de envío pero no hay dirección, es un dato faltante
+      return _buildInfoTile(
+        context,
+        Icons.location_off_outlined,
+        'Dirección',
+        'No especificada (pero con envío)',
+      );
+    }
+
+    // Si SÍ hay dirección
+    return _buildInfoTile(
+      context,
+      Icons.location_on_outlined,
+      'Dirección de Entrega',
+      address
+          .displayAddress, // Usamos el getter! (Ej: "Casa" o "Av. 9 de Julio 123")
+      trailing: IconButton(
+        icon: Icon(
+          Icons.map_outlined,
+          color: Theme.of(context).colorScheme.primary, // Color del tema
+        ),
+        tooltip: 'Ver en Google Maps',
+        onPressed: () => _handleMapsLaunch(address),
+      ),
+    );
+  }
+
+  /// --- NUEVO HELPER: Lógica para abrir Google Maps (CORREGIDO) ---
+  void _handleMapsLaunch(ClientAddress address) {
+    // Prioridad 1: Usar coordenadas si existen
+    if (address.latitude != null && address.longitude != null) {
+      // --- CORRECCIÓN AQUÍ ---
+      // Creamos un string de consulta con lat,lon
+      final query = '${address.latitude},${address.longitude}';
+      // Usamos la función que SÍ existe
+      launchGoogleMaps(query);
+      return;
+    }
+    // Prioridad 2: Usar la URL de Google Maps si existe
+    if (address.googleMapsUrl != null && address.googleMapsUrl!.isNotEmpty) {
+      launchExternalUrl(address.googleMapsUrl!);
+      return;
+    }
+    // Prioridad 3: Buscar por la dirección de texto
+    if (address.addressLine1 != null && address.addressLine1!.isNotEmpty) {
+      // --- CORRECCIÓN AQUÍ ---
+      // Usamos la función que SÍ existe
+      launchGoogleMaps(address.addressLine1!);
+      return;
+    }
+    // No hay nada que abrir
+  }
+
   // --- Helper para construir la Card principal ---
   Widget _buildInfoCard(
-    BuildContext context, { // Recibir context
+    BuildContext context, {
     String? title,
     required List<Widget> children,
     required Color backgroundColor,
     required Color borderColor,
   }) {
-    // ❌ ELIMINAMOS cs.onSurface en el título de la tarjeta
-
     return Card(
       elevation: 0.5,
       margin: const EdgeInsets.only(bottom: 16),
@@ -605,7 +649,6 @@ class OrderDetailPage extends ConsumerWidget {
               child: Text(
                 title,
                 style: const TextStyle(
-                  // 👇 FORZADO A NEGRO
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
@@ -634,36 +677,33 @@ class OrderDetailPage extends ConsumerWidget {
 
   // --- Helper para filas de detalle ---
   Widget _buildInfoTile(
-    BuildContext context, // Recibir context
+    BuildContext context,
     IconData icon,
     String title,
     String subtitle, {
     Widget? trailing,
+    VoidCallback? onTap, // Añadido para hacerla clickeable
   }) {
-    // ❌ ELIMINAMOS cs.onSurface en el texto/ícono
-
     return ListTile(
-      leading: const Icon(
-        Icons.person,
+      leading: Icon(
+        icon, // Usar el ícono pasado como argumento
         color: Colors.black54,
         size: 26,
-      ), // FORZADO A GRIS OSCURO
+      ),
       title: Text(
         title,
         style: const TextStyle(
           fontWeight: FontWeight.w600,
-          color: Colors.black87, // FORZADO A NEGRO
+          color: Colors.black87,
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: const TextStyle(
-          fontSize: 15,
-          color: Colors.black54,
-        ), // FORZADO A GRIS OSCURO
+        style: const TextStyle(fontSize: 15, color: Colors.black54),
       ),
       trailing: trailing,
       dense: true,
+      onTap: onTap, // Añadido
       contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 0),
     );
   }
@@ -673,13 +713,13 @@ class OrderDetailPage extends ConsumerWidget {
     OrderItem item,
     ProductCategory? category,
     NumberFormat currencyFormat,
-    BuildContext context, // Recibir context
+    BuildContext context,
   ) {
+    // (Tu lógica de _buildItemDetails se mantiene intacta,
+    // solo se asegura de pasar 'context' a _buildDetailRow)
     final List<Widget> details = [];
     final custom = item.customizationJson ?? {};
 
-    // --- DESGLOSE DE PRECIO ---
-    // ... (la lógica de desglose no cambia, solo los colores)
     if (item.adjustments != 0) {
       details.add(
         _buildDetailRow(
@@ -695,7 +735,7 @@ class OrderDetailPage extends ConsumerWidget {
           currencyFormat.format(item.adjustments),
           highlight: item.adjustments > 0
               ? Colors.green.shade500
-              : Colors.red.shade500, // Colores fijos para el highlight
+              : Colors.red.shade500,
         ),
       );
       details.add(
@@ -729,9 +769,7 @@ class OrderDetailPage extends ConsumerWidget {
         ),
       );
     }
-    // --- FIN DESGLOSE DE PRECIO ---
 
-    // ... (Detalles específicos por categoría - la lógica no cambia, solo se adapta la llamada)
     switch (category) {
       case ProductCategory.torta:
         if (custom['weight_kg'] != null) {
@@ -835,9 +873,9 @@ class OrderDetailPage extends ConsumerWidget {
     return details;
   }
 
-  // --- Helper para la fila de detalle de item (ACTUALIZADO para tema) ---
+  // --- Helper para la fila de detalle de item ---
   Widget _buildDetailRow(
-    BuildContext context, // Recibir context
+    BuildContext context,
     String label,
     String value, {
     bool isList = false,
@@ -845,8 +883,6 @@ class OrderDetailPage extends ConsumerWidget {
     bool isSubTotal = false,
     Color? highlight,
   }) {
-    // ❌ ELIMINAMOS cs.onSurface en el texto/ícono
-
     return Padding(
       padding: const EdgeInsets.only(top: 4.0),
       child: Row(
@@ -857,7 +893,6 @@ class OrderDetailPage extends ConsumerWidget {
           Text(
             '$label ',
             style: const TextStyle(
-              // 👇 FORZADO A GRIS OSCURO
               color: Colors.black54,
               fontWeight: FontWeight.normal,
             ),
@@ -878,18 +913,14 @@ class OrderDetailPage extends ConsumerWidget {
                               horizontal: 4,
                               vertical: 0,
                             ),
-                            backgroundColor: darkBrown.withAlpha(
-                              26,
-                            ), // Usamos el color fijo de la marca para el fondo pastel
+                            backgroundColor: darkBrown.withAlpha(26),
                             labelStyle: const TextStyle(
                               fontSize: 12,
-                              color: Colors.black87, // FORZADO A NEGRO
+                              color: Colors.black87,
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(6),
-                              side: BorderSide(
-                                color: darkBrown.withAlpha(51),
-                              ), // Usamos el color fijo de la marca para el borde
+                              side: BorderSide(color: darkBrown.withAlpha(51)),
                             ),
                           ),
                         )
@@ -900,9 +931,7 @@ class OrderDetailPage extends ConsumerWidget {
                     style: TextStyle(
                       color:
                           highlight ??
-                          (isSubTotal
-                              ? Colors.black87
-                              : Colors.black54), // FORZADO A NEGRO/GRIS OSCURO
+                          (isSubTotal ? Colors.black87 : Colors.black54),
                       fontStyle: isNote ? FontStyle.italic : FontStyle.normal,
                       fontWeight: isSubTotal
                           ? FontWeight.bold
@@ -915,54 +944,39 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // --- NUEVO: Helper para fila del resumen financiero ---
+  // --- Helper para fila del resumen financiero ---
   Widget _buildSummaryRow(
     String label,
     double amount,
     NumberFormat currencyFormat, {
     bool isTotal = false,
     bool highlight = false,
-    // 👇 AÑADIR CONTEXTO AQUÍ
     required BuildContext context,
   }) {
-    // Usar '.abs()' para mostrar la seña como número positivo
     final formattedAmount = currencyFormat.format(
       label == 'Seña Recibida:' ? amount.abs() : amount,
     );
-    final sign = label == 'Seña Recibida:'
-        ? '-'
-        : ''; // Añadir signo negativo a la seña
-
-    // ❌ ELIMINADA: final cs = Theme.of(context).colorScheme;
-
-    // Color de alto contraste para el resumen
+    final sign = label == 'Seña Recibida:' ? '-' : '';
     const Color mainTextColor = Colors.black87;
 
     final style = TextStyle(
       fontSize: isTotal ? 16 : 14,
       fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-      // Color adaptado: Rojo/verde si es highlight, si no, color NEGRO
       color: highlight ? accentRed : (isTotal ? mainTextColor : Colors.black54),
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: 4.0,
-        horizontal: 16.0,
-      ), // Padding horizontal
+      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: style),
-          Text(
-            '$sign$formattedAmount',
-            style: style,
-          ), // Añadir signo si es seña
+          Text('$sign$formattedAmount', style: style),
         ],
       ),
     );
   }
 
-  // --- _showImageDialog (Adaptado) ---
+  // --- _showImageDialog ---
   void _showImageDialog(BuildContext context, String imageUrl) {
     final cs = Theme.of(context).colorScheme;
 
@@ -974,7 +988,7 @@ class OrderDetailPage extends ConsumerWidget {
             horizontal: 20,
             vertical: 40,
           ),
-          backgroundColor: cs.background, // Adaptado
+          backgroundColor: cs.background,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -996,14 +1010,14 @@ class OrderDetailPage extends ConsumerWidget {
                                 ? loadingProgress.cumulativeBytesLoaded /
                                       loadingProgress.expectedTotalBytes!
                                 : null,
-                            color: cs.primary, // Adaptado
+                            color: cs.primary,
                           ),
                         );
                       },
                       errorBuilder: (context, error, stackTrace) => Center(
                         child: Icon(
                           Icons.broken_image,
-                          color: cs.onSurfaceVariant, // Adaptado
+                          color: cs.onSurfaceVariant,
                           size: 50,
                         ),
                       ),
@@ -1012,10 +1026,7 @@ class OrderDetailPage extends ConsumerWidget {
                 ),
               ),
               TextButton(
-                child: Text(
-                  "Cerrar",
-                  style: TextStyle(color: cs.primary),
-                ), // Adaptado
+                child: Text("Cerrar", style: TextStyle(color: cs.primary)),
                 onPressed: () {
                   Navigator.of(context).pop();
                 },
@@ -1028,7 +1039,7 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // --- _handleMarkAsPaid (Sin cambios funcionales, solo estilo) ---
+  // --- _handleMarkAsPaid ---
   Future<void> _handleMarkAsPaid(
     BuildContext context,
     WidgetRef ref,
@@ -1059,11 +1070,14 @@ class OrderDetailPage extends ConsumerWidget {
 
     if (confirm) {
       try {
-        await ref.read(ordersRepoProvider).markAsPaid(order.id);
-        ref.invalidate(orderByIdProvider(order.id));
+        // Usamos el método optimizado del repositorio
+        await ref.read(ordersRepoProvider).updateOrder(order.id, {
+          'deposit': order.total, // Establece la seña igual al total
+        });
+        ref.invalidate(orderByIdProvider(order.id)); // Refresca esta página
+        ref.invalidate(ordersWindowProvider); // Refresca la home
 
         if (!context.mounted) return;
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Pedido marcado como pagado.'),
@@ -1082,7 +1096,7 @@ class OrderDetailPage extends ConsumerWidget {
     }
   }
 
-  // --- _handleChangeStatus (Sin cambios) ---
+  // --- _handleChangeStatus ---
   Future<void> _handleChangeStatus(
     BuildContext context,
     WidgetRef ref,
@@ -1091,7 +1105,8 @@ class OrderDetailPage extends ConsumerWidget {
   ) async {
     try {
       await ref.read(ordersRepoProvider).updateStatus(order.id, newStatus);
-      ref.invalidate(orderByIdProvider(order.id));
+      ref.invalidate(orderByIdProvider(order.id)); // Refresca esta página
+      ref.invalidate(ordersWindowProvider); // Refresca la home
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1111,11 +1126,12 @@ class OrderDetailPage extends ConsumerWidget {
           ),
         );
       }
+      // Revertir el cambio visual en caso de error
       ref.invalidate(orderByIdProvider(order.id));
     }
   }
 
-  // --- Diálogo Confirmar Eliminación (Sin cambios) ---
+  // --- Diálogo Confirmar Eliminación ---
   void _showDeleteConfirmationDialog(
     BuildContext context,
     WidgetRef ref,
@@ -1125,9 +1141,11 @@ class OrderDetailPage extends ConsumerWidget {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
+        // Usamos un StateProvider local para el estado de carga del diálogo
+        final isDeletingProvider = StateProvider<bool>((_) => false);
+
         return Consumer(
           builder: (context, ref, child) {
-            final isDeletingProvider = StateProvider<bool>((_) => false);
             final isDeleting = ref.watch(isDeletingProvider);
 
             return AlertDialog(
@@ -1173,19 +1191,21 @@ class OrderDetailPage extends ConsumerWidget {
                                 .read(ordersRepoProvider)
                                 .deleteOrder(order.id);
                             if (context.mounted) {
-                              Navigator.of(context).pop();
+                              Navigator.of(context).pop(); // Cierra el diálogo
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Pedido eliminado con éxito.'),
                                   backgroundColor: Colors.green,
                                 ),
                               );
-                              ref.invalidate(ordersWindowProvider);
-                              context.go('/');
+                              ref.invalidate(
+                                ordersWindowProvider,
+                              ); // Refresca la home
+                              context.go('/'); // Vuelve a la home
                             }
                           } catch (e) {
                             if (context.mounted) {
-                              Navigator.of(context).pop();
+                              Navigator.of(context).pop(); // Cierra el diálogo
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('Error al eliminar: $e'),
@@ -1194,6 +1214,8 @@ class OrderDetailPage extends ConsumerWidget {
                               );
                             }
                           }
+                          // No es necesario poner 'isDeleting = false'
+                          // porque el diálogo se cierra
                         },
                 ),
               ],

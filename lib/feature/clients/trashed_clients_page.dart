@@ -1,10 +1,10 @@
-// Archivo: lib/feature/clients/trashed_clients_page.dart
+// Archivo: lib/feature/clients/presentation/trashed_clients_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:pasteleria_180_flutter/core/models/client.dart';
-import 'clients_repository.dart';
+import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 
 class TrashedClientsPage extends ConsumerWidget {
   const TrashedClientsPage({super.key});
@@ -53,7 +53,7 @@ class TrashedClientsPage extends ConsumerWidget {
         );
       }
       // Refrescar la lista de la papelera
-      ref.invalidate(getTrashedClientsProvider);
+      ref.invalidate(trashedClientsProvider); // <-- NOMBRE CORREGIDO
     } catch (e) {
       // 3. Manejar errores (especialmente el 409)
       String errorMsg = 'Error al eliminar: $e';
@@ -70,7 +70,9 @@ class TrashedClientsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncTrashed = ref.watch(getTrashedClientsProvider);
+    // <-- NOMBRE CORREGIDO
+    final asyncTrashed = ref.watch(trashedClientsProvider);
+    const Color darkBrown = Color(0xFF7A4A4A);
 
     return Scaffold(
       appBar: AppBar(
@@ -78,76 +80,93 @@ class TrashedClientsPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(getTrashedClientsProvider),
+            onPressed: () =>
+                ref.invalidate(trashedClientsProvider), // <-- NOMBRE CORREGIDO
           ),
         ],
       ),
       body: asyncTrashed.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () =>
+            const Center(child: CircularProgressIndicator(color: darkBrown)),
         error: (err, stack) => Center(child: Text('Error: $err')),
         data: (clients) {
           if (clients.isEmpty) {
             return const Center(child: Text('La papelera está vacía.'));
           }
 
-          return ListView.builder(
-            itemCount: clients.length,
-            itemBuilder: (context, index) {
-              final client = clients[index];
-              final deletedAt = client.deletedAt != null
-                  ? DateFormat('dd/MM/yyyy').format(client.deletedAt!)
-                  : 'Fecha desconocida';
+          return RefreshIndicator(
+            onRefresh: () => ref.refresh(
+              trashedClientsProvider.future,
+            ), // <-- NOMBRE CORREGIDO
+            child: ListView.builder(
+              itemCount: clients.length,
+              itemBuilder: (context, index) {
+                final client = clients[index];
+                final deletedAt = client.deletedAt != null
+                    ? DateFormat('dd/MM/yyyy').format(client.deletedAt!)
+                    : 'Fecha desconocida';
 
-              return ListTile(
-                title: Text(client.name),
-                subtitle: Text('Eliminado el: $deletedAt'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Botón Restaurar
-                    FilledButton.tonal(
-                      child: const Text('Restaurar'),
-                      onPressed: () async {
-                        try {
-                          await ref
-                              .read(clientsRepoProvider)
-                              .restoreClient(client.id);
-                          if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Cliente restaurado'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
+                return ListTile(
+                  title: Text(
+                    client.name,
+                    style: const TextStyle(
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
+                  subtitle: Text('Eliminado el: $deletedAt'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Botón Restaurar
+                      FilledButton.tonal(
+                        child: const Text('Restaurar'),
+                        onPressed: () async {
+                          try {
+                            await ref
+                                .read(clientsRepoProvider)
+                                .restoreClient(client.id);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Cliente restaurado'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                            // Refrescar ambas listas
+                            ref.invalidate(
+                              trashedClientsProvider,
+                            ); // <-- NOMBRE CORREGIDO
+                            ref.invalidate(
+                              clientsListProvider,
+                            ); // <-- Refrescar lista principal
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
                           }
-                          // Refrescar la lista de la papelera
-                          ref.invalidate(getTrashedClientsProvider);
-                          ref.invalidate(clientsRepoProvider);
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Error: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          } 
-                        }
-                      },
-                    ),
-                    // Botón Eliminar Definitivamente
-                    IconButton(
-                      icon: Icon(
-                        Icons.delete_forever,
-                        color: Colors.red.shade700,
+                        },
                       ),
-                      tooltip: 'Eliminar permanentemente',
-                      onPressed: () => _handleForceDelete(context, ref, client),
-                    ),
-                  ],
-                ),
-              );
-            },
+                      // Botón Eliminar Definitivamente
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete_forever,
+                          color: Colors.red.shade700,
+                        ),
+                        tooltip: 'Eliminar permanentemente',
+                        onPressed: () =>
+                            _handleForceDelete(context, ref, client),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           );
         },
       ),

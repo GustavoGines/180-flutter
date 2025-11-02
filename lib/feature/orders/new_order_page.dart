@@ -492,7 +492,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
       // Invalidar listas para que se refresquen
       ref.invalidate(clientsRepoProvider);
-      ref.invalidate(getTrashedClientsProvider);
+      ref.invalidate(trashedClientsProvider);
 
       if (mounted) {
         // Setea el cliente restaurado en el formulario
@@ -2309,7 +2309,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 }
                                 return ref
                                     .read(clientsRepoProvider)
-                                    .searchClients(pattern);
+                                    .searchClients(query: pattern); // MODIFIQUE SIN SABER
                               },
                               itemBuilder: (context, client) => ListTile(
                                 leading: Icon(Icons.person),

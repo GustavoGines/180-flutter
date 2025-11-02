@@ -1,19 +1,9 @@
-// Archivo: lib/feature/clients/client_form_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'clients_repository.dart';
-import 'package:dio/dio.dart'; // 👈 AÑADE ESTO
-import '../../core/models/client.dart'; // 👈 Asegúrate que esté
-
-
-// Provider para buscar el cliente por ID (solo para modo edición)
-final clientByIdProvider = FutureProvider.autoDispose.family<Client?, int>((
-  ref,
-  id,
-) {
-  return ref.watch(clientsRepoProvider).getClientById(id);
-});
+import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
+import 'package:dio/dio.dart';
+import 'package:pasteleria_180_flutter/core/models/client.dart';
 
 class ClientFormPage extends ConsumerWidget {
   final int? clientId; // Si es null, es "Crear". Si tiene ID, es "Editar".
@@ -25,7 +15,8 @@ class ClientFormPage extends ConsumerWidget {
 
     if (isEditMode) {
       // Modo Edición: Cargar datos primero
-      final asyncClient = ref.watch(clientByIdProvider(clientId!));
+      // USAMOS EL PROVIDER DEL REPO
+      final asyncClient = ref.watch(clientDetailsProvider(clientId!));
       return Scaffold(
         appBar: AppBar(title: const Text('Editar Cliente')),
         body: asyncClient.when(
@@ -64,7 +55,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  final _addressController = TextEditingController();
+  final _notesController = TextEditingController(); // AÑADIDO PARA NOTAS
   bool _isLoading = false;
 
   bool get isEditMode => widget.client != null;
@@ -77,7 +68,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       _nameController.text = widget.client!.name;
       _phoneController.text = widget.client!.phone ?? '';
       _emailController.text = widget.client!.email ?? '';
-      //_addressController.text = widget.client!.address ?? '';
+      _notesController.text = widget.client!.notes ?? ''; // AÑADIDO
     }
   }
 
@@ -86,7 +77,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
-    _addressController.dispose();
+    _notesController.dispose(); // AÑADIDO
     super.dispose();
   }
 
@@ -105,9 +96,9 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       'email': _emailController.text.trim().isEmpty
           ? null
           : _emailController.text.trim(),
-      'address': _addressController.text.trim().isEmpty
+      'notes': _notesController.text.trim().isEmpty
           ? null
-          : _addressController.text.trim(),
+          : _notesController.text.trim(), // AÑADIDO
     };
 
     try {
@@ -119,7 +110,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
         await repo.updateClient(widget.client!.id, payload);
         successMessage = 'Cliente actualizado con éxito';
         // Invalidar el caché del cliente editado
-        ref.invalidate(clientByIdProvider(widget.client!.id));
+        ref.invalidate(clientDetailsProvider(widget.client!.id));
       } else {
         // --- Lógica de Creación ---
         await repo.createClient(payload);
@@ -127,8 +118,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       }
 
       // Invalidar la lista de búsqueda para que se refresque
-      ref.invalidate(clientsRepoProvider); // Esto es simple pero ineficiente.
-      // Sería mejor tener un provider de "searchQuery" y ref.invalidate(searchClientsProvider)
+      ref.invalidate(clientsListProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -149,16 +139,16 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
             // Laravel nos envió el cliente en el cuerpo del error
             final clientData = e.response?.data['client'];
             final clientToRestore = Client.fromJson(
-              (clientData as Map).map((k, v) => MapEntry(k.toString(), v))
+              (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
             );
-            
+
             // Oculta el loader y muestra el diálogo de restauración
             setState(() => _isLoading = false);
             _showRestoreDialog(clientToRestore);
             return; // Sal del catch, ya estamos manejando esto
-            
           } catch (parseError) {
-             errorMessage = 'Se encontró un cliente eliminado, pero no se pudo leer.';
+            errorMessage =
+                'Se encontró un cliente eliminado, pero no se pudo leer.';
           }
         }
         // Si no fue un 409, muestra el error normal
@@ -169,7 +159,10 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        // Asegurarse de que el loading se quite si no fue el caso 409
+        if (_isLoading) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -179,9 +172,9 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     final didConfirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar Eliminación'),
+        title: const Text('Confirmar Envío a Papelera'),
         content: Text(
-          '¿Estás seguro de que quieres eliminar a ${widget.client!.name}? Esta acción no se puede deshacer.',
+          '¿Estás seguro de que quieres enviar a ${widget.client!.name} a la papelera?',
         ),
         actions: [
           TextButton(
@@ -191,7 +184,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Eliminar'),
+            child: const Text('Sí, Enviar a Papelera'),
           ),
         ],
       ),
@@ -199,26 +192,27 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
 
     if (didConfirm != true) return; // Si el usuario cancela, no hagas nada
 
-    // 2. Si confirma, proceder a eliminar
+    // 2. Si confirma, proceder a eliminar (soft delete)
     setState(() => _isLoading = true);
 
     try {
       await ref.read(clientsRepoProvider).deleteClient(widget.client!.id);
 
       // 3. Invalidar los providers para refrescar las listas
-      ref.invalidate(clientsRepoProvider); // Invalida toda la búsqueda/lista
+      ref.invalidate(clientsListProvider); // Invalida la lista principal
+      ref.invalidate(trashedClientsProvider); // Invalida la papelera
       ref.invalidate(
-        clientByIdProvider(widget.client!.id),
+        clientDetailsProvider(widget.client!.id),
       ); // Invalida este cliente
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Cliente eliminado'),
+            content: Text('Cliente enviado a la papelera'),
             backgroundColor: Colors.green,
           ),
         );
-        // Salir de la página de edición, ya que el cliente no existe
+        // Salir de la página de edición
         context.pop();
       }
     } catch (e) {
@@ -237,14 +231,15 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     }
   }
 
-  // 👇 AÑADE ESTA NUEVA FUNCIÓN
+  // 👇 Esta función estaba bien, solo corregimos el provider
   Future<void> _showRestoreDialog(Client clientToRestore) async {
     final didConfirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Cliente Encontrado'),
         content: Text(
-            'El cliente "${clientToRestore.name}" ya existe pero fue eliminado. ¿Deseas restaurarlo?'),
+          'El cliente "${clientToRestore.name}" ya existe pero fue eliminado. ¿Deseas restaurarlo?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -264,10 +259,10 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     setState(() => _isLoading = true);
     try {
       await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
-      
+
       // Invalidar listas para que se refresquen
-      ref.invalidate(clientsRepoProvider);
-      ref.invalidate(getTrashedClientsProvider); // (Provider que crearemos abajo)
+      ref.invalidate(clientsListProvider);
+      ref.invalidate(trashedClientsProvider); // <-- USAR NOMBRE CORRECTO
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -279,9 +274,12 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
         context.pop(); // Cierra la página de creación
       }
     } catch (e) {
-       if (mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al restaurar: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error al restaurar: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -289,10 +287,20 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
         setState(() => _isLoading = false);
       }
     }
-
   }
+
   @override
   Widget build(BuildContext context) {
+    const Color darkBrown = Color(0xFF7A4A4A);
+    final inputStyle = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12.0),
+      borderSide: const BorderSide(color: Colors.grey),
+    );
+    final focusedStyle = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12.0),
+      borderSide: const BorderSide(color: darkBrown, width: 2.0),
+    );
+
     return Form(
       key: _formKey,
       child: ListView(
@@ -300,10 +308,11 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
         children: [
           TextFormField(
             controller: _nameController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Nombre Completo *',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.person),
+              border: inputStyle,
+              focusedBorder: focusedStyle,
+              prefixIcon: const Icon(Icons.person, color: darkBrown),
             ),
             validator: (value) => (value == null || value.trim().isEmpty)
                 ? 'El nombre es obligatorio'
@@ -313,31 +322,36 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _phoneController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Teléfono',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.phone),
+              border: inputStyle,
+              focusedBorder: focusedStyle,
+              prefixIcon: const Icon(Icons.phone, color: darkBrown),
             ),
             keyboardType: TextInputType.phone,
           ),
           const SizedBox(height: 16),
           TextFormField(
             controller: _emailController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Email',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.email),
+              border: inputStyle,
+              focusedBorder: focusedStyle,
+              prefixIcon: const Icon(Icons.email, color: darkBrown),
             ),
             keyboardType: TextInputType.emailAddress,
           ),
           const SizedBox(height: 16),
+          // CAMPO DE NOTAS AÑADIDO
           TextFormField(
-            controller: _addressController,
-            decoration: const InputDecoration(
-              labelText: 'Dirección',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.location_on),
+            controller: _notesController,
+            decoration: InputDecoration(
+              labelText: 'Notas Adicionales',
+              border: inputStyle,
+              focusedBorder: focusedStyle,
+              prefixIcon: const Icon(Icons.note_alt, color: darkBrown),
             ),
+            maxLines: 3,
             textCapitalization: TextCapitalization.sentences,
           ),
           const SizedBox(height: 24),
@@ -347,12 +361,20 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Icon(Icons.save),
             label: Text(isEditMode ? 'Guardar Cambios' : 'Crear Cliente'),
             style: FilledButton.styleFrom(
+              backgroundColor: darkBrown,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
           if (isEditMode) ...[
@@ -361,11 +383,15 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: _isLoading ? null : _handleDelete,
-              icon: const Icon(Icons.delete_forever),
-              label: const Text('Eliminar Cliente'),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Enviar a Papelera'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.red.shade700,
                 side: BorderSide(color: Colors.red.shade300),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
           ],
