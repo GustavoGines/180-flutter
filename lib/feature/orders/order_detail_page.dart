@@ -155,7 +155,7 @@ class OrderDetailPage extends ConsumerWidget {
                               )
                             : null,
                       ),
-                      if (order.client?.address != null &&
+                      /*if (order.client?.address != null &&
                           order.client!.address!.isNotEmpty)
                         _buildInfoTile(
                           context,
@@ -171,7 +171,7 @@ class OrderDetailPage extends ConsumerWidget {
                             onPressed: () =>
                                 launchGoogleMaps(order.client!.address!),
                           ),
-                        ),
+                        ),*/
                       const Divider(indent: 16, endIndent: 16, height: 1),
                       _buildInfoTile(
                         context,

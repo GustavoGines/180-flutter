@@ -117,7 +117,7 @@ class ClientDetailPage extends ConsumerWidget {
                               Icons.location_on_outlined,
                               color: darkBrown,
                             ),
-                            title: Text(client.address ?? 'Sin dirección'),
+                            /*title: Text(client.address ?? 'Sin dirección'),
                             trailing:
                                 (client.address != null &&
                                     client.address!.isNotEmpty)
@@ -130,7 +130,7 @@ class ClientDetailPage extends ConsumerWidget {
                                     onPressed: () =>
                                         launchGoogleMaps(client.address!),
                                   )
-                                : null,
+                                : null,*/
                           ),
                         ],
                       ),

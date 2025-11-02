@@ -216,9 +216,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           PopupMenuButton<String>(
             onSelected: (value) async {
               switch (value) {
-                case 'create_user':
-                  context.push('/create_user');
-                  break;
                 case 'logout':
                   ref.read(authStateProvider.notifier).logout();
                   break;
@@ -299,17 +296,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                 const PopupMenuDivider(),
 
                 // --- FIN SELECCIÓN DE TEMA ---
-                if (authState.user?.isAdmin ?? false)
-                  const PopupMenuItem(
-                    value: 'create_user',
-                    child: ListTile(
-                      leading: Icon(Icons.person_add_alt_1),
-                      title: Text('Crear Usuario'),
-                    ),
-                  ),
-
-                if (authState.user?.isAdmin ?? false) const PopupMenuDivider(),
-
                 const PopupMenuItem(
                   value: 'logout',
                   child: ListTile(
@@ -405,6 +391,17 @@ class _HomePageState extends ConsumerState<HomePage> {
             foregroundColor: Theme.of(context).colorScheme.primary,
             onTap: () => context.push('/new_order'),
           ),
+
+          // Botón 3: Usuarios (Solo visible si es Admin)
+          if (authState.user?.isAdmin ?? false)
+            SpeedDialChild(
+              child: const Icon(Icons.people_alt_outlined),
+              label: 'Usuarios',
+              labelStyle: const TextStyle(fontSize: 16),
+              backgroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.primary,
+              onTap: () => context.push('/users'),
+            ),
         ],
       ),
 

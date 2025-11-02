@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/models/client.dart';
-import 'package:flutter/foundation.dart';
+import '../../core/models/client_address.dart'; // <-- IMPORTAR MODELO
 
 final clientsRepoProvider = Provider<ClientsRepository>(
   (_) => ClientsRepository(),
@@ -46,14 +46,11 @@ class ClientsRepository {
     final res = await _dio.post('/clients', data: payload);
     final body = res.data;
 
-    // Normalizamos a Map<String, dynamic>
     late final Map<String, dynamic> map;
 
     if (body is Map && body['data'] is Map) {
       map = (body['data'] as Map).map((k, v) => MapEntry(k.toString(), v));
-    }
-    // Fallback por si la API devuelve el objeto directamente
-    else if (body is Map) {
+    } else if (body is Map) {
       map = body.map((k, v) => MapEntry(k.toString(), v));
     } else {
       throw Exception(
@@ -66,47 +63,37 @@ class ClientsRepository {
 
   /// GET /clients/{id}
   Future<Client?> getClientById(int id) async {
-    // Nota: Tu API de Laravel debe tener la ruta: Route::get('/clients/{client}', ...);
-    // Si tu ruta es /client (singular), cambia '/clients' aquí.
     try {
       final res = await _dio.get('/clients/$id');
       final body = res.data;
 
       late final Map<String, dynamic> map;
-      // Asumimos que la API devuelve { "data": {...} } al buscar por ID
       if (body is Map && body['data'] is Map) {
         map = (body['data'] as Map).map((k, v) => MapEntry(k.toString(), v));
-      }
-      // O quizás solo devuelve {...}
-      else if (body is Map) {
+      } else if (body is Map) {
         map = body.map((k, v) => MapEntry(k.toString(), v));
       } else {
         throw Exception(
           'Respuesta inesperada al buscar cliente: ${body.runtimeType}',
         );
       }
+      // Gracias al modelo actualizado, esto YA INCLUIRÁ las 'addresses'
       return Client.fromJson(map);
     } catch (e) {
-      // Manejar 404 (No encontrado) u otros errores
       debugPrint('Error en getClientById: $e');
       return null;
     }
   }
 
-  // 👇 AÑADE ESTA FUNCIÓN
   /// PUT /clients/{id}
   Future<Client> updateClient(int id, Map<String, dynamic> payload) async {
-    // Nota: Tu API de Laravel debe tener la ruta: Route::put('/clients/{client}', ...);
     final res = await _dio.put('/clients/$id', data: payload);
     final body = res.data;
 
     late final Map<String, dynamic> map;
-    // Asumimos que la API devuelve { "data": {...} } al actualizar
     if (body is Map && body['data'] is Map) {
       map = (body['data'] as Map).map((k, v) => MapEntry(k.toString(), v));
-    }
-    // O quizás solo devuelve {...}
-    else if (body is Map) {
+    } else if (body is Map) {
       map = body.map((k, v) => MapEntry(k.toString(), v));
     } else {
       throw Exception(
@@ -119,27 +106,24 @@ class ClientsRepository {
   /// DELETE /clients/{id}
   Future<void> deleteClient(int id) async {
     try {
-      // Laravel devolverá 204 No Content, Dio lo interpretará como éxito
       await _dio.delete('/clients/$id');
     } catch (e) {
       debugPrint('Error en deleteClient: $e');
-      // Propaga el error para que la UI pueda mostrar un SnackBar
       rethrow;
     }
   }
 
   /// GET /clients/trashed
   Future<List<Client>> getTrashedClients() async {
+    // ... (tu código está perfecto) ...
     final res = await _dio.get('/clients/trashed');
     final body = res.data;
-
     List rows;
     if (body is Map && body['data'] is List) {
       rows = body['data'];
     } else {
       rows = const [];
     }
-
     return rows
         .whereType<Map>()
         .map<Map<String, dynamic>>(
@@ -151,9 +135,9 @@ class ClientsRepository {
 
   /// POST /clients/{id}/restore
   Future<Client> restoreClient(int id) async {
+    // ... (tu código está perfecto) ...
     final res = await _dio.post('/clients/$id/restore');
     final body = res.data;
-
     late final Map<String, dynamic> map;
     if (body is Map && body['data'] is Map) {
       map = (body['data'] as Map).map((k, v) => MapEntry(k.toString(), v));
@@ -167,11 +151,77 @@ class ClientsRepository {
 
   /// DELETE /clients/{id}/force-delete
   Future<void> forceDeleteClient(int id) async {
+    // ... (tu código está perfecto) ...
     try {
       await _dio.delete('/clients/$id/force-delete');
     } catch (e) {
       debugPrint('Error en forceDeleteClient: $e');
-      rethrow; // Propaga el error para que la UI lo muestre
+      rethrow;
+    }
+  }
+
+  // ---- 👇 NUEVOS MÉTODOS PARA DIRECCIONES 👇 ----
+
+  /// POST /clients/{clientId}/addresses
+  /// Añade una nueva dirección a un cliente específico.
+  Future<ClientAddress> addAddress(
+    int clientId,
+    Map<String, dynamic> payload,
+  ) async {
+    // Asegurarnos que el payload NO envíe el ID del cliente,
+    // ya que va en la URL. El backend lo asignará.
+    payload.remove('client_id');
+
+    final res = await _dio.post('/clients/$clientId/addresses', data: payload);
+
+    // Asumimos que la API devuelve { "data": {...} }
+    final body = res.data;
+    if (body is Map && body['data'] is Map) {
+      final map = (body['data'] as Map).map(
+        (k, v) => MapEntry(k.toString(), v),
+      );
+      return ClientAddress.fromJson(map);
+    }
+    // Fallback por si devuelve el objeto directo
+    else if (body is Map) {
+      final map = body.map((k, v) => MapEntry(k.toString(), v));
+      return ClientAddress.fromJson(map);
+    } else {
+      throw Exception('Respuesta inesperada al crear dirección');
+    }
+  }
+
+  /// PUT /client-addresses/{addressId}
+  /// Actualiza una dirección específica.
+  Future<ClientAddress> updateAddress(
+    int addressId,
+    Map<String, dynamic> payload,
+  ) async {
+    // Laravel usa PUT, así que enviamos el payload completo
+    final res = await _dio.put('/client-addresses/$addressId', data: payload);
+
+    final body = res.data;
+    if (body is Map && body['data'] is Map) {
+      final map = (body['data'] as Map).map(
+        (k, v) => MapEntry(k.toString(), v),
+      );
+      return ClientAddress.fromJson(map);
+    } else if (body is Map) {
+      final map = body.map((k, v) => MapEntry(k.toString(), v));
+      return ClientAddress.fromJson(map);
+    } else {
+      throw Exception('Respuesta inesperada al actualizar dirección');
+    }
+  }
+
+  /// DELETE /client-addresses/{addressId}
+  /// Elimina una dirección específica.
+  Future<void> deleteAddress(int addressId) async {
+    try {
+      await _dio.delete('/client-addresses/$addressId');
+    } catch (e) {
+      debugPrint('Error en deleteAddress: $e');
+      rethrow;
     }
   }
 }

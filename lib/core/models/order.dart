@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import 'order_item.dart';
 import 'client.dart';
+import 'client_address.dart'; // <-- IMPORTAR EL MODELO QUE FALTA
 
 class Order {
   final int id;
@@ -13,10 +14,16 @@ class Order {
   final String status;
   final double? total;
   final double? deposit;
-  final double? deliveryCost; // <-- NUEVO CAMPO
+  final double? deliveryCost;
   final String? notes;
   final List<OrderItem> items;
   final Client? client;
+
+  // ---- INICIO DE CAMPOS NUEVOS ----
+  final int? deliveryAddressId; // El ID de la dirección seleccionada
+  final ClientAddress?
+  deliveryAddress; // El objeto dirección (si viene cargado)
+  // ---- FIN DE CAMPOS NUEVOS ----
 
   Order({
     required this.id,
@@ -28,71 +35,71 @@ class Order {
     required this.items,
     this.total,
     this.deposit,
-    this.deliveryCost, // <-- AÑADIDO AL CONSTRUCTOR
+    this.deliveryCost,
     this.notes,
     this.client,
+    this.deliveryAddressId, // <-- AÑADIR AL CONSTRUCTOR
+    this.deliveryAddress, // <-- AÑADIR AL CONSTRUCTOR
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
-    // ---- LÓGICA DE PARSEO DE FECHA Y HORA MEJORADA ----
-
-    // Función auxiliar para combinar fecha y hora de forma segura
+    // ... (toda tu lógica de parseDateTime está perfecta) ...
     DateTime parseDateTime(String dateStr, String timeStr) {
       try {
-        // Asume que dateStr viene como YYYY-MM-DD
         final date = DateTime.parse(dateStr).toLocal();
-        // Asume que timeStr viene como HH:MM
         final timeParts = timeStr.split(':');
         final hour = int.tryParse(timeParts[0]) ?? 0;
         final minute = int.tryParse(timeParts[1]) ?? 0;
-        // Combina fecha con hora/minuto parseados
         return DateTime(date.year, date.month, date.day, hour, minute);
       } catch (e) {
-        // Fallback robusto: si algo falla, devuelve solo la fecha a medianoche
         try {
           return DateTime.parse(dateStr).toLocal();
         } catch (_) {
-          // Si incluso la fecha falla, devuelve ahora como último recurso
           return DateTime.now();
         }
       }
     }
 
-    // Usar '' como default si son null para evitar errores en parseDateTime
     final eventDateString =
         json['event_date'] as String? ??
-        DateTime.now().toIso8601String().substring(
-          0,
-          10,
-        ); // Asegurar solo YYYY-MM-DD
+        DateTime.now().toIso8601String().substring(0, 10);
     final startTimeString = json['start_time'] as String? ?? '00:00';
     final endTimeString = json['end_time'] as String? ?? '00:00';
-
     final itemsJson = (json['items'] as List?) ?? const [];
 
     return Order(
-      // Usar int.tryParse para más seguridad con IDs
       id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       clientId: int.tryParse(json['client_id']?.toString() ?? '0') ?? 0,
-
-      // Parseo de fechas y horas
       eventDate:
-          DateTime.tryParse(eventDateString)?.toLocal() ??
-          DateTime.now(), // Usar tryParse
+          DateTime.tryParse(eventDateString)?.toLocal() ?? DateTime.now(),
       startTime: parseDateTime(eventDateString, startTimeString),
       endTime: parseDateTime(eventDateString, endTimeString),
-
-      // Parseo de otros campos, asegurando tipos correctos y defaults
-      status: (json['status'] ?? 'unknown')
-          .toString(), // Default a 'unknown' si es null
-      total: double.tryParse(
-        json['total']?.toString() ?? '',
-      ), // tryParse maneja null o string vacío
+      status: (json['status'] ?? 'unknown').toString(),
+      total: double.tryParse(json['total']?.toString() ?? ''),
       deposit: double.tryParse(json['deposit']?.toString() ?? ''),
-      deliveryCost: double.tryParse(
-        json['delivery_cost']?.toString() ?? '',
-      ), // <-- PARSEAR NUEVO CAMPO
-      notes: json['notes']?.toString(), // Permite null
+      deliveryCost: double.tryParse(json['delivery_cost']?.toString() ?? ''),
+      notes: json['notes']?.toString(),
+
+      // ---- INICIO DE AJUSTES EN FROMJSON ----
+
+      // Parsear la dirección de entrega si viene (eager-loaded)
+      deliveryAddressId: int.tryParse(
+        json['delivery_address_id']?.toString() ?? '',
+      ),
+      deliveryAddress:
+          json['delivery_address'] != null &&
+              json['delivery_address'] is Map<String, dynamic>
+          ? ClientAddress.fromJson(
+              json['delivery_address'] as Map<String, dynamic>,
+            )
+          : null,
+
+      // Parsear el cliente si viene (eagler-loaded)
+      client: json['client'] != null && json['client'] is Map<String, dynamic>
+          ? Client.fromJson(json['client'] as Map<String, dynamic>)
+          : null,
+
+      // Parsear items (tu lógica estaba bien)
       items: itemsJson
           .map((e) {
             try {
@@ -101,19 +108,13 @@ class Order {
               if (kDebugMode) {
                 print("Error parsing order item: $itemError \nItem JSON: $e");
               }
-              // Decide qué hacer: retornar un item inválido, null, o lanzar error?
-              // Por ahora, lo omitimos para no crashear
               return null;
             }
           })
-          .whereType<OrderItem>() // Filtra los nulos si hubo error en el item
+          .whereType<OrderItem>()
           .toList(),
-      client:
-          json['client'] != null &&
-              json['client']
-                  is Map<String, dynamic> // Chequeo extra
-          ? Client.fromJson(json['client'] as Map<String, dynamic>)
-          : null,
+
+      // ---- FIN DE AJUSTES EN FROMJSON ----
     );
   }
 
@@ -130,6 +131,8 @@ class Order {
     String? notes,
     List<OrderItem>? items,
     Client? client,
+    int? deliveryAddressId, // <-- AÑADIR A COPYWITH
+    ClientAddress? deliveryAddress, // <-- AÑADIR A COPYWITH
   }) {
     return Order(
       id: id ?? this.id,
@@ -144,6 +147,8 @@ class Order {
       notes: notes ?? this.notes,
       items: items ?? this.items,
       client: client ?? this.client,
+      deliveryAddressId: deliveryAddressId ?? this.deliveryAddressId, // <--
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress, // <--
     );
   }
 }

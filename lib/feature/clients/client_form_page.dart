@@ -77,7 +77,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       _nameController.text = widget.client!.name;
       _phoneController.text = widget.client!.phone ?? '';
       _emailController.text = widget.client!.email ?? '';
-      _addressController.text = widget.client!.address ?? '';
+      //_addressController.text = widget.client!.address ?? '';
     }
   }
 

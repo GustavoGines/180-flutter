@@ -8,7 +8,7 @@ import 'feature/auth/login_page.dart';
 import 'feature/orders/home_page.dart';
 import 'feature/orders/new_order_page.dart';
 import 'feature/orders/order_detail_page.dart';
-import 'feature/users/create_user_page.dart';
+import 'feature/users/presentation/create_user_page.dart';
 import 'feature/clients/clients_page.dart';
 import 'feature/auth/presentation/forgot_password_page.dart';
 import 'feature/auth/presentation/reset_password_page.dart';
@@ -16,6 +16,8 @@ import 'feature/auth/auth_state.dart';
 import 'feature/clients/client_form_page.dart';
 import 'feature/clients/trashed_clients_page.dart';
 import 'feature/clients/client_detail_page.dart';
+import 'feature/users/presentation/users_list_page.dart';
+import 'feature/users/presentation/edit_user_page.dart';
 
 final goRouterNotifierProvider = Provider((ref) => GoRouterNotifier(ref));
 
@@ -72,11 +74,28 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
 
-      // ----------------------
+      // --- NUEVO GRUPO DE RUTAS DE USUARIOS ---
       GoRoute(
-        path: '/create_user',
-        builder: (context, state) => const CreateUserPage(),
+        path: '/users',
+        builder: (context, state) => const UsersListPage(),
+        routes: [
+          // Ruta para crear: /users/new
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => const CreateUserPage(),
+          ),
+          // Ruta para editar: /users/:id/edit
+          GoRoute(
+            path: ':id/edit',
+            builder: (context, state) {
+              final id = int.parse(state.pathParameters['id']!);
+              return EditUserPage(userId: id);
+            },
+          ),
+        ],
       ),
+
+      // --- NUEVO GRUPO DE RUTAS DE CLIENTES ---
       GoRoute(
         path: '/clients',
         builder: (context, state) => const ClientsPage(), // Muestra la lista
