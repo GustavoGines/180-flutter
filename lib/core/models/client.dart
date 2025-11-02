@@ -9,7 +9,6 @@ class Client {
   final String? email;
   final String? notes;
   final DateTime? deletedAt;
-  final String? whatsappUrl;
   final List<ClientAddress> addresses; // Esta es la lista clave
 
   const Client({
@@ -20,13 +19,29 @@ class Client {
     this.email,
     this.notes,
     this.deletedAt,
-    this.whatsappUrl,
     this.addresses = const [], // Default a lista vacía
   });
 
-  factory Client.fromJson(Map<String, dynamic> j) {
-    // ---- INICIO DE LA CORRECCIÓN ----
+  // 👇 NUEVO GETTER QUE GENERA EL ENLACE CORRECTO
+  String? get whatsappUrl {
+    if (phone == null || phone!.isEmpty) {
+      return null;
+    }
 
+    // 1. Limpiamos cualquier cosa que no sea número o el signo '+'
+    String cleanedPhone = phone!.replaceAll(RegExp(r'[^\d+]'), '');
+
+    // 2. Si el número ya tiene el código internacional (+549), usamos el substring después del +
+    // Si no, asumimos que está estandarizado por Laravel a 549 y solo quitamos el '+' si existe.
+    if (cleanedPhone.startsWith('+')) {
+      cleanedPhone = cleanedPhone.substring(1);
+    }
+
+    // El backend debe asegurar que el número es 549...
+    return 'https://wa.me/$cleanedPhone';
+  }
+
+  factory Client.fromJson(Map<String, dynamic> j) {
     // Parsear la lista de direcciones si viene en el JSON
     final addressesList = (j['addresses'] as List?) ?? [];
     final parsedAddresses = addressesList
@@ -35,8 +50,6 @@ class Client {
               ClientAddress.fromJson(addressJson as Map<String, dynamic>),
         )
         .toList();
-
-    // ---- FIN DE LA CORRECCIÓN ----
 
     return Client(
       id: j['id'],
@@ -47,7 +60,6 @@ class Client {
       deletedAt: j['deleted_at'] != null
           ? DateTime.parse(j['deleted_at'] as String)
           : null,
-      whatsappUrl: j['whatsapp_url'] as String?,
       addresses: parsedAddresses, // <-- USAR LA LISTA PARSEADA
     );
   }
@@ -71,7 +83,6 @@ class Client {
     String? email,
     String? notes,
     DateTime? deletedAt,
-    String? whatsappUrl,
     List<ClientAddress>? addresses,
   }) {
     return Client(
@@ -81,7 +92,6 @@ class Client {
       email: email ?? this.email,
       notes: notes ?? this.notes,
       deletedAt: deletedAt ?? this.deletedAt,
-      whatsappUrl: whatsappUrl ?? this.whatsappUrl,
       addresses: addresses ?? this.addresses,
     );
   }
