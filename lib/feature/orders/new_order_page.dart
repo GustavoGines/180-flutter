@@ -68,7 +68,9 @@ class NewOrderPage extends ConsumerWidget {
                       child: Text(
                         'Error al cargar el pedido: $err\nIntenta recargar la página.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
                       ),
                     ),
                   ),
@@ -318,9 +320,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     // 1. Pedir Permiso de Contactos
     if (!await FlutterContacts.requestPermission(readonly: true)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Permiso de contactos denegado.'),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
         ),
       );
       await openAppSettings(); // Sugerir abrir configuración
@@ -339,9 +341,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
       if (phone == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('El contacto no tiene número de teléfono.'),
-            backgroundColor: Colors.orange,
+          SnackBar(
+            content: Text(
+              'El contacto no tiene número de teléfono.',
+              style: TextStyle(
+                // Color de texto sobre el contenedor secundario
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+              ),
+            ),
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
           ),
         );
         return;
@@ -435,7 +443,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       );
     } else if (errorMessage != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
+        ),
       );
     }
   }
@@ -714,7 +725,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al restaurar: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           ),
         );
       }
@@ -766,7 +777,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error subiendo imagen: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           ),
         );
       }
@@ -2098,7 +2109,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     return Container(
                       height: 80,
                       width: 80,
-                      color: Colors.grey[300],
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
                       child: Center(
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
@@ -2113,8 +2126,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   errorBuilder: (context, error, stackTrace) => Container(
                     height: 80,
                     width: 80,
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.broken_image, color: Colors.grey),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.broken_image,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                    ),
                   ),
                 )
               : Image.file(
@@ -2175,8 +2195,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         SnackBar(
           content: Text(
             'No se puede editar (Categoría desconocida: "${item.name}")',
+            style: TextStyle(
+              // Color de texto sobre el contenedor secundario
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+            ),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
         ),
       );
     }
@@ -2190,11 +2214,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     if (_depositAmount > _grandTotal + 0.01) {
       // Añadimos una pequeña tolerancia
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             'El monto de la seña/depósito no puede ser mayor al TOTAL del pedido. Verifica los valores.',
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           duration: Duration(seconds: 4),
         ),
       );
@@ -2206,11 +2230,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     // (Añadir validación de dirección si el costo de envío es > 0)
     if (_deliveryCost > 0 && _selectedAddressId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             'Si hay costo de envío, debes seleccionar una dirección de entrega.',
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           duration: Duration(seconds: 4),
         ),
       );
@@ -2219,11 +2243,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     if (!valid || _selectedClient == null || _items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             'Revisa los campos obligatorios: Cliente y al menos un Producto.',
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           duration: Duration(seconds: 4),
         ),
       );
@@ -2232,11 +2256,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     if (_grandTotal <= 0 && _items.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             'El total calculado es cero o negativo. Revisa los precios de los productos.',
+            style: TextStyle(
+              // Color de texto sobre el contenedor secundario
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+            ),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
           duration: Duration(seconds: 4),
         ),
       );
@@ -2305,7 +2333,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al guardar: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           ),
         );
       }
@@ -2581,7 +2609,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       ),
       error: (err, stack) => Text(
         'Error al cargar direcciones: $err',
-        style: const TextStyle(color: Colors.red),
+        style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
       ),
       data: (client) {
         final addresses = client?.addresses ?? [];
