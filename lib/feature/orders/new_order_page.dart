@@ -43,7 +43,6 @@ class NewOrderPage extends ConsumerWidget {
 
     // Colores de la marca (podrían estar en un archivo de tema global)
     Color darkBrown = Theme.of(context).colorScheme.primary;
-    Color primaryPink = Theme.of(context).colorScheme.secondary;
 
     return Scaffold(
       appBar: AppBar(
@@ -129,10 +128,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     locale: 'es_AR',
     symbol: '\$',
   );
-
-  // Paleta de colores
-  static const Color primaryPink = Color(0xFFF8B6B6);
-  static const Color darkBrown = Color(0xFF7A4A4A);
 
   bool get isEditMode => widget.order != null;
 
@@ -1031,7 +1026,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 content: Text(
                                   'La cantidad debe ser mayor a 0.',
                                 ),
-                                backgroundColor: Colors.orange,
                               ),
                             );
                             return;
@@ -1809,7 +1803,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               calculateMesaDulcePrice();
                             });
                           },
-                          selectedColor: primaryPink,
+                          selectedColor: Theme.of(
+                            context,
+                          ).colorScheme.secondary,
                         ),
                       ],
                     ),
@@ -1837,7 +1833,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<Product>(
-                      value: selectedProduct,
+                      initialValue: selectedProduct,
                       items: mesaDulceProducts.map((Product product) {
                         String priceSuffix = '';
                         if (product.unit == ProductUnit.dozen) {
@@ -1991,7 +1987,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 content: Text(
                                   'Verifica la cantidad y/o tamaño.',
                                 ),
-                                backgroundColor: Colors.orange,
                               ),
                             );
                             return;
@@ -2423,7 +2418,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     IconButton.filled(
                       onPressed: _addItemDialog,
                       icon: const Icon(Icons.add),
-                      style: IconButton.styleFrom(backgroundColor: darkBrown),
+                      style: IconButton.styleFrom(),
                       tooltip: 'Añadir producto',
                     ),
                   ],
@@ -2506,9 +2501,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 _currencyFormat.format(
                                   item.finalUnitPrice * item.qty,
                                 ),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: darkBrown,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                               ),
                               IconButton(
@@ -2645,7 +2640,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               child: TextButton.icon(
                 icon: const Icon(Icons.add_location_alt_outlined, size: 20),
                 label: const Text('Añadir nueva dirección al cliente'),
-                style: TextButton.styleFrom(foregroundColor: darkBrown),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                ),
                 onPressed: _showAddAddressDialog,
               ),
             ),
@@ -2679,9 +2676,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         );
       },
     );
-    // No necesitamos un .then() porque AddressFormDialog
-    // invalida clientDetailsProvider, y _buildAddressSelector
-    // (que está "watcheando" ese provider) se reconstruirá solo.
   }
 
   // --- WIDGET RESUMEN Y GUARDAR (sin cambios) ---
