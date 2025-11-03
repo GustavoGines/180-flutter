@@ -18,6 +18,7 @@ import 'feature/clients/trashed_clients_page.dart';
 import 'feature/clients/client_detail_page.dart';
 import 'feature/users/presentation/users_list_page.dart';
 import 'feature/users/presentation/edit_user_page.dart';
+import 'feature/orders/services/pdf_preview_page.dart';
 
 final goRouterNotifierProvider = Provider((ref) => GoRouterNotifier(ref));
 
@@ -61,17 +62,34 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       GoRoute(path: '/', builder: (context, state) => const HomePage()),
 
-      // --- RUTA MODIFICADA ---
+      // --- GRUPO DE RUTAS DE PEDIDOS (ORDERS) ---
       GoRoute(
         path: '/new_order',
-        builder: (context, state) => const NewOrderPage(), // Para crear
+        builder: (context, state) => const NewOrderPage(),
       ),
       GoRoute(
-        path: '/order/:id/edit', // Para editar
+        path: '/order/:id',
         builder: (context, state) {
           final orderId = int.parse(state.pathParameters['id']!);
-          return NewOrderPage(orderId: orderId);
+          return OrderDetailPage(orderId: orderId);
         },
+        routes: [
+          GoRoute(
+            path: 'edit',
+            builder: (context, state) {
+              final orderId = int.parse(state.pathParameters['id']!);
+              return NewOrderPage(orderId: orderId);
+            },
+          ),
+          // 👇 RUTA FALTANTE PARA LA VISTA PREVIA DE PDF
+          GoRoute(
+            path: 'pdf/preview',
+            builder: (context, state) {
+              final orderId = int.parse(state.pathParameters['id']!);
+              return PdfPreviewPage(orderId: orderId);
+            },
+          ),
+        ],
       ),
 
       // --- NUEVO GRUPO DE RUTAS DE USUARIOS ---

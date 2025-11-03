@@ -3,8 +3,9 @@ import 'package:flutter/foundation.dart';
 
 import 'order_item.dart';
 import 'client.dart';
-import 'client_address.dart'; // <-- IMPORTAR EL MODELO QUE FALTA
+import 'client_address.dart';
 
+@immutable
 class Order {
   final int id;
   final int clientId;
@@ -19,13 +20,12 @@ class Order {
   final List<OrderItem> items;
   final Client? client;
 
-  // ---- INICIO DE CAMPOS NUEVOS ----
-  final int? deliveryAddressId; // El ID de la dirección seleccionada
-  final ClientAddress?
-  deliveryAddress; // El objeto dirección (si viene cargado)
-  // ---- FIN DE CAMPOS NUEVOS ----
+  // --- 1. Renombrar variables ---
+  final int? clientAddressId; // ANTES: deliveryAddressId
+  final ClientAddress? clientAddress; // ANTES: deliveryAddress
+  // ---------------------------
 
-  Order({
+  const Order({
     required this.id,
     required this.clientId,
     required this.eventDate,
@@ -38,12 +38,12 @@ class Order {
     this.deliveryCost,
     this.notes,
     this.client,
-    this.deliveryAddressId, // <-- AÑADIR AL CONSTRUCTOR
-    this.deliveryAddress, // <-- AÑADIR AL CONSTRUCTOR
+    this.clientAddressId, // <-- Renombrado
+    this.clientAddress, // <-- Renombrado
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
-    // ... (toda tu lógica de parseDateTime está perfecta) ...
+    // ... (Tu lógica de parseDateTime está bien) ...
     DateTime parseDateTime(String dateStr, String timeStr) {
       try {
         final date = DateTime.parse(dateStr).toLocal();
@@ -80,26 +80,24 @@ class Order {
       deliveryCost: double.tryParse(json['delivery_cost']?.toString() ?? ''),
       notes: json['notes']?.toString(),
 
-      // ---- INICIO DE AJUSTES EN FROMJSON ----
-
-      // Parsear la dirección de entrega si viene (eager-loaded)
-      deliveryAddressId: int.tryParse(
-        json['delivery_address_id']?.toString() ?? '',
+      // --- 2. Cambiar claves del JSON ---
+      // Busca 'client_address_id' en el JSON
+      clientAddressId: int.tryParse(
+        json['client_address_id']?.toString() ?? '',
       ),
-      deliveryAddress:
-          json['delivery_address'] != null &&
-              json['delivery_address'] is Map<String, dynamic>
+      // Busca la relación 'client_address' (que definimos en Laravel)
+      clientAddress:
+          json['client_address'] != null &&
+              json['client_address'] is Map<String, dynamic>
           ? ClientAddress.fromJson(
-              json['delivery_address'] as Map<String, dynamic>,
+              json['client_address'] as Map<String, dynamic>,
             )
           : null,
 
-      // Parsear el cliente si viene (eagler-loaded)
+      // ---------------------------------
       client: json['client'] != null && json['client'] is Map<String, dynamic>
           ? Client.fromJson(json['client'] as Map<String, dynamic>)
           : null,
-
-      // Parsear items (tu lógica estaba bien)
       items: itemsJson
           .map((e) {
             try {
@@ -113,8 +111,6 @@ class Order {
           })
           .whereType<OrderItem>()
           .toList(),
-
-      // ---- FIN DE AJUSTES EN FROMJSON ----
     );
   }
 
@@ -131,8 +127,10 @@ class Order {
     String? notes,
     List<OrderItem>? items,
     Client? client,
-    int? deliveryAddressId, // <-- AÑADIR A COPYWITH
-    ClientAddress? deliveryAddress, // <-- AÑADIR A COPYWITH
+    // --- 3. Renombrar en copyWith ---
+    int? clientAddressId,
+    ClientAddress? clientAddress,
+    // -----------------------------
   }) {
     return Order(
       id: id ?? this.id,
@@ -147,8 +145,9 @@ class Order {
       notes: notes ?? this.notes,
       items: items ?? this.items,
       client: client ?? this.client,
-      deliveryAddressId: deliveryAddressId ?? this.deliveryAddressId, // <--
-      deliveryAddress: deliveryAddress ?? this.deliveryAddress, // <--
+      clientAddressId:
+          clientAddressId ?? this.clientAddressId, // <-- Renombrado
+      clientAddress: clientAddress ?? this.clientAddress, // <-- Renombrado
     );
   }
 }

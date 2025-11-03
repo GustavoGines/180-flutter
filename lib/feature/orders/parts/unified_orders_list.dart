@@ -5,13 +5,15 @@ class _UnifiedOrdersList extends ConsumerStatefulWidget {
     required this.itemScrollController,
     required this.itemPositionsListener,
     required this.monthIndexMap,
-    required this.dayIndexMap, // 👈 Ya lo tenías, está OK
+    required this.dayIndexMap,
+    this.logoImageProvider,
   });
 
   final ItemScrollController itemScrollController;
   final ItemPositionsListener itemPositionsListener;
   final Map<DateTime, int> monthIndexMap;
-  final Map<DateTime, int> dayIndexMap; // 👈 Ya lo tenías, está OK
+  final Map<DateTime, int> dayIndexMap;
+  final ImageProvider? logoImageProvider;
 
   @override
   ConsumerState<_UnifiedOrdersList> createState() => _UnifiedOrdersListState();
@@ -29,7 +31,7 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
   // 👇 2. Pasa el mes ESTÁTICO y el dayIndexMap al constructor del builder
   late final _listBuilder = _FlatListBuilder(
     monthIndexMap: widget.monthIndexMap,
-    dayIndexMap: widget.dayIndexMap, // 👈 AÑADIDO: Pasa el mapa de días
+    dayIndexMap: widget.dayIndexMap,
     staticCenterMonth: _staticCenterMonth,
     flatList: _flatList,
   );
@@ -79,7 +81,12 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
             // Lógica de traducción
             switch (item.type) {
               case _ItemType.monthBanner:
-                return _MonthBanner(date: item.data);
+                return _MonthBanner(
+                  date: item.data,
+                  logoImage: widget.logoImageProvider, // 👈 Pasa el logo aquí
+                );
+
+              // 👇 --- INICIO DE CAMBIOS ---
               case _ItemType.weekSeparator:
                 return _WeekSeparator(
                   weekStart: item.data['ws'],

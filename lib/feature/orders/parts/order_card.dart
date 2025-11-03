@@ -42,15 +42,22 @@ class OrderCard extends ConsumerWidget {
     final fmt = NumberFormat(r"'$' #,##0.00", 'es_AR');
     final totalString = fmt.format(order.total); // Usando order.total
 
+    // --- 👇 ADAPTACIÓN TEMA 👇 ---
+    // 1. Obtenemos el tema y el ColorScheme
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // 2. Obtenemos los colores semánticos (esto no cambia)
     final bg = _statusPastelBg[order.status] ?? _kPastelSand;
     final ink =
         _statusInk[order.status] ?? _kInkSand; // Color de acento principal
-    final textTheme = Theme.of(context).textTheme;
 
-    // Color de texto principal (ligeramente más suave que negro puro)
-    final primaryTextColor = Colors.black.withOpacity(0.8);
-    // Color de texto secundario (para fecha/hora)
-    final secondaryTextColor = Colors.black.withOpacity(0.6);
+    // 3. Los colores de texto AHORA dependen del tema
+    final primaryTextColor = cs.onSurface; // (Negro en light, Blanco en dark)
+    final secondaryTextColor = cs.onSurfaceVariant; // (Gris en light y dark)
+    // --- 👆 FIN ADAPTACIÓN 👆 ---
 
     // Formatear fecha y hora combinadas
     final String dateTimeString =
@@ -58,15 +65,27 @@ class OrderCard extends ConsumerWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      elevation: 2.5, // Sombra sutil restaurada
-      shadowColor: Colors.black.withOpacity(0.50), // Sombra aún más suave
-      color: bg,
+      elevation: 2.5,
+      // --- 👇 ADAPTACIÓN TEMA 👇 ---
+      // 4. La sombra solo se aplica en modo claro
+      shadowColor: isDarkMode
+          ? Colors.transparent
+          : Colors.black.withOpacity(0.50),
+      // 5. El color de fondo de la tarjeta depende del tema
+      color: isDarkMode
+          ? cs.surface
+          : bg, // (DarkSurface en dark, Pastel en light)
+      // --- 👆 FIN ADAPTACIÓN 👆 ---
       surfaceTintColor:
           Colors.transparent, // Importante para que no tome tint del tema
       shape: RoundedRectangleBorder(
-        // Sin borde explícito, confiamos en la sombra y el color de fondo
-        // side: BorderSide(color: ink.withOpacity(0.25), width: 0.8),
-        borderRadius: BorderRadius.circular(12), // Un poco más redondeado
+        // --- 👇 ADAPTACIÓN TEMA 👇 ---
+        // 6. Añadimos un borde lateral en modo oscuro para mostrar el estado
+        side: isDarkMode
+            ? BorderSide(color: ink, width: 2.0)
+            : BorderSide.none, // En modo claro, el fondo 'bg' es suficiente
+        // --- 👆 FIN ADAPTACIÓN 👆 ---
+        borderRadius: BorderRadius.circular(12),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -74,10 +93,7 @@ class OrderCard extends ConsumerWidget {
         splashColor: ink.withOpacity(0.1), // Splash con color de acento
         highlightColor: ink.withOpacity(0.05), // Highlight con color de acento
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 12,
-          ), // Padding vertical aumentado ligeramente
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -90,10 +106,11 @@ class OrderCard extends ConsumerWidget {
                     child: Text(
                       order.client?.name ?? 'Cliente no especificado',
                       style: textTheme.titleSmall?.copyWith(
-                        fontWeight:
-                            FontWeight.w600, // Un poco más bold que antes
+                        fontWeight: FontWeight.w600,
+                        // --- 👇 ADAPTADO 👇 ---
                         color: primaryTextColor,
-                        letterSpacing: 0.1, // Ligero espaciado
+                        // --- 👆 FIN 👆 ---
+                        letterSpacing: 0.1,
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
@@ -104,14 +121,16 @@ class OrderCard extends ConsumerWidget {
                   Text(
                     totalString,
                     style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600, // Consistente con el nombre
+                      fontWeight: FontWeight.w600,
+                      // --- 👇 ADAPTADO 👇 ---
                       color: primaryTextColor,
+                      // --- 👆 FIN 👆 ---
                       letterSpacing: 0.1,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8), // Más espacio aquí
+              const SizedBox(height: 8),
               // --- Fila 2: Fecha/Hora y Dropdown de Estado ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -123,57 +142,58 @@ class OrderCard extends ConsumerWidget {
                       Icon(
                         Icons.calendar_today_outlined,
                         size: 13,
+                        // --- 👇 ADAPTADO 👇 ---
                         color: secondaryTextColor,
+                        // --- 👆 FIN 👆 ---
                       ),
                       const SizedBox(width: 4),
                       Text(
                         dateTimeString,
                         style: textTheme.bodySmall?.copyWith(
+                          // --- 👇 ADAPTADO 👇 ---
                           color: secondaryTextColor,
-                        ), // bodySmall es bueno aquí
+                          // --- 👆 FIN 👆 ---
+                        ),
                       ),
                     ],
                   ),
 
                   // Dropdown con apariencia de "Chip" sutil
                   Material(
-                    // Necesario para InkWell y borde redondeado dentro de Card
                     color: Colors.transparent,
                     child: InkWell(
-                      // Para que toda el área sea tappable, no solo el icono
                       borderRadius: BorderRadius.circular(8),
-                      // splashColor: ink.withOpacity(0.1), // Opcional: splash en el dropdown
-                      // highlightColor: ink.withOpacity(0.05),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
                           vertical: 2,
-                        ), // Padding interno
+                        ),
                         decoration: BoxDecoration(
-                          //color: ink.withOpacity(0.05), // Fondo muy sutil opcional
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: ink.withOpacity(0.4),
                             width: 0.8,
-                          ), // Borde sutil
+                          ),
                         ),
                         child: DropdownButtonHideUnderline(
-                          // Quita la línea por defecto
                           child: DropdownButton<String>(
                             value: order.status,
                             icon: Icon(
                               Icons.arrow_drop_down,
                               size: 18,
                               color: ink.withOpacity(0.8),
-                            ), // Icono más pequeño
-                            isDense: true,
-                            // Estilo del texto seleccionado en el botón
-                            style: textTheme.labelSmall?.copyWith(
-                              color: ink, // Color principal del estado
-                              fontWeight: FontWeight.w600,
-                              fontSize:
-                                  10.5, // Ligeramente más grande que en el menú
                             ),
+                            isDense: true,
+                            // Estilo del texto seleccionado (ya usa 'ink', está perfecto)
+                            style: textTheme.labelSmall?.copyWith(
+                              color: ink,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 10.5,
+                            ),
+                            // --- 👇 ADAPTACIÓN TEMA 👇 ---
+                            // 7. El fondo del menú desplegable debe usar el tema
+                            dropdownColor: cs.surface,
+                            // --- 👆 FIN ADAPTACIÓN 👆 ---
                             items: _statusTranslations.keys.map((String value) {
                               final c = _statusInk[value] ?? _kInkSand;
                               return DropdownMenuItem<String>(
@@ -192,9 +212,11 @@ class OrderCard extends ConsumerWidget {
                                     const SizedBox(width: 6),
                                     Text(
                                       _statusTranslations[value]!,
-                                      // Estilo del texto en el menú desplegado
+                                      // Estilo en el menú desplegado (ya es dinámico)
                                       style: textTheme.bodySmall?.copyWith(
                                         fontSize: 12,
+                                        // 8. Aseguramos el color del texto en el menú
+                                        color: cs.onSurface,
                                       ),
                                     ),
                                   ],

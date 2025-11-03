@@ -59,11 +59,13 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _didPerformInitialScroll = false;
 
   Timer? _jumpCooldownTimer;
+  ImageProvider? _logoImageProvider;
 
   @override
   void initState() {
     super.initState();
     _loadVersion();
+    _loadLogo();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoCheckForUpdateIfEnabled();
     });
@@ -78,6 +80,25 @@ class _HomePageState extends ConsumerState<HomePage> {
       _onScrollPositionChanged,
     );
     super.dispose();
+  }
+
+  void _loadLogo() {
+    // Usamos AssetImage, que maneja el precaching
+    const logo = AssetImage('assets/images/launch_image_solo.png');
+    // Guardamos el provider en el estado
+    setState(() {
+      _logoImageProvider = logo;
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Llamamos a precacheImage aquí, donde el 'context' SÍ está disponible.
+    if (_logoImageProvider != null) {
+      precacheImage(_logoImageProvider!, context);
+    }
   }
 
   Future<void> _jumpToMonth(DateTime m) async {
@@ -145,7 +166,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final ordersAsync = ref.watch(ordersWindowProvider);
-
+    final cs = Theme.of(context).colorScheme;
     final isRefreshing = ordersAsync is AsyncLoading;
 
     if (ordersAsync is AsyncData && !_didPerformInitialScroll) {
@@ -364,32 +385,49 @@ class _HomePageState extends ConsumerState<HomePage> {
       floatingActionButton: SpeedDial(
         icon: Icons.add,
         activeIcon: Icons.close,
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        overlayColor: Colors.black,
+        // El botón principal ya está bien adaptado (usa primary/onPrimary)
+        backgroundColor: cs.primary,
+        foregroundColor: cs.onPrimary,
+
+        // --- 👇 ADAPTACIÓN DEL TEMA 👇 ---
+
+        // 1. Usa el color 'scrim' del tema para el fondo
+        overlayColor: cs.scrim,
+        // 2. Deja que el 'scrim' controle la opacidad
         overlayOpacity: 0.4,
+
+        // --- 👆 FIN DE ADAPTACIÓN 👆 ---
         spacing: 12,
         childrenButtonSize: const Size(60.0, 60.0),
-
         children: [
-          // Botón 1: Clientes
-          SpeedDialChild(
-            child: const Icon(Icons.people_outline),
-            label: 'Clientes',
-            labelStyle: const TextStyle(fontSize: 16),
-            backgroundColor: Colors.white,
-            foregroundColor: Theme.of(context).colorScheme.primary,
-            onTap: () => context.push('/clients'),
-          ),
-
-          // Botón 2: Nuevo Pedido
+          // Botón 1: Nuevo Pedido
           SpeedDialChild(
             child: const Icon(Icons.add_shopping_cart),
             label: 'Nuevo Pedido',
             labelStyle: const TextStyle(fontSize: 16),
-            backgroundColor: Colors.white,
-            foregroundColor: Theme.of(context).colorScheme.primary,
+
+            // --- 👇 ADAPTACIÓN DEL TEMA 👇 ---
+            // 3. Usa un color de "contenedor" que se adapte
+            backgroundColor: cs.secondaryContainer,
+            // 4. Usa el color de contenido que va "sobre" ese contenedor
+            foregroundColor: cs.onSecondaryContainer,
+
+            // --- 👆 FIN DE ADAPTACIÓN 👆 ---
             onTap: () => context.push('/new_order'),
+          ),
+
+          // Botón 2: Clientes
+          SpeedDialChild(
+            child: const Icon(Icons.people_outline),
+            label: 'Clientes',
+            labelStyle: const TextStyle(fontSize: 16),
+
+            // --- 👇 ADAPTACIÓN DEL TEMA 👇 ---
+            backgroundColor: cs.secondaryContainer,
+            foregroundColor: cs.onSecondaryContainer,
+
+            // --- 👆 FIN DE ADAPTACIÓN 👆 ---
+            onTap: () => context.push('/clients'),
           ),
 
           // Botón 3: Usuarios (Solo visible si es Admin)
@@ -398,8 +436,12 @@ class _HomePageState extends ConsumerState<HomePage> {
               child: const Icon(Icons.people_alt_outlined),
               label: 'Usuarios',
               labelStyle: const TextStyle(fontSize: 16),
-              backgroundColor: Colors.white,
-              foregroundColor: Theme.of(context).colorScheme.primary,
+
+              // --- 👇 ADAPTACIÓN DEL TEMA 👇 ---
+              backgroundColor: cs.secondaryContainer,
+              foregroundColor: cs.onSecondaryContainer,
+
+              // --- 👆 FIN DE ADAPTACIÓN 👆 ---
               onTap: () => context.push('/users'),
             ),
         ],
@@ -410,6 +452,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         itemPositionsListener: _itemPositionsListener,
         monthIndexMap: _monthIndexMap,
         dayIndexMap: _dayIndexMap,
+        logoImageProvider: _logoImageProvider,
       ),
     );
   }

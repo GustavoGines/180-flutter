@@ -9,6 +9,9 @@ import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:collection/collection.dart'; // Para .firstWhereOrNull
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 // --- AÑADIDOS PARA COMPRESIÓN ---
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -24,6 +27,7 @@ import '../../core/models/client.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../clients/clients_repository.dart';
+import '../clients/address_form_dialog.dart'; // <-- 2. IMPORTAR DIÁLOGO
 import 'orders_repository.dart';
 import 'order_detail_page.dart';
 import 'home_page.dart'; // Para invalidar ordersByFilterProvider
@@ -38,24 +42,24 @@ class NewOrderPage extends ConsumerWidget {
     final isEditMode = orderId != null;
 
     // Colores de la marca (podrían estar en un archivo de tema global)
-    const Color darkBrown = Color(0xFF7A4A4A);
+    Color darkBrown = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
           isEditMode ? 'Editar Pedido' : 'Nuevo Pedido',
-          style: const TextStyle(color: darkBrown),
+          style: TextStyle(color: Theme.of(context).colorScheme.primary),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 1,
-        iconTheme: const IconThemeData(color: darkBrown),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
       ),
       body: isEditMode
           // Si estamos editando, buscamos el pedido primero
           ? ref
                 .watch(orderByIdProvider(orderId!))
                 .when(
-                  loading: () => const Center(
+                  loading: () => Center(
                     child: CircularProgressIndicator(color: darkBrown),
                   ),
                   error: (err, stack) => Center(
@@ -64,12 +68,21 @@ class NewOrderPage extends ConsumerWidget {
                       child: Text(
                         'Error al cargar el pedido: $err\nIntenta recargar la página.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
                       ),
                     ),
                   ),
                   // Cuando tenemos los datos, construimos el formulario y se los pasamos
-                  data: (order) => _OrderForm(order: order),
+                  data: (order) {
+                    if (order == null) {
+                      return const Center(
+                        child: Text('Pedido no encontrado o eliminado.'),
+                      );
+                    }
+                    return _OrderForm(order: order);
+                  },
                 )
           // Si estamos creando, construimos el formulario vacío
           : const _OrderForm(),
@@ -100,25 +113,23 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   final _clientNameController = TextEditingController();
   Client? _selectedClient;
 
+  // --- 3. NUEVOS ESTADOS PARA DIRECCIÓN ---
+  int? _selectedAddressId; // El ID de la dirección de entrega
+  // ------------------------------------
+
   late DateTime _date;
   late TimeOfDay _start;
   late TimeOfDay _end;
-  final _depositController = TextEditingController(); // Cambiado a controller
-  final _deliveryCostController =
-      TextEditingController(); // Nuevo controller para envío
-  final _notesController = TextEditingController(); // Cambiado a controller
+  final _depositController = TextEditingController();
+  final _deliveryCostController = TextEditingController();
+  final _notesController = TextEditingController();
   final List<OrderItem> _items = [];
 
-  bool _isLoading = false; // Para el botón de guardar
+  bool _isLoading = false;
   final NumberFormat _currencyFormat = NumberFormat.currency(
     locale: 'es_AR',
     symbol: '\$',
-  ); // Formato de moneda
-
-  // Paleta de colores (podría venir del tema)
-  static const Color primaryPink = Color(0xFFF8B6B6);
-  static const Color darkBrown = Color(0xFF7A4A4A);
-  static const Color lightBrownText = Color(0xFFA57D7D);
+  );
 
   bool get isEditMode => widget.order != null;
 
@@ -132,13 +143,27 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       _date = order.eventDate;
       _start = TimeOfDay.fromDateTime(order.startTime);
       _end = TimeOfDay.fromDateTime(order.endTime);
-      _depositController.text =
-          order.deposit?.toStringAsFixed(0) ?? '0'; // Sin decimales
+      _depositController.text = order.deposit?.toStringAsFixed(0) ?? '0';
       _deliveryCostController.text =
-          order.deliveryCost?.toStringAsFixed(0) ??
-          '0'; // Cargar costo envío si existe
+          order.deliveryCost?.toStringAsFixed(0) ?? '0';
       _notesController.text = order.notes ?? '';
       _items.addAll(order.items);
+
+      // --- 4. CARGAR DATOS DE DIRECCIÓN EN MODO EDICIÓN ---
+      _selectedAddressId = order.clientAddressId;
+      // Cargar las direcciones del cliente en modo edición
+      if (_selectedClient != null) {
+        // Usamos ref.read().future para cargar los datos iniciales
+        // El widget _buildAddressSelector usará ref.watch() para reactividad
+        ref.read(clientDetailsProvider(_selectedClient!.id).future).then((
+          client,
+        ) {
+          if (mounted) {
+            setState(() {});
+          }
+        });
+      }
+      // ------------------------------------------------
     } else {
       // Valores por defecto para un pedido nuevo
       _date = DateTime.now();
@@ -165,7 +190,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     super.dispose();
   }
 
-  // --- CÁLCULO DE TOTALES ---
+  // --- CÁLCULO DE TOTALES (sin cambios) ---
   double _itemsSubtotal = 0.0;
   double _deliveryCost = 0.0;
   double _grandTotal = 0.0;
@@ -175,7 +200,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   void _recalculateTotals() {
     double subtotal = 0.0;
     for (var item in _items) {
-      // 👇 USA EL GETTER finalUnitPrice
       subtotal += (item.finalUnitPrice * item.qty);
     }
 
@@ -187,7 +211,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     double total = subtotal + delivery;
     double remaining = total - deposit;
 
-    // Usamos addPostFrameCallback para evitar errores de setState durante el build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         setState(() {
@@ -201,7 +224,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     });
   }
 
-  // Llama a _recalculateTotals cada vez que se añada, edite o elimine un item
   void _updateItemsAndRecalculate(Function updateLogic) {
     setState(() {
       updateLogic();
@@ -213,24 +235,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   Future<void> _pickDate() async {
     final d = await showDatePicker(
       context: context,
-      locale: const Locale('es', 'AR'), // Para español
-      firstDate: DateTime.now().subtract(
-        const Duration(days: 90),
-      ), // Ajustar rango
+      locale: const Locale('es', 'AR'),
+      firstDate: DateTime.now().subtract(const Duration(days: 90)),
       lastDate: DateTime.now().add(const Duration(days: 730)),
       initialDate: _date,
-      // Theming básico
       builder: (context, child) {
+        // Obtenemos el tema actual
+        final theme = Theme.of(context);
         return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: darkBrown, // color header background
-              onPrimary: Colors.white, // color header text
-              onSurface: darkBrown, // color body text
-            ),
+          // Usamos la base del tema (light o dark)
+          data: theme.copyWith(
             textButtonTheme: TextButtonThemeData(
+              // Hacemos que los botones usen el color primary del tema
               style: TextButton.styleFrom(
-                foregroundColor: darkBrown, // button text color
+                foregroundColor: theme.colorScheme.primary,
               ),
             ),
           ),
@@ -245,37 +263,33 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     final t = await showTimePicker(
       context: context,
       initialTime: isStart ? _start : _end,
-      initialEntryMode: TimePickerEntryMode.input, // Facilita ingreso rápido
-      // 👇 --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
+      initialEntryMode: TimePickerEntryMode.input,
       builder: (context, child) {
-        // 1. Envuelve todo en un MediaQuery que fuerza el formato 24h
+        // Obtenemos el tema actual
+        final theme = Theme.of(context);
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          // 2. Tu Theme (con tus colores) va adentro
           child: Theme(
-            data: ThemeData.light().copyWith(
-              colorScheme: const ColorScheme.light(
-                primary: darkBrown, // color header background
-                onPrimary: Colors.white,
-                surface: primaryPink, // Background selector
-                onSurface: darkBrown, // Números
-              ),
-              timePickerTheme: TimePickerThemeData(
-                // Estilos adicionales si quieres
+            // Usamos la base del tema (light o dark)
+            data: theme.copyWith(
+              // ¡No sobrescribimos 'primary'!
+              textButtonTheme: TextButtonThemeData(
+                // Hacemos que los botones usen el color primary del tema
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.primary,
+                ),
               ),
             ),
             child: child!,
           ),
         );
       },
-      // --- FIN DE LA CORRECCIÓN ---
     );
 
     if (t != null) {
       setState(() {
         if (isStart) {
           _start = t;
-          // Opcional: ajustar _end si _start es posterior
           if ((_start.hour * 60 + _start.minute) >=
               (_end.hour * 60 + _end.minute)) {
             _end = TimeOfDay(
@@ -285,7 +299,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           }
         } else {
           _end = t;
-          // Opcional: ajustar _start si _end es anterior
           if ((_start.hour * 60 + _start.minute) >=
               (_end.hour * 60 + _end.minute)) {
             _start = TimeOfDay(
@@ -298,160 +311,190 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
-  // --- DIÁLOGO NUEVO CLIENTE (sin cambios) ---
+  // =========================================================================
+  // === INICIO DE MÉTODOS DEL SPEED DIAL (Reemplazan _addClientDialog) =======
+  // =========================================================================
 
-  void _addClientDialog() {
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
-    final addressController = TextEditingController();
+  // --- Función para obtener Cliente desde Contactos ---
+  Future<void> _selectClientFromContacts() async {
+    // 1. Pedir Permiso de Contactos
+    if (!await FlutterContacts.requestPermission(readonly: true)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Permiso de contactos denegado.'),
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
+        ),
+      );
+      await openAppSettings(); // Sugerir abrir configuración
+      return;
+    }
+
+    // 2. Abrir Selector Nativo
+    final Contact? contact = await FlutterContacts.openExternalPick();
+
+    if (contact != null) {
+      // 3. Extraer datos y normalizar
+      final String name = contact.displayName;
+      final String? phone = contact.phones.isNotEmpty
+          ? contact.phones.first.number
+          : null;
+
+      if (phone == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'El contacto no tiene número de teléfono.',
+              style: TextStyle(
+                // Color de texto sobre el contenedor secundario
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+              ),
+            ),
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+          ),
+        );
+        return;
+      }
+
+      // 4. Intentar buscar si el cliente ya existe por teléfono
+      // NOTA: Tu API debe tener una búsqueda por teléfono implementada en searchClients
+      final existingClients = await ref
+          .read(clientsRepoProvider)
+          .searchClients(query: phone);
+      final existingClient = existingClients.firstWhereOrNull(
+        (c) => c.phone == phone,
+      );
+
+      if (existingClient != null) {
+        // 5. Cliente ya existe: simplemente seleccionarlo
+        setState(() {
+          _selectedClient = existingClient;
+          _clientNameController.text = existingClient.name;
+          _selectedAddressId = null;
+          _deliveryCostController.text = '0';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cliente "${existingClient.name}" seleccionado.'),
+          ),
+        );
+      } else {
+        // 6. Cliente no existe: crear el nuevo cliente directamente
+        _createClientFromData(name: name, phone: phone);
+      }
+    }
+  }
+
+  // --- Helper: Crear Cliente desde Contacto/Manual ---
+  Future<void> _createClientFromData({
+    required String name,
+    String? phone,
+  }) async {
+    // Simula el flujo de _addClientDialog, pero sin el formulario modal
+    if (name.trim().isEmpty) return;
 
     showDialog(
-      context: context, // Contexto de _OrderFormState
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    Client? newClient;
+    String? errorMessage;
+
+    try {
+      newClient = await ref.read(clientsRepoProvider).createClient({
+        'name': name.trim(),
+        'phone': phone?.trim(),
+      });
+    } on DioException catch (e) {
+      // Si es 409 (cliente borrado), lo manejamos con el diálogo de restauración
+      if (e.response?.statusCode == 409 && e.response?.data['client'] != null) {
+        // Cierra el loader primero
+        if (context.mounted) Navigator.pop(context);
+        final clientData = e.response?.data['client'];
+        final clientToRestore = Client.fromJson(
+          (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
+        );
+        _showRestoreDialog(clientToRestore);
+        return; // Sale del try/catch
+      }
+      errorMessage =
+          e.response?.data['message'] as String? ?? 'Error al crear cliente.';
+    } catch (e) {
+      errorMessage = e.toString();
+    }
+
+    // Cerrar loader
+    if (context.mounted) Navigator.pop(context);
+
+    if (newClient != null && mounted) {
+      setState(() {
+        _selectedClient = newClient;
+        _clientNameController.text = newClient!.name;
+        _selectedAddressId = null;
+        _deliveryCostController.text = '0';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cliente creado y seleccionado'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (errorMessage != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
+        ),
+      );
+    }
+  }
+
+  // --- Diálogo Manual (Versión simplificada) ---
+  void _addClientManuallyDialog() {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+
+    showDialog(
+      context: context,
       builder: (dialogContext) => AlertDialog(
-        // Contexto del Dialog
-        title: const Text('Nuevo Cliente', style: TextStyle(color: darkBrown)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
-                textCapitalization: TextCapitalization.words,
-              ),
-              TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(labelText: 'Teléfono'),
-                keyboardType: TextInputType.phone,
-              ),
-              TextField(
-                controller: addressController,
-                decoration: const InputDecoration(labelText: 'Dirección'),
-                textCapitalization: TextCapitalization.sentences,
-              ),
-            ],
-          ),
+        title: Text(
+          'Nuevo Cliente Manual',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Nombre *'),
+              textCapitalization: TextCapitalization.words,
+            ),
+            TextField(
+              controller: phoneController,
+              decoration: const InputDecoration(labelText: 'Teléfono'),
+              keyboardType: TextInputType.phone,
+            ),
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext), // Usa dialogContext para cerrar
-            child: const Text('Cancelar', style: TextStyle(color: darkBrown)),
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: darkBrown),
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-
-              // Mostrar loader (dentro del dialogContext)
-              showDialog(
-                context: dialogContext,
-                barrierDismissible: false,
-                builder: (_) =>
-                    const Center(child: CircularProgressIndicator()),
-              );
-
-              Client? newClient;
-              String? errorMessage;
-
-              try {
-                // --- INTENTO DE CREACIÓN ---
-                newClient = await ref.read(clientsRepoProvider).createClient({
-                  'name': nameController.text.trim(),
-                  'phone': phoneController.text.trim().isEmpty
-                      ? null
-                      : phoneController.text.trim(),
-                  'address': addressController.text.trim().isEmpty
-                      ? null
-                      : addressController.text.trim(),
-                });
-
-                // Éxito: Cierra el loader
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-              } catch (e) {
-                // --- INICIO DE LA NUEVA LÓGICA DE ERROR ---
-
-                // Cierra el loader primero
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-
-                if (e is DioException &&
-                    (e.response?.statusCode == 409 ||
-                        e.response?.statusCode == 422)) {
-                  // Es un error 409 (restaurar) o 422 (ya existe)
-                  final responseData = e.response?.data;
-                  if (responseData is Map) {
-                    errorMessage =
-                        responseData['message'] as String? ??
-                        'Error de cliente';
-
-                    // Si es 409, Laravel nos envió el cliente para restaurar
-                    if (e.response?.statusCode == 409 &&
-                        responseData['client'] != null) {
-                      try {
-                        final clientData = responseData['client'];
-                        final clientToRestore = Client.fromJson(
-                          (clientData as Map).map(
-                            (k, v) => MapEntry(k.toString(), v),
-                          ),
-                        );
-
-                        // Cierra el diálogo de "Nuevo Cliente"
-                        if (dialogContext.mounted) {
-                          Navigator.pop(dialogContext);
-                        }
-
-                        // Muestra el diálogo de "Restaurar"
-                        // (Usamos el 'context' de la PÁGINA)
-                        _showRestoreDialog(clientToRestore);
-                        return; // Salimos, ya estamos manejando la restauración
-                      } catch (parseError) {
-                        errorMessage = 'Error al procesar cliente duplicado.';
-                      }
-                    }
-                  } else {
-                    errorMessage = e.toString();
-                  }
-                } else {
-                  // Error genérico (sin internet, 500, etc.)
-                  errorMessage = e.toString();
-                }
-                // --- FIN DE LA NUEVA LÓGICA DE ERROR ---
-
-                debugPrint("Error creando cliente: $e");
-              }
-
-              // --- Lógica de Seteo/Pop ---
-
-              // Si hubo éxito (newClient no es null)
-              if (newClient != null && mounted) {
-                setState(() {
-                  _selectedClient = newClient;
-                  _clientNameController.text = newClient!.name;
-                });
-                // Cierra el diálogo de "Nuevo Cliente"
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Cliente creado y seleccionado'),
-                    backgroundColor: Colors.green,
-                  ),
+            style: FilledButton.styleFrom(),
+            onPressed: () {
+              if (nameController.text.trim().isNotEmpty) {
+                Navigator.pop(dialogContext); // Cierra el diálogo manual
+                _createClientFromData(
+                  name: nameController.text,
+                  phone: phoneController.text.trim().isNotEmpty
+                      ? phoneController.text
+                      : null,
                 );
               }
-              // Si hubo un error (y NO fue el 409 que ya manejamos)
-              else if (errorMessage != null && mounted) {
-                // Cierra el diálogo de "Nuevo Cliente"
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-
-                // Muestra el error (ej: 422 "Ya existe")
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(errorMessage), // Muestra el mensaje de la API
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-              // --- FIN Lógica de Seteo/Pop ---
             },
             child: const Text('Guardar Cliente'),
           ),
@@ -460,9 +503,180 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
+  // --- Selector de Cliente Completo con SpeedDial ---
+  Widget _buildClientSelector(BuildContext context) {
+    // Usamos un Builder para que el SpeedDial tenga el contexto correcto
+    return Builder(
+      builder: (context) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_selectedClient == null)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TypeAheadField<Client>(
+                      // ... (TypeAheadField se mantiene sin cambios)
+                      controller: _clientNameController,
+                      suggestionsCallback: (pattern) async {
+                        if (pattern.length < 2) return [];
+                        if (_selectedClient != null) {
+                          setState(() {
+                            _selectedClient = null;
+                          });
+                        }
+                        return ref.read(clientsListProvider(pattern).future);
+                      },
+                      itemBuilder: (context, client) => ListTile(
+                        leading: const Icon(Icons.person),
+                        title: Text(client.name),
+                        subtitle: Text(client.phone ?? 'Sin teléfono'),
+                      ),
+                      onSelected: (client) {
+                        setState(() {
+                          _selectedClient = client;
+                          _clientNameController.text = client.name;
+                          _selectedAddressId = null;
+                          _deliveryCostController.text = '0';
+                        });
+                      },
+                      emptyBuilder: (context) => const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: Text('No se encontraron clientes.'),
+                      ),
+                      builder: (context, controller, focusNode) =>
+                          TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Buscar cliente...',
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            validator: (value) {
+                              if (_selectedClient == null) {
+                                return 'Debes seleccionar un cliente.';
+                              }
+                              return null;
+                            },
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // 👇 REEMPLAZO DEL BOTÓN FIJO POR EL SPEED DIAL
+                  SpeedDial(
+                    icon: Icons.add,
+                    activeIcon: Icons.close,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    spacing: 5,
+                    buttonSize: const Size(
+                      56,
+                      56,
+                    ), // Mismo tamaño que un FAB estándar
+                    childrenButtonSize: const Size(56, 56),
+                    direction: SpeedDialDirection.down,
+                    curve: Curves.easeInOut,
+
+                    children: [
+                      // Opción 1: Seleccionar desde Contactos
+                      SpeedDialChild(
+                        child: const Icon(Icons.contact_phone_outlined),
+                        label: 'Desde Contactos',
+                        onTap: _selectClientFromContacts,
+                      ),
+                      // Opción 2: Agregar Nuevo Manualmente
+                      SpeedDialChild(
+                        child: const Icon(Icons.person_add_alt_1),
+                        label: 'Nuevo Manualmente',
+                        onTap: _addClientManuallyDialog,
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            else
+              // --- VISTA "PILL" (Se mantiene sin cambios) ---
+              Card(
+                elevation: 0,
+                // Usa un color contenedor del tema
+                color: Theme.of(
+                  context,
+                ).colorScheme.tertiaryContainer, // <-- SOLUCIÓN
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  // El borde puede usar un color 'outline'
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ), // <-- SOLUCIÓN
+                ),
+                child: ListTile(
+                  leading: Icon(
+                    Icons.person,
+                    color: Theme.of(context).colorScheme.onTertiaryContainer,
+                  ), // <-- SOLUCIÓN
+                  title: Text(
+                    _selectedClient!.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      // Usa el color de texto SOBRE el contenedor
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onTertiaryContainer, // <-- SOLUCIÓN
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Tel: ${_selectedClient!.phone ?? "N/A"}',
+                    style: TextStyle(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onTertiaryContainer.withOpacity(0.8),
+                    ), // <-- SOLUCIÓN
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_selectedClient!.whatsappUrl != null)
+                        IconButton(
+                          icon: const FaIcon(FontAwesomeIcons.whatsapp),
+                          color: Colors.green,
+                          tooltip: 'Chatear por WhatsApp',
+                          onPressed: () {
+                            launchExternalUrl(_selectedClient!.whatsappUrl!);
+                          },
+                        ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.close,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onTertiaryContainer,
+                        ),
+                        tooltip: 'Quitar cliente',
+                        onPressed: () {
+                          setState(() {
+                            _selectedClient = null;
+                            _clientNameController.clear();
+                            _selectedAddressId = null;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- DIÁLOGO RESTAURAR CLIENTE (sin cambios) ---
   Future<void> _showRestoreDialog(Client clientToRestore) async {
     final didConfirm = await showDialog<bool>(
-      context: context, // Usa el context de la página
+      context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Cliente Encontrado'),
         content: Text(
@@ -483,22 +697,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     if (didConfirm != true) return;
 
-    // Si confirma, llama al repositorio para restaurar
     setState(() => _isLoading = true);
     try {
       final restoredClient = await ref
           .read(clientsRepoProvider)
           .restoreClient(clientToRestore.id);
 
-      // Invalidar listas para que se refresquen
-      ref.invalidate(clientsRepoProvider);
-      ref.invalidate(getTrashedClientsProvider);
+      ref.invalidate(clientsListProvider('')); // Invalida búsqueda
+      ref.invalidate(trashedClientsProvider);
 
       if (mounted) {
-        // Setea el cliente restaurado en el formulario
         setState(() {
           _selectedClient = restoredClient;
           _clientNameController.text = restoredClient.name;
+          _selectedAddressId = null; // Resetear dirección
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -513,27 +725,25 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al restaurar: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           ),
         );
       }
     } finally {
       if (mounted) {
-        // Asegúrate de que el loader del botón principal se apague
         setState(() => _isLoading = false);
       }
     }
   }
 
-  // --- FUNCIÓN HELPER PARA COMPRIMIR Y SUBIR (sin cambios) ---
+  // --- FUNCIÓN COMPRIMIR Y SUBIR (sin cambios) ---
   Future<String?> _compressAndUpload(XFile imageFile, WidgetRef ref) async {
     final tempDir = await getTemporaryDirectory();
-    // Crear un nombre de archivo un poco más único
     final fileName =
         '${DateTime.now().millisecondsSinceEpoch}_${imageFile.name.split('/').last}.jpg';
     final tempPath = '${tempDir.path}/$fileName';
 
-    File? tempFile; // Para asegurar la limpieza
+    File? tempFile;
 
     try {
       final compressedBytes = await FlutterImageCompress.compressWithFile(
@@ -547,48 +757,39 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       XFile fileToUpload;
 
       if (compressedBytes != null) {
-        tempFile = File(tempPath); // Asignar antes de escribir
+        tempFile = File(tempPath);
         await tempFile.writeAsBytes(compressedBytes);
         fileToUpload = XFile(tempFile.path);
         debugPrint('Imagen comprimida a: ${tempFile.lengthSync()} bytes');
       } else {
-        fileToUpload = imageFile; // Fallback
+        fileToUpload = imageFile;
         debugPrint(
           'Compresión falló, subiendo original: ${await imageFile.length()} bytes',
         );
       }
 
-      // --- Operación Async ---
       final url = await ref.read(ordersRepoProvider).uploadImage(fileToUpload);
-      // --- Fin Operación Async ---
-
-      // Limpiar después de subir exitosamente
       await tempFile?.delete();
-
       return url;
     } catch (e) {
       debugPrint("Error en _compressAndUpload: $e");
-
-      // --- CORRECCIÓN: Comprobar mounted antes de SnackBar ---
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error subiendo imagen: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           ),
         );
       }
-      // --- FIN CORRECCIÓN ---
-
-      // Intentar borrar temporal si existe incluso con error
       try {
         await tempFile?.delete();
       } catch (_) {}
-      return null; // Retornar null en caso de error
+      return null;
     }
   }
 
-  // --- DIÁLOGO PRINCIPAL PARA AÑADIR ITEM ---
+  // --- DIÁLOGOS DE ITEMS (MiniTorta, Torta, MesaDulce) ---
+  // (Sin cambios en la lógica interna de estos diálogos)
   void _addItemDialog() {
     showDialog(
       context: context,
@@ -598,27 +799,36 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.cake, color: primaryPink),
+              leading: Icon(
+                Icons.cake,
+                color: Theme.of(context).colorScheme.secondary,
+              ),
               title: const Text('Mini Torta / Accesorio'),
               onTap: () {
                 Navigator.of(context).pop();
-                _addMiniCakeDialog(); // Nuevo diálogo específico
+                _addMiniCakeDialog();
               },
             ),
             ListTile(
-              leading: const Icon(Icons.cake_outlined, color: darkBrown),
+              leading: Icon(
+                Icons.cake_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               title: const Text('Torta por Kilo'),
               onTap: () {
                 Navigator.of(context).pop();
-                _addCakeDialog(); // Diálogo para tortas
+                _addCakeDialog();
               },
             ),
             ListTile(
-              leading: const Icon(Icons.icecream, color: lightBrownText),
+              leading: Icon(
+                Icons.icecream,
+                color: Theme.of(context).colorScheme.tertiary,
+              ),
               title: const Text('Producto de Mesa Dulce'),
               onTap: () {
                 Navigator.of(context).pop();
-                _addMesaDulceDialog(); // Diálogo para mesa dulce
+                _addMesaDulceDialog();
               },
             ),
           ],
@@ -633,44 +843,34 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- DIÁLOGO PARA MINI TORTAS Y ACCESORIOS (ACTUALIZADO) ---
   void _addMiniCakeDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
-
     Map<String, dynamic> customData = isEditing
         ? (existingItem.customizationJson ?? {})
         : {};
 
-    // --- Inicialización ---
     Product? selectedProduct = isEditing
         ? miniCakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : miniCakeProducts.first;
 
     double basePrice = isEditing
-        ? existingItem
-              .basePrice // Usar !
-        : selectedProduct?.price ?? 0.0; // Precio base del catálogo
-
-    double adjustments = isEditing ? existingItem.adjustments : 0.0; // Usar !
+        ? existingItem.basePrice
+        : selectedProduct?.price ?? 0.0;
+    double adjustments = isEditing ? existingItem.adjustments : 0.0;
 
     final qtyController = TextEditingController(
-      text: isEditing ? existingItem.qty.toString() : '1', // Usar !
+      text: isEditing ? existingItem.qty.toString() : '1',
     );
     final adjustmentsController = TextEditingController(
-      text: adjustments.toStringAsFixed(0), // Mostrar ajuste actual
+      text: adjustments.toStringAsFixed(0),
     );
-
-    // Renombrado para claridad (estas son notas del ajuste)
     final adjustmentNotesController = TextEditingController(
       text: isEditing ? existingItem.customizationNotes ?? '' : '',
     );
-
-    // Notas generales del item (sabor, temática, etc.)
     final itemNotesController = TextEditingController(
       text: customData['item_notes'] as String? ?? '',
     );
 
-    // Lógica para manejo de imágenes
     final ImagePicker picker = ImagePicker();
     List<String> existingImageUrls = List<String>.from(
       customData['photo_urls'] ?? [],
@@ -679,43 +879,36 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     bool isUploading = false;
 
     final finalPriceController = TextEditingController();
-    // --- Fin Inicialización ---
 
-    // --- Función para calcular precio ---
     void calculatePrice() {
       final qty = int.tryParse(qtyController.text) ?? 0;
       final currentAdjustments =
           double.tryParse(adjustmentsController.text) ?? 0.0;
       if (qty > 0) {
         final finalUnitPrice = basePrice + currentAdjustments;
-        finalPriceController.text = (finalUnitPrice * qty).toStringAsFixed(
-          0,
-        ); // Muestra el total del item
+        finalPriceController.text = (finalUnitPrice * qty).toStringAsFixed(0);
       } else {
         finalPriceController.text = 'N/A';
       }
-      // Actualizar el estado local de adjustments para guardarlo
       adjustments = currentAdjustments;
     }
 
-    // Calcular precio inicial
     WidgetsBinding.instance.addPostFrameCallback((_) => calculatePrice());
-    // --- Fin Función Precio ---
     showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
-          // Necesario para Dropdown y cálculos
           builder: (context, setDialogState) {
             return AlertDialog(
               title: Text(isEditing ? 'Editar Item' : 'Añadir Item'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start, // Alinear
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<Product>(
-                      initialValue: selectedProduct, // Ahora usa 'value'
+                      value:
+                          selectedProduct, // Usar 'value' en lugar de 'initialValue'
                       items: miniCakeProducts.map((Product product) {
                         return DropdownMenuItem<Product>(
                           value: product,
@@ -727,11 +920,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       onChanged: (Product? newValue) {
                         setDialogState(() {
                           selectedProduct = newValue;
-                          basePrice =
-                              newValue?.price ?? 0.0; // Actualiza precio base
-                          // Reinicia ajustes si cambia el producto? Opcional.
-                          // adjustmentsController.text = '0';
-                          calculatePrice(); // Recalcula
+                          basePrice = newValue?.price ?? 0.0;
+                          calculatePrice();
                         });
                       },
                       decoration: const InputDecoration(labelText: 'Producto'),
@@ -742,33 +932,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       decoration: const InputDecoration(labelText: 'Cantidad'),
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      onChanged: (_) =>
-                          setDialogState(calculatePrice), // Recalcula
+                      onChanged: (_) => setDialogState(calculatePrice),
                     ),
-                    // --- NUEVOS CAMPOS ---
                     TextFormField(
                       controller: adjustmentsController,
                       decoration: InputDecoration(
                         labelText: 'Ajuste Manual al Precio Unitario (\$)',
                         hintText: 'Ej: 500 (extra), -200 (descuento)',
-                        prefixText:
-                            '${basePrice.toStringAsFixed(0)} + ', // Muestra base
+                        prefixText: '${basePrice.toStringAsFixed(0)} + ',
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
-                        signed: true, // Permite negativo
+                        signed: true,
                         decimal: false,
                       ),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'^-?\d*'),
-                        ), // Permite '-' al inicio y dígitos
+                        FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
                       ],
-                      onChanged: (_) =>
-                          setDialogState(calculatePrice), // Recalcula
+                      onChanged: (_) => setDialogState(calculatePrice),
                     ),
                     TextFormField(
-                      controller:
-                          adjustmentNotesController, // Controller renombrado
+                      controller: adjustmentNotesController,
                       decoration: const InputDecoration(
                         labelText: 'Notas de Ajuste/Personalización',
                         hintText: 'Ej: Diseño especial, cambio de color, etc.',
@@ -776,7 +959,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       maxLines: 2,
                       textCapitalization: TextCapitalization.sentences,
                     ),
-                    // --- AÑADIDO: SECCIÓN DE NOTAS Y FOTOS ---
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: itemNotesController,
@@ -834,7 +1016,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     ),
                     const Divider(),
                     TextFormField(
-                      // Mostrar precio final (no editable)
                       controller: finalPriceController,
                       readOnly: true,
                       decoration: const InputDecoration(
@@ -852,7 +1033,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: darkBrown),
+                  style: FilledButton.styleFrom(),
                   onPressed: isUploading
                       ? null
                       : () async {
@@ -865,13 +1046,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 content: Text(
                                   'La cantidad debe ser mayor a 0.',
                                 ),
-                                backgroundColor: Colors.orange,
                               ),
                             );
                             return;
                           }
 
-                          // --- AÑADIDO: Lógica de subida de fotos ---
                           setDialogState(() => isUploading = true);
 
                           final List<String> newUploadedUrls = [];
@@ -891,7 +1070,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           final itemNotes = itemNotesController.text.trim();
                           final adjustmentNotes = adjustmentNotesController.text
                               .trim();
-                          // --- FIN AÑADIDO ---
 
                           final newItem = OrderItem(
                             id: isEditing ? existingItem.id : null,
@@ -899,8 +1077,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             qty: qty,
                             basePrice: basePrice,
                             adjustments: adjustments,
-
-                            // --- MODIFICADO: Usar variables correctas ---
                             customizationNotes: adjustmentNotes.isEmpty
                                 ? null
                                 : adjustmentNotes,
@@ -908,11 +1084,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               'product_category':
                                   selectedProduct!.category.name,
                               'product_unit': selectedProduct!.unit.name,
-                              // --- AÑADIDO ---
                               if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
                               if (allImageUrls.isNotEmpty)
                                 'photo_urls': allImageUrls,
-                              // --- FIN AÑADIDO ---
                             },
                           );
 
@@ -928,14 +1102,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             Navigator.pop(dialogContext);
                           }
                         },
-                  // --- MODIFICADO: Mostrar loader si está subiendo ---
                   child: isUploading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
@@ -948,36 +1121,27 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- DIÁLOGO PARA TORTAS POR KILO (ACTUALIZADO) ---
   void _addCakeDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
     Map<String, dynamic> customData = isEditing
         ? (existingItem.customizationJson ?? {})
-        : {}; // Usar !
+        : {};
 
-    // --- Inicialización ---
     Product? selectedCakeType = isEditing
-        ? cakeProducts.firstWhereOrNull(
-            (p) => p.name == existingItem.name,
-          ) // Usar !
+        ? cakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : cakeProducts.first;
 
     final weightController = TextEditingController(
       text: customData['weight_kg']?.toString() ?? '1.0',
     );
-    // NUEVO: Controller para ajuste manual
     final adjustmentsController = TextEditingController(
-      text: isEditing
-          ? existingItem.adjustments.toStringAsFixed(0)
-          : '0', // Usar !
+      text: isEditing ? existingItem.adjustments.toStringAsFixed(0) : '0',
     );
     final notesController = TextEditingController(
-      // Notas generales del item
       text: customData['item_notes'] as String? ?? '',
     );
-    // NUEVO: Controller para notas DEL AJUSTE
     final adjustmentNotesController = TextEditingController(
-      text: isEditing ? existingItem.customizationNotes ?? '' : '', // Usar !
+      text: isEditing ? existingItem.customizationNotes ?? '' : '',
     );
 
     List<Filling> selectedFillings =
@@ -1035,16 +1199,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     List<XFile> newImageFiles = [];
     bool isUploading = false;
 
-    // Controladores para precios (solo display)
-    final calculatedBasePriceController =
-        TextEditingController(); // Precio calculado ANTES de ajuste manual
-    final finalPriceController =
-        TextEditingController(); // Precio final DESPUÉS de ajuste manual
-    // --- Fin Inicialización ---
+    final calculatedBasePriceController = TextEditingController();
+    final finalPriceController = TextEditingController();
 
-    // --- Función para calcular precio ---
-    double calculatedBasePrice = 0.0; // Variable para guardar el base calculado
-    double manualAdjustments = 0.0; // Variable para guardar el ajuste manual
+    double calculatedBasePrice = 0.0;
+    double manualAdjustments = 0.0;
 
     void calculateCakePrice() {
       if (selectedCakeType == null) {
@@ -1054,9 +1213,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
       double weight =
           double.tryParse(weightController.text.replaceAll(',', '.')) ?? 0.0;
-      manualAdjustments =
-          double.tryParse(adjustmentsController.text) ??
-          0.0; // Lee ajuste manual
+      manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
 
       if (weight <= 0) {
         calculatedBasePriceController.text = 'N/A';
@@ -1079,13 +1236,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       );
 
       calculatedBasePrice =
-          base +
-          extraFillingsPrice +
-          extrasKgPrice +
-          extrasUnitPrice; // Base = Suma de todo lo calculado
-      double finalPrice =
-          calculatedBasePrice +
-          manualAdjustments; // Final = Base Calculado + Ajuste Manual
+          base + extraFillingsPrice + extrasKgPrice + extrasUnitPrice;
+      double finalPrice = calculatedBasePrice + manualAdjustments;
 
       calculatedBasePriceController.text = calculatedBasePrice.toStringAsFixed(
         0,
@@ -1094,14 +1246,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) => calculateCakePrice());
-    // --- Fin Función Precio ---
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            // ... (Helpers buildFillingCheckbox, buildExtraKgCheckbox, buildExtraUnitSelector SIN CAMBIOS) ...
             Widget buildFillingCheckbox(Filling filling, bool isExtraCost) {
               bool isSelected = isExtraCost
                   ? selectedExtraFillings.contains(filling)
@@ -1203,10 +1353,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           onChanged: (value) {
                             int qty = int.tryParse(value) ?? 1;
                             if (qty < 1) {
-                              qty = 1; // Mínimo 1 si está seleccionado
+                              qty = 1;
                             }
                             selection.quantity = qty;
-                            // No necesitamos setDialogState aquí si usamos un controller, pero sí recalcular
                             calculateCakePrice();
                           },
                         ),
@@ -1224,9 +1373,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- Campos existentes (Tipo, Peso, Rellenos, Extras, Notas, Fotos...) ---
                     DropdownButtonFormField<Product>(
-                      initialValue: selectedCakeType,
+                      value: selectedCakeType,
                       items: cakeProducts.map((Product product) {
                         return DropdownMenuItem<Product>(
                           value: product,
@@ -1245,13 +1393,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       decoration: const InputDecoration(
                         labelText: 'Tipo de Torta',
                       ),
-                      isExpanded:
-                          true, // Para que el texto largo no se corte tanto
+                      isExpanded: true,
                     ),
                     const SizedBox(height: 16),
-                    // Peso
                     TextFormField(
-                      // Peso
                       controller: weightController,
                       decoration: const InputDecoration(
                         labelText: 'Peso Estimado (kg)',
@@ -1263,57 +1408,42 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(
                           RegExp(r'^\d*[\.,]?\d{0,2}'),
-                        ), // Acepta . o ,
+                        ),
                       ],
                       onChanged: (_) => setDialogState(calculateCakePrice),
                     ),
                     const SizedBox(height: 16),
-
-                    // Rellenos Gratuitos
                     Text(
                       'Rellenos Incluidos (Seleccionar)',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
-                    // Rellenos
                     ...freeFillings.map((f) => buildFillingCheckbox(f, false)),
                     const SizedBox(height: 16),
-
-                    // Rellenos con Costo Extra
                     Text(
                       'Rellenos con Costo Extra (Seleccionar)',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
-                    // Rellenos Extra
                     ...extraCostFillings.map(
                       (f) => buildFillingCheckbox(f, true),
                     ),
                     const SizedBox(height: 16),
-
-                    // Extras por Kg
                     Text(
                       'Extras (Costo por Kg)',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
-                    // Extras KG
                     ...cakeExtras
                         .where((ex) => !ex.isPerUnit)
                         .map(buildExtraKgCheckbox),
                     const SizedBox(height: 16),
-
-                    // Extras por Unidad
                     Text(
                       'Extras (Costo por Unidad)',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
-                    // Extras Unidad
                     ...cakeExtras
                         .where((ex) => ex.isPerUnit)
                         .map(buildExtraUnitSelector),
                     const SizedBox(height: 16),
-
-                    // Notas específicas del item
                     TextField(
-                      // Notas Item
                       controller: notesController,
                       decoration: const InputDecoration(
                         labelText:
@@ -1322,15 +1452,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 16),
-
-                    // Sección de Fotos (igual que en addItemDialog)
-                    // ... Sección de Fotos (SIN CAMBIOS) ...
                     const Divider(),
                     const Text(
                       'Fotos de Referencia (Opcional)',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    // Wrap de fotos
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Wrap(
@@ -1358,7 +1484,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         ],
                       ),
                     ),
-                    // Botón Añadir Fotos
                     TextButton.icon(
                       icon: const Icon(Icons.photo_library),
                       label: const Text('Añadir Fotos'),
@@ -1372,11 +1497,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       },
                     ),
                     const Divider(),
-                    // --- FIN Campos existentes ---
-
-                    // --- NUEVOS CAMPOS ---
                     TextFormField(
-                      // Mostrar precio base calculado (readOnly)
                       controller: calculatedBasePriceController,
                       readOnly: true,
                       decoration: const InputDecoration(
@@ -1386,13 +1507,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
-                      // Input para ajuste manual
                       controller: adjustmentsController,
                       decoration: InputDecoration(
                         labelText: 'Ajuste Manual Adicional (\$)',
                         hintText: 'Ej: 5000 (extra), -2000 (descuento)',
-                        prefixText:
-                            '${calculatedBasePriceController.text} + ', // Muestra base calculado
+                        prefixText: '${calculatedBasePriceController.text} + ',
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
                         signed: true,
@@ -1401,12 +1520,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
                       ],
-                      onChanged: (_) =>
-                          setDialogState(calculateCakePrice), // Recalcula
+                      onChanged: (_) => setDialogState(calculateCakePrice),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
-                      // Input para notas del ajuste
                       controller: adjustmentNotesController,
                       decoration: const InputDecoration(
                         labelText: 'Notas del Ajuste Manual',
@@ -1414,9 +1531,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       ),
                       textCapitalization: TextCapitalization.sentences,
                     ),
-                    // --- FIN NUEVOS CAMPOS ---
                     const SizedBox(height: 16),
-                    // Precio Final (readOnly)
                     TextFormField(
                       controller: finalPriceController,
                       readOnly: true,
@@ -1435,7 +1550,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: darkBrown),
+                  style: FilledButton.styleFrom(),
                   onPressed: isUploading
                       ? null
                       : () async {
@@ -1445,25 +1560,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 weightController.text.replaceAll(',', '.'),
                               ) ??
                               0.0;
-                          // 'manualAdjustments' ya se actualizó en calculateCakePrice
                           final adjustmentNotes = adjustmentNotesController.text
                               .trim();
 
                           if (weight <= 0 || calculatedBasePrice <= 0) {
-                            // Validar base calculado
-                            // Mostrar algún error si el peso o precio es inválido
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('El peso debe ser mayor a 0.'),
-                              ), // Error
+                              ),
                             );
                             return;
                           }
 
                           setDialogState(() => isUploading = true);
 
-                          // Subir NUEVAS imágenes
-                          // ... (Lógica para subir imágenes SIN CAMBIOS) ...
                           final List<String> newUploadedUrls = [];
                           if (newImageFiles.isNotEmpty) {
                             for (final imageFile in newImageFiles) {
@@ -1474,14 +1584,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               if (url != null) newUploadedUrls.add(url);
                             }
                           }
-                          // Combinar URLs
                           final allImageUrls = [
                             ...existingImageUrls,
                             ...newUploadedUrls,
                           ];
-                          // --- FIN Lógica subir imágenes ---
 
-                          // Construcción del customizationJson (SIN CAMBIOS, ya incluía todo)
                           final customization = {
                             'product_category': selectedCakeType!.category.name,
                             'cake_type': selectedCakeType!.name,
@@ -1504,30 +1611,23 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 )
                                 .toList(),
                             if (notesController.text.trim().isNotEmpty)
-                              'item_notes': notesController.text
-                                  .trim(), // Notas generales del item
+                              'item_notes': notesController.text.trim(),
                             if (allImageUrls.isNotEmpty)
                               'photo_urls': allImageUrls,
-                            // 'calculated_base_price': calculatedBasePrice, // COMENTADO: Quitar campos calculados
                           };
-                          // Limpiar nulos o listas vacías si prefieres
                           customization.removeWhere(
                             (key, value) => (value is List && value.isEmpty),
                           );
 
                           final newItem = OrderItem(
-                            id: isEditing ? existingItem.id : null, // Usar !
-                            name: selectedCakeType!
-                                .name, // Nombre base de la torta
-                            qty:
-                                1, // Para tortas, la cantidad suele ser 1, el precio depende del peso/extras
-                            basePrice:
-                                calculatedBasePrice, // El base es el calculado
-                            adjustments:
-                                manualAdjustments, // El ajuste es el manual
+                            id: isEditing ? existingItem.id : null,
+                            name: selectedCakeType!.name,
+                            qty: 1,
+                            basePrice: calculatedBasePrice,
+                            adjustments: manualAdjustments,
                             customizationNotes: adjustmentNotes.isEmpty
                                 ? null
-                                : adjustmentNotes, // Notas del ajuste
+                                : adjustmentNotes,
                             customizationJson: customization,
                           );
 
@@ -1543,12 +1643,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           }
                         },
                   child: isUploading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
@@ -1561,27 +1661,21 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- DIÁLOGO PARA PRODUCTO DE MESA DULCE (ACTUALIZADO) ---
   void _addMesaDulceDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
     Map<String, dynamic> customData = isEditing
         ? (existingItem.customizationJson ?? {})
-        : {}; // Usar !
+        : {};
 
-    // --- Inicialización ---
     Product? selectedProduct = isEditing
-        ? mesaDulceProducts.firstWhereOrNull(
-            (p) => p.name == existingItem.name,
-          ) // Usar !
-        : mesaDulceProducts.first; // Default para nuevo item
+        ? mesaDulceProducts.firstWhereOrNull((p) => p.name == existingItem.name)
+        : mesaDulceProducts.first;
 
-    ProductUnit?
-    selectedSize; // Determinar basado en producto y datos guardados
-    double basePrice = 0.0; // Se calculará
-    double adjustments = isEditing ? existingItem.adjustments : 0.0; // Usar !
+    ProductUnit? selectedSize;
+    double basePrice = 0.0;
+    double adjustments = isEditing ? existingItem.adjustments : 0.0;
     bool isHalfDozen = customData['is_half_dozen'] as bool? ?? false;
 
-    // Determinar tamaño inicial
     if (selectedProduct?.pricesBySize != null) {
       final sizeName = customData['selected_size'] as String?;
       if (sizeName != null) {
@@ -1589,7 +1683,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           selectedSize = ProductUnit.values.byName(sizeName);
         } catch (_) {}
       }
-      // Asegurar que el tamaño sea válido para el producto actual o default
       if (selectedSize == null ||
           !selectedProduct!.pricesBySize!.containsKey(selectedSize)) {
         selectedSize = selectedProduct!.pricesBySize!.keys.first;
@@ -1597,18 +1690,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
 
     final qtyController = TextEditingController(
-      // Usaremos controller ahora
-      text: isEditing ? existingItem.qty.toString() : '1', // Usar !
+      text: isEditing ? existingItem.qty.toString() : '1',
     );
     final adjustmentsController = TextEditingController(
       text: adjustments.toStringAsFixed(0),
     );
     final notesController = TextEditingController(
-      // Notas del ajuste
-      text: isEditing ? existingItem.customizationNotes ?? '' : '', // Usar !
+      text: isEditing ? existingItem.customizationNotes ?? '' : '',
     );
     final itemNotesController = TextEditingController(
-      // Notas generales del item
       text: customData['item_notes'] as String? ?? '',
     );
 
@@ -1619,11 +1709,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     List<XFile> newImageFiles = [];
     bool isUploading = false;
 
-    final finalPriceController =
-        TextEditingController(); // Precio final calculado
-    // --- Fin Inicialización ---
+    final finalPriceController = TextEditingController();
 
-    // --- Función para calcular precio ---
     double manualAdjustments = 0.0;
 
     void calculateMesaDulcePrice() {
@@ -1640,7 +1727,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         return;
       }
 
-      // Determinar precio base unitario
       double unitBasePrice = 0.0;
       if (selectedProduct!.pricesBySize != null) {
         if (selectedSize == null) {
@@ -1648,7 +1734,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           return;
         }
         unitBasePrice = getPriceBySize(selectedProduct!, selectedSize!) ?? 0.0;
-        // Forzar qty a 1 si es por tamaño
         if (qtyController.text != '1') {
           qtyController.text = '1';
           qty = 1;
@@ -1660,29 +1745,24 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         unitBasePrice = selectedProduct!.price;
       }
 
-      basePrice = unitBasePrice; // Guardamos el base unitario determinado
+      basePrice = unitBasePrice;
       double finalUnitPrice = basePrice + manualAdjustments;
       double totalItemPrice = finalUnitPrice * qty;
       finalPriceController.text = totalItemPrice.toStringAsFixed(0);
     }
 
-    // Calcular precio inicial
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => calculateMesaDulcePrice(),
     );
-    // --- Fin Función Precio ---
 
-    // --- Build Dialog ---
     showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            // Helper para input cantidad/tamaño (SIN CAMBIOS FUNCIONALES, usa controller)
             Widget buildQuantityOrSizeInput() {
               if (selectedProduct == null) return const SizedBox.shrink();
               if (selectedProduct!.pricesBySize != null) {
-                // Dropdown para tamaños
                 List<ProductUnit> availableSizes = selectedProduct!
                     .pricesBySize!
                     .keys
@@ -1695,7 +1775,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   );
                 }
                 return DropdownButtonFormField<ProductUnit>(
-                  initialValue: selectedSize,
+                  value: selectedSize,
                   items: availableSizes
                       .map(
                         (size) => DropdownMenuItem(
@@ -1713,7 +1793,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   decoration: const InputDecoration(labelText: 'Tamaño'),
                 );
               } else if (selectedProduct!.allowHalfDozen) {
-                // Input numérico + Toggle Docena/Media Docena
                 return Column(
                   children: [
                     Row(
@@ -1744,14 +1823,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               calculateMesaDulcePrice();
                             });
                           },
-                          selectedColor: primaryPink,
+                          selectedColor: Theme.of(
+                            context,
+                          ).colorScheme.secondary,
                         ),
                       ],
                     ),
                   ],
                 );
               } else {
-                // Input numérico simple (para unidades o docenas sin media docena)
                 return TextFormField(
                   controller: qtyController,
                   decoration: InputDecoration(
@@ -1760,8 +1840,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   ),
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) =>
-                      setDialogState(calculateMesaDulcePrice), // Recalcula
+                  onChanged: (_) => setDialogState(calculateMesaDulcePrice),
                 );
               }
             }
@@ -1773,9 +1852,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Selección Producto Mesa Dulce
                     DropdownButtonFormField<Product>(
-                      initialValue: selectedProduct, // Usa 'value'
+                      initialValue: selectedProduct,
                       items: mesaDulceProducts.map((Product product) {
                         String priceSuffix = '';
                         if (product.unit == ProductUnit.dozen) {
@@ -1796,11 +1874,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       onChanged: (Product? newValue) {
                         setDialogState(() {
                           selectedProduct = newValue;
-                          // Resetear tamaño si el nuevo producto no lo usa
                           if (newValue?.pricesBySize == null) {
                             selectedSize = null;
                           }
-                          // Resetear media docena si el nuevo producto no lo permite
                           if (newValue?.allowHalfDozen == false) {
                             isHalfDozen = false;
                           }
@@ -1811,18 +1887,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       isExpanded: true,
                     ),
                     const SizedBox(height: 16),
-                    // Input de Cantidad/Tamaño (dinámico)
                     buildQuantityOrSizeInput(),
                     const SizedBox(height: 16),
-                    // --- NUEVOS CAMPOS ---
                     TextFormField(
-                      // Input para ajuste manual
                       controller: adjustmentsController,
                       decoration: InputDecoration(
                         labelText: 'Ajuste Manual al Precio Unitario (\$)',
                         hintText: 'Ej: 50 (extra), -20 (desc)',
-                        prefixText:
-                            '${basePrice.toStringAsFixed(0)} + ', // Muestra base unitario
+                        prefixText: '${basePrice.toStringAsFixed(0)} + ',
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
                         signed: true,
@@ -1831,12 +1903,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
                       ],
-                      onChanged: (_) =>
-                          setDialogState(calculateMesaDulcePrice), // Recalcula
+                      onChanged: (_) => setDialogState(calculateMesaDulcePrice),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
-                      // Input para notas del ajuste
                       controller: notesController,
                       decoration: const InputDecoration(
                         labelText: 'Notas del Ajuste',
@@ -1847,7 +1917,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
-                      // Notas generales del item
                       controller: itemNotesController,
                       decoration: const InputDecoration(
                         labelText: 'Notas Generales del Item',
@@ -1856,8 +1925,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       textCapitalization: TextCapitalization.sentences,
                     ),
                     const SizedBox(height: 16),
-
-                    // Sección de Fotos (Opcional para Mesa Dulce?)
                     const Divider(),
                     const Text(
                       'Fotos de Referencia (Opcional)',
@@ -1903,8 +1970,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       },
                     ),
                     const Divider(),
-
-                    // Precio Calculado (solo mostrar)
                     TextFormField(
                       controller: finalPriceController,
                       readOnly: true,
@@ -1923,24 +1988,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: darkBrown),
+                  style: FilledButton.styleFrom(),
                   onPressed: isUploading
                       ? null
                       : () async {
                           if (selectedProduct == null) return;
 
                           final qty = int.tryParse(qtyController.text) ?? 0;
-                          // 👇 CORRECCIÓN: Declaración de variables dentro del scope
-                          final manualAdjustments =
-                              double.tryParse(adjustmentsController.text) ??
-                              0.0;
                           final adjustmentNotes = notesController.text.trim();
                           final itemNotes = itemNotesController.text.trim();
 
-                          // Validación (sin cambios)
                           if (qty <= 0 ||
-                              basePrice <=
-                                  0 || // 'basePrice' SÍ existe en el estado
+                              basePrice <= 0 ||
                               (selectedProduct!.pricesBySize != null &&
                                   selectedSize == null)) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -1948,8 +2007,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 content: Text(
                                   'Verifica la cantidad y/o tamaño.',
                                 ),
-                                backgroundColor:
-                                    Colors.orange, // Añadido para claridad
                               ),
                             );
                             return;
@@ -1957,7 +2014,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                           setDialogState(() => isUploading = true);
 
-                          // --- Lógica subir imágenes (SIN CAMBIOS) ---
                           final List<String> newUploadedUrls = [];
                           if (newImageFiles.isNotEmpty) {
                             for (final imageFile in newImageFiles) {
@@ -1972,9 +2028,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             ...existingImageUrls,
                             ...newUploadedUrls,
                           ];
-                          // --- FIN Lógica subir imágenes ---
 
-                          // --- CUSTOMIZATION JSON ACTUALIZADO ---
                           final customization = {
                             'product_category': selectedProduct!.category.name,
                             'product_unit': selectedProduct!.unit.name,
@@ -1982,32 +2036,25 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               'selected_size': selectedSize!.name,
                             if (selectedProduct!.allowHalfDozen)
                               'is_half_dozen': isHalfDozen,
-                            // 👇 Guarda las notas generales del item aquí
                             if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
                             if (allImageUrls.isNotEmpty)
                               'photo_urls': allImageUrls,
-                            // 'calculated_base_price': basePrice, // NO ENVIAR CALCULADOS
                           };
                           customization.removeWhere(
                             (key, value) => (value is List && value.isEmpty),
                           );
-                          // --- FIN CUSTOMIZATION JSON ---
 
-                          // --- CREACIÓN DEL OrderItem ACTUALIZADO ---
                           final newItem = OrderItem(
                             id: isEditing ? existingItem.id : null,
                             name: selectedProduct!.name,
                             qty: qty,
-                            basePrice: basePrice, // Base unitario determinado
-                            // 👇 Usa la variable correcta para el ajuste manual
+                            basePrice: basePrice,
                             adjustments: manualAdjustments,
-                            // 👇 Usa la variable correcta para las notas de ajuste
                             customizationNotes: adjustmentNotes.isEmpty
                                 ? null
                                 : adjustmentNotes,
                             customizationJson: customization,
                           );
-                          // --- FIN CREACIÓN OrderItem ---
 
                           _updateItemsAndRecalculate(() {
                             if (isEditing) {
@@ -2022,15 +2069,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           }
                         },
                   child: isUploading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
-                      : Text(isEditing ? 'Guardar Cambios' : 'Agregar Torta'),
+                      : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
                 ),
               ],
             );
@@ -2040,13 +2087,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- NUEVO: WIDGET HELPER PARA MOSTRAR MINIATURAS DE IMAGEN ---
+  // --- WIDGET HELPER MINIATURA DE IMAGEN (sin cambios) ---
   Widget _buildImageThumbnail(
     dynamic imageSource,
     bool isNetwork,
     VoidCallback onRemove,
   ) {
-    // dynamic porque puede ser String (URL) o XFile
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -2058,13 +2104,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   height: 80,
                   width: 80,
                   fit: BoxFit.cover,
-                  // Placeholder mientras carga
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
                     return Container(
                       height: 80,
                       width: 80,
-                      color: Colors.grey[300],
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
                       child: Center(
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
@@ -2076,12 +2123,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       ),
                     );
                   },
-                  // Placeholder si falla la carga
                   errorBuilder: (context, error, stackTrace) => Container(
                     height: 80,
                     width: 80,
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.broken_image, color: Colors.grey),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.broken_image,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                    ),
                   ),
                 )
               : Image.file(
@@ -2099,7 +2152,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               Icons.cancel_rounded,
               color: Colors.redAccent,
               size: 28,
-            ), // Más grande
+            ),
             onPressed: onRemove,
             tooltip: 'Quitar imagen',
           ),
@@ -2108,14 +2161,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- FUNCIÓN PARA ABRIR DIÁLOGO DE EDICIÓN CORRECTO ---
+  // --- FUNCIÓN EDITAR ITEM ROUTER (sin cambios) ---
   void _editItemDialogRouter(int index) {
     final item = _items[index];
     final custom = item.customizationJson ?? {};
 
     ProductCategory? category;
-
-    // 1. Intenta leer la categoría moderna (la que estás guardando ahora)
     final categoryString = custom['product_category'] as String?;
     if (categoryString != null) {
       category = ProductCategory.values.firstWhereOrNull(
@@ -2123,7 +2174,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       );
     }
 
-    // 2. Si falló (es un item viejo), intenta adivinar por el nombre
     if (category == null) {
       if (cakeProducts.any((p) => p.name == item.name)) {
         category = ProductCategory.torta;
@@ -2134,7 +2184,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
     }
 
-    // 3. Ahora sí, usa el 'category' (obtenido de una u otra forma)
     if (category == ProductCategory.torta) {
       _addCakeDialog(existingItem: item, itemIndex: index);
     } else if (category == ProductCategory.mesaDulce) {
@@ -2142,78 +2191,113 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     } else if (category == ProductCategory.miniTorta) {
       _addMiniCakeDialog(existingItem: item, itemIndex: index);
     } else {
-      // Si NINGUNO de los métodos funcionó, ahora sí muestra el error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'No se puede editar (Categoría desconocida: "${item.name}")',
+            style: TextStyle(
+              // Color de texto sobre el contenedor secundario
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+            ),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
         ),
       );
     }
   }
 
-  // --- FUNCIÓN SUBMIT (MODIFICADA PARA INCLUIR DELIVERY COST) ---
+  // --- 6. FUNCIÓN SUBMIT (MODIFICADA) ---
   Future<void> _submit() async {
     final valid = _formKey.currentState?.validate() ?? false;
-    // Recalcular una última vez por si acaso
     _recalculateTotals();
+
+    if (_depositAmount > _grandTotal + 0.01) {
+      // Añadimos una pequeña tolerancia
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'El monto de la seña/depósito no puede ser mayor al TOTAL del pedido. Verifica los valores.',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      // Detiene el proceso si el depósito es mayor al total
+      return;
+    }
+
+    // --- 6a. Nueva Validación ---
+    // (Añadir validación de dirección si el costo de envío es > 0)
+    if (_deliveryCost > 0 && _selectedAddressId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Si hay costo de envío, debes seleccionar una dirección de entrega.',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
 
     if (!valid || _selectedClient == null || _items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Revisa los campos obligatorios: Cliente, al menos un Producto y verifica que los precios/cantidades sean correctos.',
+            'Revisa los campos obligatorios: Cliente y al menos un Producto.',
           ),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           duration: Duration(seconds: 4),
         ),
       );
       return;
     }
 
-    // Doble chequeo de que los totales son razonables
     if (_grandTotal <= 0 && _items.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'El total calculado es cero o negativo. Revisa los precios de los productos añadidos.',
+            'El total calculado es cero o negativo. Revisa los precios de los productos.',
+            style: TextStyle(
+              // Color de texto sobre el contenedor secundario
+              color: Theme.of(context).colorScheme.onSecondaryContainer,
+            ),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
           duration: Duration(seconds: 4),
         ),
       );
       return;
     }
 
-    setState(() => _isLoading = true); // Activar indicador en botón
+    setState(() => _isLoading = true);
 
     final fmt = DateFormat('yyyy-MM-dd');
     String t(TimeOfDay x) =>
         '${x.hour.toString().padLeft(2, '0')}:${x.minute.toString().padLeft(2, '0')}';
 
-    // --- PAYLOAD ACTUALIZADO ---
+    // --- 6b. PAYLOAD ACTUALIZADO CON DIRECCIÓN ---
     final payload = {
       'client_id': _selectedClient!.id,
       'event_date': fmt.format(_date),
       'start_time': t(_start),
       'end_time': t(_end),
       'status': isEditMode ? widget.order!.status : 'confirmed',
-      'deposit': _depositAmount, // Usar valor calculado/parseado
+      'deposit': _depositAmount,
       'delivery_cost': _deliveryCost > 0 ? _deliveryCost : null,
+      'delivery_address_id':
+          _selectedAddressId, // <-- AQUÍ ESTÁ LA NUEVA FUNCIONALIDAD
       'notes': _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
-      // 👇 Mapea items usando toJson() del OrderItem actualizado
+      'client_address_id': _selectedAddressId,
       'items': _items.map((item) => item.toJson()).toList(),
-      // No enviar 'total', el backend lo recalcula.
     };
+    // ------------------------------------------
 
-    // 👇 AÑADE ESTO PARA VER QUÉ SE ENVÍA
-    print('--- Payload a Enviar ---');
-    print(payload);
-    // ----------------------------
+    debugPrint('--- Payload a Enviar ---');
+    debugPrint(payload.toString());
 
     try {
       if (isEditMode) {
@@ -2227,12 +2311,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               backgroundColor: Colors.green,
             ),
           );
-          // Invalidar caché para refrescar vistas
           ref.invalidate(orderByIdProvider(widget.order!.id));
-          ref.invalidate(
-            ordersWindowProvider,
-          ); // Asume que este provider existe
-          context.pop(); // Volver a la pantalla anterior
+          ref.invalidate(ordersWindowProvider);
+          context.pop();
         }
       } else {
         await ref.read(ordersRepoProvider).createOrder(payload);
@@ -2243,10 +2324,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               backgroundColor: Colors.green,
             ),
           );
-          ref.invalidate(
-            ordersWindowProvider,
-          ); // Asume que este provider existe
-          context.pop(); // Volver a la pantalla anterior
+          ref.invalidate(ordersWindowProvider);
+          context.pop();
         }
       }
     } catch (e) {
@@ -2254,226 +2333,90 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al guardar: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
           ),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false); // Desactivar indicador
+        setState(() => _isLoading = false);
       }
     }
   }
 
-  // --- BUILD WIDGET (MODIFICADO PARA TOTALES Y DELIVERY) ---
+  // --- BUILD WIDGET (MODIFICADO PARA DIRECCIONES) ---
   @override
   Widget build(BuildContext context) {
-    // Calcular totales iniciales
     WidgetsBinding.instance.addPostFrameCallback((_) => _recalculateTotals());
 
     return Form(
       key: _formKey,
       child: Column(
-        // Usar Column para poner el resumen abajo
         children: [
           Expanded(
-            // El ListView ocupa el espacio disponible
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                0,
-              ), // Quitar padding inferior
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               children: [
-                // --- SECCIÓN CLIENTE ---
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // --- LÓGICA PARA MOSTRAR/OCULTAR BUSCADOR ---
-                    if (_selectedClient == null)
-                      // --- VISTA DE BÚSQUEDA (Mostrada si NO hay cliente) ---
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: TypeAheadField<Client>(
-                              controller: _clientNameController,
-                              suggestionsCallback: (pattern) async {
-                                if (pattern.length < 2) return [];
-                                // Si el usuario escribe, reseteamos el cliente seleccionado
-                                if (_selectedClient != null) {
-                                  setState(() {
-                                    _selectedClient = null;
-                                  });
-                                }
-                                return ref
-                                    .read(clientsRepoProvider)
-                                    .searchClients(pattern);
-                              },
-                              itemBuilder: (context, client) => ListTile(
-                                leading: Icon(Icons.person),
-                                title: Text(client.name),
-                                subtitle: Text(client.phone ?? 'Sin teléfono'),
-                              ),
-                              onSelected: (client) {
-                                // Al seleccionar, actualizamos el estado
-                                setState(() {
-                                  _selectedClient = client;
-                                  _clientNameController.text = client.name;
-                                });
-                              },
-                              emptyBuilder: (context) => const Padding(
-                                padding: EdgeInsets.all(12.0),
-                                child: Text('No se encontraron clientes.'),
-                              ),
-                              builder: (context, controller, focusNode) =>
-                                  TextFormField(
-                                    controller: _clientNameController,
-                                    focusNode: focusNode,
-                                    decoration: InputDecoration(
-                                      labelText: 'Buscar cliente...',
-                                      border: const OutlineInputBorder(),
-                                      prefixIcon: const Icon(Icons.search),
-                                    ),
-                                    // Validación: se activa si el usuario toca y
-                                    // sale del campo sin seleccionar (o si borra)
-                                    validator: (value) {
-                                      if (_selectedClient == null) {
-                                        return 'Debes seleccionar un cliente.';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Botón para 'Crear nuevo cliente'
-                          IconButton.filled(
-                            icon: const Icon(Icons.add),
-                            onPressed: _addClientDialog, // Llama a tu función
-                            tooltip: 'Crear nuevo cliente',
-                            style: IconButton.styleFrom(
-                              backgroundColor: darkBrown,
-                              padding: const EdgeInsets.all(16),
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      // --- VISTA "PILL" (Mostrada si SÍ hay cliente) ---
-                      Card(
-                        elevation: 0,
-                        color: primaryPink.withAlpha(51),
-                        margin: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: primaryPink.withAlpha(128)),
-                        ),
-                        child: ListTile(
-                          leading: const Icon(Icons.person, color: darkBrown),
-                          title: Text(
-                            _selectedClient!.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: darkBrown,
-                            ),
-                          ),
-                          subtitle: Text(
-                            'Tel: ${_selectedClient!.phone ?? "N/A"}',
-                            style: TextStyle(color: darkBrown.withAlpha(200)),
-                          ),
-
-                          // 👇 AQUÍ ESTÁ EL CAMBIO: Un Row con ambos botones
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // 1. Botón de WhatsApp
-                              if (_selectedClient!.whatsappUrl != null)
-                                IconButton(
-                                  icon: const FaIcon(FontAwesomeIcons.whatsapp),
-                                  color: Colors.green,
-                                  tooltip: 'Chatear por WhatsApp',
-                                  onPressed: () {
-                                    launchExternalUrl(
-                                      _selectedClient!.whatsappUrl!,
-                                    );
-                                  },
-                                ),
-                              // 2. Botón de Quitar Cliente
-                              IconButton(
-                                icon: const Icon(Icons.close, color: darkBrown),
-                                tooltip: 'Quitar cliente',
-                                onPressed: () {
-                                  // Al presionarlo, limpiamos el estado
-                                  setState(() {
-                                    _selectedClient = null;
-                                    _clientNameController.clear();
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                _buildClientSelector(context), // El buscador de clientes
+                // --- SECCIÓN DIRECCIÓN (NUEVA) ---
+                if (_selectedClient != null)
+                  _buildAddressSelector(context), // <-- AÑADIDO
                 const SizedBox(height: 16),
 
-                // --- SECCIÓN FECHA Y HORA ---
+                // --- SECCIÓN FECHA Y HORA (sin cambios) ---
                 Card(
                   elevation: 0,
-                  color: primaryPink.withAlpha(26),
+                  // Un contenedor de superficie ligeramente tintado
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
                     child: Column(
                       children: [
                         ListTile(
                           dense: true,
-                          leading: const Icon(
+                          leading: Icon(
                             Icons.calendar_today,
-                            color: darkBrown,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           title: Text(
                             'Fecha Evento: ${DateFormat('EEEE d \'de\' MMMM, y', 'es_AR').format(_date)}',
                           ),
-                          // trailing: const Icon(Icons.edit_calendar_outlined),
                           onTap: _pickDate,
                         ),
                         Divider(
                           height: 1,
                           indent: 16,
                           endIndent: 16,
-                          color: primaryPink.withAlpha(128),
+                          color: Theme.of(context).colorScheme.surfaceContainer,
                         ),
                         Row(
                           children: [
                             Expanded(
                               child: ListTile(
                                 dense: true,
-                                leading: const Icon(
+                                leading: Icon(
                                   Icons.access_time,
-                                  color: darkBrown,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                                 title: Text('Desde: ${_start.format(context)}'),
-                                // trailing: const Icon(Icons.edit_outlined),
                                 onTap: () => _pickTime(true),
                               ),
                             ),
                             Container(
                               height: 30,
                               width: 1,
-                              color: primaryPink.withAlpha(128),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainer,
                             ),
                             Expanded(
                               child: ListTile(
                                 dense: true,
-                                leading: const Icon(
+                                leading: Icon(
                                   Icons.update,
-                                  color: darkBrown,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                                 title: Text('Hasta: ${_end.format(context)}'),
-                                // trailing: const Icon(Icons.edit_outlined),
                                 onTap: () => _pickTime(false),
                               ),
                             ),
@@ -2483,10 +2426,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
 
-                // --- SECCIÓN NOTAS ---
+                // --- SECCIÓN NOTAS (sin cambios) ---
                 TextFormField(
                   controller: _notesController,
                   decoration: const InputDecoration(
@@ -2500,47 +2442,45 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 ),
                 const SizedBox(height: 24),
 
-                // --- SECCIÓN PRODUCTOS ---
+                // --- SECCIÓN PRODUCTOS (sin cambios) ---
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       'Productos *',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleLarge?.copyWith(color: darkBrown),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                     IconButton.filled(
                       onPressed: _addItemDialog,
                       icon: const Icon(Icons.add),
-                      style: IconButton.styleFrom(backgroundColor: darkBrown),
+                      style: IconButton.styleFrom(),
                       tooltip: 'Añadir producto',
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                // Validar que haya items (visualmente y en submit)
                 if (_items.isEmpty)
-                  const Center(
+                  Center(
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 24.0),
                       child: Text(
                         'Añade al menos un producto al pedido.',
-                        style: TextStyle(color: lightBrownText),
+                        // Usa el color de texto "variante" (más sutil)
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   )
                 else
-                  // --- LISTA DE ITEMS MEJORADA ---
                   ListView.builder(
-                    shrinkWrap:
-                        true, // Para que funcione dentro de otro ListView
-                    physics:
-                        const NeverScrollableScrollPhysics(), // Deshabilitar scroll interno
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
                     itemCount: _items.length,
                     itemBuilder: (context, index) {
                       final item = _items[index];
-                      // Extraer detalles para mostrar
                       String details = '';
                       final custom = item.customizationJson ?? {};
                       final category = ProductCategory.values.firstWhereOrNull(
@@ -2554,7 +2494,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           details +=
                               ' | Rellenos: ${(custom['selected_fillings'] as List).join(", ")}';
                         }
-                        // Podrías añadir extras aquí también
                       } else if (category == ProductCategory.mesaDulce) {
                         if (custom['selected_size'] != null) {
                           details += getUnitText(
@@ -2563,8 +2502,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         } else if (custom['is_half_dozen'] == true) {
                           details += ' (Media Docena)';
                         }
-                      } else if (category == ProductCategory.miniTorta) {
-                        // Detalles específicos de mini torta si los hay
                       }
                       if (item.customizationNotes != null) {
                         details += ' | Notas: ${item.customizationNotes}';
@@ -2575,11 +2512,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         elevation: 1,
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: primaryPink.withAlpha(51),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.tertiaryContainer,
                             child: Text(
                               '${item.qty}',
-                              style: const TextStyle(
-                                color: darkBrown,
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onTertiaryContainer,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -2588,20 +2529,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           subtitle: Text(
                             details.isNotEmpty
                                 ? details
-                                : 'Precio Base: ${_currencyFormat.format(item.basePrice)}', // Mostrar base si no hay detalles
+                                : 'Precio Base: ${_currencyFormat.format(item.basePrice)}',
                           ),
                           trailing: Row(
-                            // Usar Row para precio y botón borrar
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                // 👇 USA finalUnitPrice para el total del item
                                 _currencyFormat.format(
                                   item.finalUnitPrice * item.qty,
                                 ),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: darkBrown,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                               ),
                               IconButton(
@@ -2616,40 +2555,176 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               ),
                             ],
                           ),
-                          onTap: () => _editItemDialogRouter(
-                            index,
-                          ), // Usar el router para editar
+                          onTap: () => _editItemDialogRouter(index),
                           dense: true,
                         ),
                       );
                     },
                   ),
 
-                // Espacio antes del resumen
                 const SizedBox(height: 100),
               ],
             ),
           ),
 
-          // --- SECCIÓN INFERIOR FIJA CON RESUMEN Y BOTÓN GUARDAR ---
+          // --- SECCIÓN INFERIOR FIJA (sin cambios) ---
           _buildSummaryAndSave(),
         ],
       ),
     );
   }
 
-  // --- WIDGET PARA EL RESUMEN Y BOTÓN GUARDAR ---
+  // --- 11. WIDGET NUEVO: SELECCIÓN DE DIRECCIÓN ---
+  Widget _buildAddressSelector(BuildContext context) {
+    // Observamos el provider que trae los detalles (y direcciones) del cliente
+    final asyncClientDetails = ref.watch(
+      clientDetailsProvider(_selectedClient!.id),
+    );
+
+    return asyncClientDetails.when(
+      loading: () => Center(
+        child: Padding(
+          padding: EdgeInsets.all(8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              SizedBox(width: 16),
+              Text(
+                'Cargando direcciones...',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      error: (err, stack) => Text(
+        'Error al cargar direcciones: $err',
+        style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+      ),
+      data: (client) {
+        final addresses = client?.addresses ?? [];
+
+        // Asegurarse que el ID seleccionado sigue siendo válido
+        // Esto es útil si el usuario edita el pedido y la dirección fue borrada
+        if (_selectedAddressId != null &&
+            !addresses.any((a) => a.id == _selectedAddressId)) {
+          // El ID guardado ya no existe, resetear.
+          _selectedAddressId = null;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownButtonFormField<int?>(
+              initialValue: _selectedAddressId,
+              decoration: InputDecoration(
+                labelText: 'Dirección de Entrega',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(
+                  Icons.location_on_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              items: [
+                // Opción "Retira en local"
+                const DropdownMenuItem(
+                  value: null,
+                  child: Text(
+                    'Retira en local (o sin dirección)',
+                    style: TextStyle(fontStyle: FontStyle.italic),
+                  ),
+                ),
+                // Lista de direcciones del cliente
+                ...addresses.map((address) {
+                  return DropdownMenuItem(
+                    value: address.id,
+                    child: Text(
+                      address.displayAddress, // 'Casa', 'Oficina', etc.
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }),
+              ],
+              onChanged: (int? newId) {
+                setState(() {
+                  _selectedAddressId = newId;
+                  // Si eligen "Retira en local", poner costo de envío en 0
+                  if (newId == null) {
+                    _deliveryCostController.text = '0';
+                  }
+                  // Si eligen una dirección, ¿poner costo de envío?
+                  // Mejor dejar que el usuario lo ponga manualmente.
+                });
+              },
+              validator: (value) {
+                // Es válido que sea nulo (retira en local)
+                return null;
+              },
+            ),
+            const SizedBox(height: 8),
+            // Botón para añadir nueva dirección
+            Center(
+              child: TextButton.icon(
+                icon: const Icon(Icons.add_location_alt_outlined, size: 20),
+                label: const Text('Añadir nueva dirección al cliente'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                ),
+                onPressed: _showAddAddressDialog,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- 12. FUNCIÓN NUEVA: MOSTRAR MODAL DE DIRECCIONES ---
+  void _showAddAddressDialog() {
+    if (_selectedClient == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // Permite que el modal sea alto
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        // Usamos el widget que ya creamos y probamos
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          // Envuelve el diálogo en un contenedor con bordes redondeados
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: AddressFormDialog(clientId: _selectedClient!.id),
+          ),
+        );
+      },
+    );
+  }
+
+  // --- WIDGET RESUMEN Y GUARDAR (sin cambios) ---
   Widget _buildSummaryAndSave() {
     return Material(
-      // Usar Material para elevación y color
       elevation: 8.0,
-      color: Colors.white, // O el color de fondo de tu Scaffold
+      color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Fila para Seña y Envío
             Row(
               children: [
                 Expanded(
@@ -2665,8 +2740,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       decimal: false,
                     ),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: (_) =>
-                        _recalculateTotals(), // Recalcular al cambiar
+                    onChanged: (_) => _recalculateTotals(),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -2683,22 +2757,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       decimal: false,
                     ),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    // El listener ya recalcula
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            // Resumen de Totales
             _buildSummaryRow('Subtotal Productos:', _itemsSubtotal),
             if (_deliveryCost > 0)
               _buildSummaryRow('Costo Envío:', _deliveryCost),
             _buildSummaryRow('TOTAL PEDIDO:', _grandTotal, isTotal: true),
             if (_depositAmount > 0)
-              _buildSummaryRow(
-                'Seña Recibida:',
-                -_depositAmount,
-              ), // Mostrar en negativo o como resta
+              _buildSummaryRow('Seña Recibida:', -_depositAmount),
             if (_grandTotal > 0)
               _buildSummaryRow(
                 'Saldo Pendiente:',
@@ -2706,26 +2775,23 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 isTotal: true,
                 highlight: _remainingBalance > 0,
               ),
-
             const SizedBox(height: 16),
-            // Botón Guardar
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: _isLoading ? null : _submit,
                 icon: _isLoading
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.onPrimary,
                         ),
                       )
                     : const Icon(Icons.save),
                 label: Text(isEditMode ? 'Guardar Cambios' : 'Guardar Pedido'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: darkBrown,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   textStyle: const TextStyle(
                     fontSize: 18,
@@ -2740,7 +2806,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- WIDGET HELPER PARA FILAS DEL RESUMEN ---
+  // --- WIDGET HELPER RESUMEN (sin cambios) ---
   Widget _buildSummaryRow(
     String label,
     double amount, {
@@ -2751,8 +2817,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       fontSize: isTotal ? 16 : 14,
       fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
       color: highlight
-          ? Colors.redAccent
-          : (isTotal ? darkBrown : Colors.black87),
+          ? Theme.of(context).colorScheme.error
+          : (isTotal
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.onSurface),
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -2766,16 +2834,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  /// Se llama cada vez que el usuario escribe en el campo
+  // --- LISTENER CAMBIO DE NOMBRE (modificado) ---
   void _onClientNameChanged() {
-    // Si el texto del campo NO coincide con el nombre del cliente seleccionado
     if (_selectedClient != null &&
         _clientNameController.text != _selectedClient!.name) {
-      // Significa que el usuario está buscando de nuevo.
-      // Ocultamos el botón de WhatsApp.
       setState(() {
         _selectedClient = null;
+        _selectedAddressId = null; // <-- 14. LIMPIAR DIRECCIÓN
       });
     }
   }
-} // Fin de _OrderFormState
+}

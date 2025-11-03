@@ -97,18 +97,18 @@ class OrdersRepository {
     }
   }
 
+  /// PATCH /api/orders/{order}/mark-paid
   Future<Order?> markAsPaid(int orderId) async {
     try {
-      final response = await _dio.patch(
-        '/orders/$orderId/status',
-        data: {'is_fully_paid': true},
-      );
+      // Usamos PATCH y el nuevo endpoint dedicado.
+      final response = await _dio.patch('/orders/$orderId/mark-paid');
+      // Asumimos que devuelve el objeto Order actualizado
       return Order.fromJson(response.data);
-    } catch (e) {
+    } on DioException catch (e) {
       if (kDebugMode) {
         print('Error al marcar como pagado: $e');
       }
-      return null;
+      rethrow; // Propagamos el error para que la UI lo muestre
     }
   }
 }
