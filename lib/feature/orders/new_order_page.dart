@@ -42,24 +42,26 @@ class NewOrderPage extends ConsumerWidget {
     final isEditMode = orderId != null;
 
     // Colores de la marca (podrían estar en un archivo de tema global)
-    const Color darkBrown = Color(0xFF7A4A4A);
+    Color darkBrown = Theme.of(context).colorScheme.primary;
+    Color primaryPink = Theme.of(context).colorScheme.secondary;
+
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
           isEditMode ? 'Editar Pedido' : 'Nuevo Pedido',
-          style: const TextStyle(color: darkBrown),
+          style: TextStyle(color: Theme.of(context).colorScheme.primary),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 1,
-        iconTheme: const IconThemeData(color: darkBrown),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
       ),
       body: isEditMode
           // Si estamos editando, buscamos el pedido primero
           ? ref
                 .watch(orderByIdProvider(orderId!))
                 .when(
-                  loading: () => const Center(
+                  loading: () => Center(
                     child: CircularProgressIndicator(color: darkBrown),
                   ),
                   error: (err, stack) => Center(
@@ -132,7 +134,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   // Paleta de colores
   static const Color primaryPink = Color(0xFFF8B6B6);
   static const Color darkBrown = Color(0xFF7A4A4A);
-  static const Color lightBrownText = Color(0xFFA57D7D);
 
   bool get isEditMode => widget.order != null;
 
@@ -243,15 +244,16 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       lastDate: DateTime.now().add(const Duration(days: 730)),
       initialDate: _date,
       builder: (context, child) {
+        // Obtenemos el tema actual
+        final theme = Theme.of(context);
         return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: darkBrown,
-              onPrimary: Colors.white,
-              onSurface: darkBrown,
-            ),
+          // Usamos la base del tema (light o dark)
+          data: theme.copyWith(
             textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(foregroundColor: darkBrown),
+              // Hacemos que los botones usen el color primary del tema
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.primary,
+              ),
             ),
           ),
           child: child!,
@@ -267,15 +269,19 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       initialTime: isStart ? _start : _end,
       initialEntryMode: TimePickerEntryMode.input,
       builder: (context, child) {
+        // Obtenemos el tema actual
+        final theme = Theme.of(context);
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
           child: Theme(
-            data: ThemeData.light().copyWith(
-              colorScheme: const ColorScheme.light(
-                primary: darkBrown,
-                onPrimary: Colors.white,
-                surface: primaryPink,
-                onSurface: darkBrown,
+            // Usamos la base del tema (light o dark)
+            data: theme.copyWith(
+              // ¡No sobrescribimos 'primary'!
+              textButtonTheme: TextButtonThemeData(
+                // Hacemos que los botones usen el color primary del tema
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.primary,
+                ),
               ),
             ),
             child: child!,
@@ -448,9 +454,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text(
+        title: Text(
           'Nuevo Cliente Manual',
-          style: TextStyle(color: darkBrown),
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -470,10 +476,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar', style: TextStyle(color: darkBrown)),
+            child: const Text('Cancelar'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: darkBrown),
+            style: FilledButton.styleFrom(),
             onPressed: () {
               if (nameController.text.trim().isNotEmpty) {
                 Navigator.pop(dialogContext); // Cierra el diálogo manual
@@ -558,7 +564,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   SpeedDial(
                     icon: Icons.add,
                     activeIcon: Icons.close,
-                    backgroundColor: darkBrown,
                     foregroundColor: Colors.white,
                     spacing: 5,
                     buttonSize: const Size(
@@ -590,24 +595,40 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               // --- VISTA "PILL" (Se mantiene sin cambios) ---
               Card(
                 elevation: 0,
-                color: primaryPink.withAlpha(51),
+                // Usa un color contenedor del tema
+                color: Theme.of(
+                  context,
+                ).colorScheme.tertiaryContainer, // <-- SOLUCIÓN
                 margin: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: primaryPink.withAlpha(128)),
+                  // El borde puede usar un color 'outline'
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ), // <-- SOLUCIÓN
                 ),
                 child: ListTile(
-                  leading: const Icon(Icons.person, color: darkBrown),
+                  leading: Icon(
+                    Icons.person,
+                    color: Theme.of(context).colorScheme.onTertiaryContainer,
+                  ), // <-- SOLUCIÓN
                   title: Text(
                     _selectedClient!.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: darkBrown,
+                      // Usa el color de texto SOBRE el contenedor
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onTertiaryContainer, // <-- SOLUCIÓN
                     ),
                   ),
                   subtitle: Text(
                     'Tel: ${_selectedClient!.phone ?? "N/A"}',
-                    style: TextStyle(color: darkBrown.withAlpha(200)),
+                    style: TextStyle(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onTertiaryContainer.withOpacity(0.8),
+                    ), // <-- SOLUCIÓN
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -622,7 +643,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           },
                         ),
                       IconButton(
-                        icon: const Icon(Icons.close, color: darkBrown),
+                        icon: Icon(
+                          Icons.close,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onTertiaryContainer,
+                        ),
                         tooltip: 'Quitar cliente',
                         onPressed: () {
                           setState(() {
@@ -768,7 +794,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.cake, color: primaryPink),
+              leading: const Icon(Icons.cake),
               title: const Text('Mini Torta / Accesorio'),
               onTap: () {
                 Navigator.of(context).pop();
@@ -776,7 +802,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.cake_outlined, color: darkBrown),
+              leading: const Icon(Icons.cake_outlined),
               title: const Text('Torta por Kilo'),
               onTap: () {
                 Navigator.of(context).pop();
@@ -784,7 +810,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.icecream, color: lightBrownText),
+              leading: const Icon(Icons.icecream),
               title: const Text('Producto de Mesa Dulce'),
               onTap: () {
                 Navigator.of(context).pop();
@@ -993,7 +1019,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: darkBrown),
+                  style: FilledButton.styleFrom(),
                   onPressed: isUploading
                       ? null
                       : () async {
@@ -1511,7 +1537,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: darkBrown),
+                  style: FilledButton.styleFrom(),
                   onPressed: isUploading
                       ? null
                       : () async {
@@ -1947,7 +1973,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: darkBrown),
+                  style: FilledButton.styleFrom(),
                   onPressed: isUploading
                       ? null
                       : () async {
@@ -2309,16 +2335,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 // --- SECCIÓN FECHA Y HORA (sin cambios) ---
                 Card(
                   elevation: 0,
-                  color: primaryPink.withAlpha(26),
+                  // Un contenedor de superficie ligeramente tintado
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
                     child: Column(
                       children: [
                         ListTile(
                           dense: true,
-                          leading: const Icon(
+                          leading: Icon(
                             Icons.calendar_today,
-                            color: darkBrown,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           title: Text(
                             'Fecha Evento: ${DateFormat('EEEE d \'de\' MMMM, y', 'es_AR').format(_date)}',
@@ -2336,9 +2363,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             Expanded(
                               child: ListTile(
                                 dense: true,
-                                leading: const Icon(
+                                leading: Icon(
                                   Icons.access_time,
-                                  color: darkBrown,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                                 title: Text('Desde: ${_start.format(context)}'),
                                 onTap: () => _pickTime(true),
@@ -2352,9 +2379,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             Expanded(
                               child: ListTile(
                                 dense: true,
-                                leading: const Icon(
+                                leading: Icon(
                                   Icons.update,
-                                  color: darkBrown,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                                 title: Text('Hasta: ${_end.format(context)}'),
                                 onTap: () => _pickTime(false),
@@ -2388,9 +2415,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   children: [
                     Text(
                       'Productos *',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleLarge?.copyWith(color: darkBrown),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                     IconButton.filled(
                       onPressed: _addItemDialog,
@@ -2402,12 +2429,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 ),
                 const SizedBox(height: 8),
                 if (_items.isEmpty)
-                  const Center(
+                  Center(
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 24.0),
                       child: Text(
                         'Añade al menos un producto al pedido.',
-                        style: TextStyle(color: lightBrownText),
+                        // Usa el color de texto "variante" (más sutil)
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   )
@@ -2449,11 +2479,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         elevation: 1,
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: primaryPink.withAlpha(51),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.tertiaryContainer,
                             child: Text(
                               '${item.qty}',
-                              style: const TextStyle(
-                                color: darkBrown,
+                              style: TextStyle(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onTertiaryContainer,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -2515,7 +2549,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
 
     return asyncClientDetails.when(
-      loading: () => const Center(
+      loading: () => Center(
         child: Padding(
           padding: EdgeInsets.all(8.0),
           child: Row(
@@ -2526,13 +2560,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: darkBrown,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
               SizedBox(width: 16),
               Text(
                 'Cargando direcciones...',
-                style: TextStyle(color: lightBrownText),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -2558,10 +2594,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           children: [
             DropdownButtonFormField<int?>(
               initialValue: _selectedAddressId,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Dirección de Entrega',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.location_on_outlined, color: darkBrown),
+                prefixIcon: Icon(
+                  Icons.location_on_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
               items: [
                 // Opción "Retira en local"
@@ -2622,7 +2661,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true, // Permite que el modal sea alto
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -2635,10 +2673,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           // Envuelve el diálogo en un contenedor con bordes redondeados
           child: ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: Container(
-              color: Colors.white, // Asegura fondo blanco
-              child: AddressFormDialog(clientId: _selectedClient!.id),
-            ),
+            child: AddressFormDialog(clientId: _selectedClient!.id),
           ),
         );
       },
@@ -2652,7 +2687,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   Widget _buildSummaryAndSave() {
     return Material(
       elevation: 8.0,
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -2714,18 +2749,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               child: FilledButton.icon(
                 onPressed: _isLoading ? null : _submit,
                 icon: _isLoading
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.onPrimary,
                         ),
                       )
                     : const Icon(Icons.save),
                 label: Text(isEditMode ? 'Guardar Cambios' : 'Guardar Pedido'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: darkBrown,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   textStyle: const TextStyle(
                     fontSize: 18,
@@ -2751,8 +2785,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       fontSize: isTotal ? 16 : 14,
       fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
       color: highlight
-          ? Colors.redAccent
-          : (isTotal ? darkBrown : Colors.black87),
+          ? Theme.of(context).colorScheme.error
+          : (isTotal
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.onSurface),
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
