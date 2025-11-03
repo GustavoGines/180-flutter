@@ -20,10 +20,6 @@ class ClientDetailPage extends ConsumerWidget {
   final int id;
   const ClientDetailPage({super.key, required this.id});
 
-  // Colores
-  static const Color darkBrown = Color(0xFF7A4A4A);
-  static const Color primaryPink = Color(0xFFF8B6B6);
-
   // --- Funciones para manejar Direcciones ---
 
   // Muestra el modal para Añadir/Editar dirección
@@ -59,6 +55,10 @@ class ClientDetailPage extends ConsumerWidget {
     WidgetRef ref,
     ClientAddress address,
   ) async {
+    // Obtenemos el ColorScheme aquí ANTES de llamar a showDialog
+    // para evitar problemas de contexto asíncrono.
+    final cs = Theme.of(context).colorScheme;
+
     final didConfirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -73,7 +73,12 @@ class ClientDetailPage extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            // Adaptado al tema: usa el color de error del tema
+            style: FilledButton.styleFrom(
+              backgroundColor: cs.error,
+              foregroundColor:
+                  cs.onError, // <-- Esta línea SÍ es correcta para FilledButton
+            ),
             child: const Text('Eliminar'),
           ),
         ],
@@ -87,60 +92,76 @@ class ClientDetailPage extends ConsumerWidget {
             .deleteAddress(address.clientId, address.id);
         // Refrescar los detalles del cliente (para que se actualice la lista de direcciones)
         ref.invalidate(clientDetailsProvider(address.clientId));
+
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Dirección eliminada'),
-              backgroundColor: Colors.green,
+              // Dejamos que el SnackBarTheme del tema decida el color de éxito
             ),
           );
         }
       } on DioException catch (e) {
-        // 👇 --- NUEVA LÓGICA DE MANEJO DE ERRORES --- 👇
+        if (!context.mounted) return;
+        // Obtenemos el ColorScheme para los SnackBar de error
+        final errorCs = Theme.of(context).colorScheme;
+
         if (e.response?.statusCode == 409) {
           // Error de conflicto (Dirección en uso)
           final message =
               e.response?.data['message'] as String? ??
               'Conflicto desconocido. La dirección podría estar asociada a un pedido.';
-
-          if (context.mounted) {
-            _showAddressInUseDialog(context, message);
-          }
+          _showAddressInUseDialog(context, message);
         } else {
           // Otro error de API
           final message =
               e.response?.data['message'] as String? ??
               'Error al eliminar dirección. Intenta de nuevo.';
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(message), backgroundColor: Colors.red),
-            );
-          }
-        }
-      } catch (e) {
-        // Error genérico (ej. sin conexión)
-        if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error desconocido al eliminar.'),
-              backgroundColor: Colors.red,
+            SnackBar(
+              // --- 👇 CORRECCIÓN AQUÍ 👇 ---
+              content: Text(message, style: TextStyle(color: errorCs.onError)),
+              backgroundColor: errorCs.error,
+              // --- 👆 foregroundColor eliminado 👆 ---
             ),
           );
         }
+      } catch (e) {
+        // Error genérico (ej. sin conexión)
+        if (!context.mounted) return;
+        final errorCs = Theme.of(context).colorScheme;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            // --- 👇 CORRECCIÓN AQUÍ 👇 ---
+            content: Text(
+              'Error desconocido al eliminar.',
+              style: TextStyle(color: errorCs.onError),
+            ),
+            backgroundColor: errorCs.error,
+            // --- 👆 foregroundColor eliminado 👆 ---
+          ),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Obtenemos el tema y los esquemas de color/texto
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final tt = theme.textTheme;
+
     // Observamos el provider que busca el cliente por ID
     final asyncClient = ref.watch(clientDetailsProvider(id));
 
     return asyncClient.when(
       loading: () => Scaffold(
         appBar: AppBar(),
-        body: const Center(child: CircularProgressIndicator(color: darkBrown)),
+        body: Center(
+          // El CircularProgressIndicator usará cs.primary por defecto
+          child: CircularProgressIndicator(color: cs.primary),
+        ),
       ),
       error: (err, stack) => Scaffold(
         appBar: AppBar(),
@@ -158,14 +179,16 @@ class ClientDetailPage extends ConsumerWidget {
         return Scaffold(
           appBar: AppBar(
             title: Text(client.name),
-            backgroundColor: Colors.white,
+            // Colores de AppBar adaptados al tema (M3)
+            backgroundColor: cs.surface,
+            foregroundColor: cs.onSurface,
             elevation: 1,
-            iconTheme: const IconThemeData(color: darkBrown),
-            titleTextStyle: const TextStyle(
-              color: darkBrown,
-              fontSize: 20,
+            titleTextStyle: tt.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
+              color: cs.onSurface, // Asegura el color del texto
             ),
+            // Íconos de acción
+            actionsIconTheme: IconThemeData(color: cs.onSurfaceVariant),
             actions: [
               // Botón "Editar" que lleva al formulario
               IconButton(
@@ -196,6 +219,7 @@ class ClientDetailPage extends ConsumerWidget {
   }
 
   /// Muestra un diálogo si la dirección está asociada a pedidos.
+  /// (Este widget ya estaba bien adaptado al tema)
   void _showAddressInUseDialog(BuildContext context, String message) {
     final cs = Theme.of(context).colorScheme;
     showDialog(
@@ -205,7 +229,10 @@ class ClientDetailPage extends ConsumerWidget {
         content: Text(message),
         actions: [
           FilledButton.tonal(
-            style: FilledButton.styleFrom(backgroundColor: cs.errorContainer),
+            style: FilledButton.styleFrom(
+              backgroundColor: cs.errorContainer,
+              foregroundColor: cs.onErrorContainer,
+            ),
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               'Entendido',
@@ -219,6 +246,10 @@ class ClientDetailPage extends ConsumerWidget {
 
   // Widget para la tarjeta de Contacto
   Widget _buildContactInfo(BuildContext context, Client client) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final tt = theme.textTheme;
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -226,8 +257,9 @@ class ClientDetailPage extends ConsumerWidget {
         children: [
           Text(
             'Información de Contacto',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: darkBrown,
+            style: tt.titleMedium?.copyWith(
+              // Color de subtítulo del tema
+              color: cs.onSurfaceVariant,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -244,12 +276,14 @@ class ClientDetailPage extends ConsumerWidget {
               children: [
                 // Teléfono y WhatsApp
                 ListTile(
-                  leading: const Icon(Icons.phone, color: darkBrown),
+                  // Icono con color primario del tema
+                  leading: Icon(Icons.phone, color: cs.primary),
                   title: Text(client.phone ?? 'Sin teléfono'),
                   trailing: (client.whatsappUrl != null)
                       ? IconButton(
                           icon: const FaIcon(
                             FontAwesomeIcons.whatsapp,
+                            // El color de marca (WhatsApp) se puede mantener
                             color: Colors.green,
                           ),
                           tooltip: 'Chatear por WhatsApp',
@@ -261,17 +295,14 @@ class ClientDetailPage extends ConsumerWidget {
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 // Email
                 ListTile(
-                  leading: const Icon(Icons.email_outlined, color: darkBrown),
+                  leading: Icon(Icons.email_outlined, color: cs.primary),
                   title: Text(client.email ?? 'Sin email'),
                 ),
                 // Notas (si existen)
                 if (client.notes != null && client.notes!.isNotEmpty) ...[
                   const Divider(height: 1, indent: 16, endIndent: 16),
                   ListTile(
-                    leading: const Icon(
-                      Icons.note_alt_outlined,
-                      color: darkBrown,
-                    ),
+                    leading: Icon(Icons.note_alt_outlined, color: cs.primary),
                     title: Text(client.notes!),
                   ),
                 ],
@@ -285,6 +316,10 @@ class ClientDetailPage extends ConsumerWidget {
 
   // Widget para la lista de Direcciones
   Widget _buildAddressList(BuildContext context, WidgetRef ref, Client client) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final tt = theme.textTheme;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
@@ -295,20 +330,17 @@ class ClientDetailPage extends ConsumerWidget {
             children: [
               Text(
                 'Direcciones',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: darkBrown,
+                style: tt.titleMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               FilledButton.tonalIcon(
-                // <-- CORRECCIÓN: De .tonal a .tonalIcon
                 onPressed: () => _showAddressForm(context, ref, client.id),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Añadir'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: darkBrown.withOpacity(0.1),
-                  foregroundColor: darkBrown,
-                ),
+                // El estilo por defecto de .tonalIcon ya se adapta al tema
+                // (usa secondaryContainer y onSecondaryContainer)
               ),
             ],
           ),
@@ -339,10 +371,7 @@ class ClientDetailPage extends ConsumerWidget {
               ),
               clipBehavior: Clip.antiAlias,
               child: ListTile(
-                leading: const Icon(
-                  Icons.location_on_outlined,
-                  color: darkBrown,
-                ),
+                leading: Icon(Icons.location_on_outlined, color: cs.primary),
                 title: Text(
                   address.label ?? address.addressLine1 ?? 'Dirección',
                 ),
@@ -354,12 +383,12 @@ class ClientDetailPage extends ConsumerWidget {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Botón Google Maps
+                    // Botón Google Maps (Color de marca)
                     if (address.googleMapsUrl != null)
                       IconButton(
                         icon: const Icon(
                           Icons.map_outlined,
-                          color: Colors.blue,
+                          color: Colors.blue, // Mantenemos color de marca
                         ),
                         tooltip: 'Ver en Google Maps',
                         onPressed: () =>
@@ -367,9 +396,10 @@ class ClientDetailPage extends ConsumerWidget {
                       ),
                     // Botón Editar Dirección
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.edit_outlined,
-                        color: Colors.grey,
+                        // Color neutral del tema para íconos
+                        color: cs.onSurfaceVariant,
                         size: 20,
                       ),
                       tooltip: 'Editar Dirección',
@@ -382,9 +412,10 @@ class ClientDetailPage extends ConsumerWidget {
                     ),
                     // Botón Eliminar Dirección
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.delete_outline,
-                        color: Colors.red,
+                        // Color de error del tema
+                        color: cs.error,
                         size: 20,
                       ),
                       tooltip: 'Eliminar Dirección',
@@ -403,6 +434,10 @@ class ClientDetailPage extends ConsumerWidget {
 
   // Widget para la sección de Historial de Pedidos
   Widget _buildOrdersSection(BuildContext context, int clientId) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final tt = theme.textTheme;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
@@ -410,13 +445,13 @@ class ClientDetailPage extends ConsumerWidget {
         children: [
           Text(
             'Historial de Pedidos',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: darkBrown,
+            style: tt.titleMedium?.copyWith(
+              color: cs.onSurfaceVariant,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
-          _buildOrdersList(clientId), // Widget interno que ya tenías
+          _buildOrdersList(clientId), // Widget interno
         ],
       ),
     );
@@ -427,20 +462,23 @@ class ClientDetailPage extends ConsumerWidget {
     // Usamos un Consumer para poder usar 'ref' aquí
     return Consumer(
       builder: (context, ref, child) {
+        // Obtenemos el ColorScheme para la función helper
+        final cs = Theme.of(context).colorScheme;
+        final tt = Theme.of(context).textTheme;
+
         // Obtenemos el repositorio de Pedidos
         final repo = ref.watch(
           ordersRepoProvider,
         ); // Asumiendo que tienes este provider
 
-        // --- INICIO DE LA MODIFICACIÓN ---
-
-        // Helper para traducir y dar color a los estados
+        // Helper para traducir y dar color a los estados (AHORA USA EL TEMA)
         (String, Color) getStatusStyle(String status) {
           final statusLower = status.toLowerCase();
-          final Color deliveredColor = Colors.green.shade700;
-          final Color pendingColor = Colors.orange.shade700;
-          final Color cancelledColor = Colors.red.shade700;
-          final Color defaultColor = Colors.grey.shade600;
+          // Colores del tema
+          final Color deliveredColor = cs.primary; // Verde/Principal
+          final Color pendingColor = cs.tertiary; // Naranja/Terciario
+          final Color cancelledColor = cs.error; // Rojo/Error
+          final Color defaultColor = cs.onSurfaceVariant; // Gris/Neutral
 
           switch (statusLower) {
             case 'pending':
@@ -459,7 +497,6 @@ class ClientDetailPage extends ConsumerWidget {
               return (capitalized, defaultColor);
           }
         }
-        // --- FIN DE LA MODIFICACIÓN ---
 
         // NOTA: Esta API no es ideal. Deberíamos tener un endpoint
         // /clients/{id}/orders o /orders?client_id={id}
@@ -476,7 +513,8 @@ class ClientDetailPage extends ConsumerWidget {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(24.0),
-                  child: CircularProgressIndicator(color: darkBrown),
+                  // Usará el color primario del tema por defecto
+                  child: CircularProgressIndicator(),
                 ),
               );
             }
@@ -518,28 +556,25 @@ class ClientDetailPage extends ConsumerWidget {
                 itemBuilder: (_, i) {
                   final o = clientOrders[i];
 
-                  // --- INICIO DE LA MODIFICACIÓN ---
+                  // Obtenemos el estilo del estado (ya adaptado al tema)
                   final statusStyle = getStatusStyle(o.status);
-                  // --- FIN DE LA MODIFICACIÓN ---
 
                   return ListTile(
                     title: Text(
                       'Pedido para: ${DateFormat('dd/MM/yyyy').format(o.eventDate)}',
                     ),
                     subtitle: Text(
-                      // --- INICIO DE LA MODIFICACIÓN ---
                       'Estado: ${statusStyle.$1}', // Usamos el texto traducido
                       style: TextStyle(
                         color:
                             statusStyle.$2, // Usamos el color correspondiente
                       ),
-                      // --- FIN DE LA MODIFICACIÓN ---
                     ),
                     trailing: Text(
                       '\$${o.total?.toStringAsFixed(0) ?? '0'}',
-                      style: const TextStyle(
+                      style: tt.bodyLarge?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: darkBrown,
+                        color: cs.primary, // Color primario para el total
                       ),
                     ),
                     onTap: () => context.push(
