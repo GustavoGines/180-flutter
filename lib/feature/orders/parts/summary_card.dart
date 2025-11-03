@@ -12,7 +12,7 @@ class _SummaryCard extends StatelessWidget {
   final String title;
   final double value;
   final IconData icon;
-  final Color color;
+  final Color color; // Este es _tertiaryMint (siempre claro)
   final bool isCurrency;
 
   @override
@@ -20,8 +20,30 @@ class _SummaryCard extends StatelessWidget {
     final fmtCurrency = NumberFormat(r"'$' #,##0.00", 'es_AR');
     final fmtInt = NumberFormat("#,##0", 'es_AR'); // Formato para enteros
 
-    final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context); // 1. Obtenemos el tema
+    final cs = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
+    // --- 👇 AQUÍ ESTÁ LA NUEVA LÓGICA 👇 ---
+
+    // 2. Detectamos si estamos en Modo Claro
+    final bool isLightMode = theme.brightness == Brightness.light;
+
+    // 3. Decidimos el color del contenido (número e ícono)
+    final Color contentColor;
+
+    if (isLightMode) {
+      // MODO CLARO:
+      // El fondo (surfaceContainerHighest) es gris claro.
+      // Forzamos el texto a ser 'cs.primary' (que es tu _darkBrown).
+      contentColor = cs.primary;
+    } else {
+      // MODO OSCURO:
+      // El fondo (surfaceContainerHighest) es gris oscuro.
+      // Usamos el color menta 'color' (que es _tertiaryMint, claro).
+      contentColor = color;
+    }
+    // --- 👆 FIN DE LA LÓGICA 👆 ---
 
     // Formateo dinámico
     String show;
@@ -34,13 +56,15 @@ class _SummaryCard extends StatelessWidget {
 
     return Card(
       elevation: 0,
-      color: cs.surfaceContainerHighest,
+      color: cs.surfaceContainerHighest, // Fondo (Gris claro / Gris oscuro)
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Icon(icon, color: color, size: 28), // Usa el icono y color pasados
+            // --- 👇 CORRECCIÓN APLICADA 👇 ---
+            Icon(icon, color: contentColor, size: 28), // Usa el color dinámico
+            // --- 👆 FIN CORRECCIÓN 👆 ---
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -50,7 +74,7 @@ class _SummaryCard extends StatelessWidget {
                   Text(
                     title,
                     style: textTheme.labelLarge?.copyWith(
-                      color: cs.onSurfaceVariant,
+                      color: cs.onSurfaceVariant, // El título ya estaba bien
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -63,7 +87,9 @@ class _SummaryCard extends StatelessWidget {
                       show,
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: color, // Usa el color pasado
+                        // --- 👇 CORRECCIÓN APLICADA 👇 ---
+                        color: contentColor, // Usa el color dinámico
+                        // --- 👆 FIN CORRECCIÓN 👆 ---
                         letterSpacing: 0.1,
                       ),
                       // Buenas prácticas para asegurar una línea:

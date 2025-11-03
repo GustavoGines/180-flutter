@@ -286,8 +286,8 @@ extension _UpdateHelpers on _HomePageState {
       menuText = '—';
     } else {
       // ✅ CORREGIDO: Mostrar ambos números
-      pillText = 'v$_versionName ($_buildNumber)'; // Ej: v1.0.1 (2)
-      menuText = '$_versionName ($_buildNumber)'; // Ej: 1.0.1 (2)
+      pillText = _versionName; // Ej: v1.0.1
+      menuText = _versionName; // Ej: 1.0.1
     }
     // --- Fin lógica de texto ---
 
