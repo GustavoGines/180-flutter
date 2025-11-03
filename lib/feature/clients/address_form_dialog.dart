@@ -63,15 +63,25 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
     super.dispose();
   }
 
+  // --- MODIFICADO PARA EL TEMA ---
   void _showSnackbar(String message, {bool isError = false}) {
     if (!mounted) return;
+    final cs = Theme.of(context).colorScheme;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        content: Text(
+          message,
+          // Aplicamos el color de texto 'onError' solo si es un error
+          style: isError ? TextStyle(color: cs.onError) : null,
+        ),
+        // Aplicamos el color de fondo 'error' solo si es un error
+        // Si es éxito, usamos el 'null' para que el SnackBarTheme decida
+        backgroundColor: isError ? cs.error : null,
       ),
     );
   }
+  // --- FIN DE MODIFICACIÓN ---
 
   Future<void> _getUserLocation() async {
     setState(() => _isGettingLocation = true);
@@ -187,8 +197,10 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
   Widget build(BuildContext context) {
     final bool isButtonDisabled = _isLoading || _isGettingLocation;
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Container(
+      // Padding para el teclado
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
@@ -200,7 +212,10 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
           children: [
             Text(
               isEditMode ? 'Editar Dirección' : 'Nueva Dirección',
-              style: Theme.of(context).textTheme.headlineSmall,
+              // Usamos el estilo del tema
+              style: textTheme.headlineSmall?.copyWith(
+                color: colorScheme.onSurface, // Color de texto principal
+              ),
             ),
             const SizedBox(height: 24),
             TextFormField(
@@ -238,11 +253,14 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
             const SizedBox(height: 16),
             Text(
               'Coordenadas (Opcional)',
-              style: Theme.of(context).textTheme.titleSmall,
+              style: textTheme.titleSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant, // Color de subtítulo
+              ),
             ),
             const SizedBox(height: 8),
 
             // --- INICIO DE BOTONES DE UBICACIÓN ---
+            // (Este Row ya usaba colorScheme, no necesita cambios)
             Row(
               children: [
                 // Botón GPS
@@ -327,12 +345,16 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
             FilledButton.icon(
               onPressed: isButtonDisabled ? null : _submit,
               icon: _isLoading
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.white,
+                        // --- MODIFICADO PARA EL TEMA ---
+                        // Usamos el color 'onPrimary' del tema,
+                        // que contrasta con el fondo 'primary' del botón.
+                        color: colorScheme.onPrimary,
+                        // --- FIN DE MODIFICACIÓN ---
                       ),
                     )
                   : const Icon(Icons.save),

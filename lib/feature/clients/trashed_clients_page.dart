@@ -9,18 +9,42 @@ import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 class TrashedClientsPage extends ConsumerWidget {
   const TrashedClientsPage({super.key});
 
+  // --- Helper de SnackBar adaptado al tema ---
+  void _showSnackbar(
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
+    if (!context.mounted) return;
+    final cs = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: isError ? TextStyle(color: cs.onError) : null,
+        ),
+        backgroundColor: isError ? cs.error : null,
+      ),
+    );
+  }
+  // --- Fin Helper ---
+
   Future<void> _handleForceDelete(
     BuildContext context,
     WidgetRef ref,
     Client client,
   ) async {
+    // --- OBTENER TEMA ANTES DE DIÁLOGO ---
+    final cs = Theme.of(context).colorScheme;
+
     // 1. Pedir una confirmación MÁS FUERTE
     final didConfirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text(
+        title: Text(
           '¿ELIMINAR PERMANENTEMENTE?',
-          style: TextStyle(color: Colors.red),
+          // --- ADAPTADO AL TEMA ---
+          style: TextStyle(color: cs.error),
         ),
         content: Text(
           'Estás a punto de eliminar a ${client.name} para siempre. Esta acción no se puede deshacer.\n\n¿Continuar?',
@@ -32,7 +56,11 @@ class TrashedClientsPage extends ConsumerWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            // --- ADAPTADO AL TEMA ---
+            style: FilledButton.styleFrom(
+              backgroundColor: cs.error,
+              foregroundColor: cs.onError,
+            ),
             child: const Text('ELIMINAR'),
           ),
         ],
@@ -44,14 +72,10 @@ class TrashedClientsPage extends ConsumerWidget {
     // 2. Intentar el borrado
     try {
       await ref.read(clientsRepoProvider).forceDeleteClient(client.id);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cliente eliminado permanentemente'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+
+      // --- USA EL HELPER ADAPTADO ---
+      _showSnackbar(context, 'Cliente eliminado permanentemente');
+
       // Refrescar la lista de la papelera
       ref.invalidate(trashedClientsProvider); // <-- NOMBRE CORREGIDO
     } catch (e) {
@@ -60,23 +84,34 @@ class TrashedClientsPage extends ConsumerWidget {
       if (e is DioException && e.response?.data['message'] != null) {
         errorMsg = e.response!.data['message'];
       }
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
-        );
-      }
+
+      // --- USA EL HELPER ADAPTADO ---
+      _showSnackbar(context, errorMsg, isError: true);
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // <-- NOMBRE CORREGIDO
+    // --- OBTENER DATOS DEL TEMA ---
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     final asyncTrashed = ref.watch(trashedClientsProvider);
-    const Color darkBrown = Color(0xFF7A4A4A);
+    // (Se eliminó 'darkBrown')
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Papelera de Clientes'),
+        // --- ADAPTADO AL TEMA ---
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
+        elevation: 1,
+        titleTextStyle: tt.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: cs.onSurface,
+        ),
+        actionsIconTheme: IconThemeData(color: cs.onSurfaceVariant),
+        // --- FIN ADAPTACIÓN ---
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -87,7 +122,8 @@ class TrashedClientsPage extends ConsumerWidget {
       ),
       body: asyncTrashed.when(
         loading: () =>
-            const Center(child: CircularProgressIndicator(color: darkBrown)),
+            // --- ADAPTADO AL TEMA ---
+            const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Error: $err')),
         data: (clients) {
           if (clients.isEmpty) {
@@ -109,8 +145,10 @@ class TrashedClientsPage extends ConsumerWidget {
                 return ListTile(
                   title: Text(
                     client.name,
-                    style: const TextStyle(
+                    style: TextStyle(
+                      // --- ADAPTADO AL TEMA ---
                       decoration: TextDecoration.lineThrough,
+                      color: cs.onSurfaceVariant.withOpacity(0.7),
                     ),
                   ),
                   subtitle: Text('Eliminado el: $deletedAt'),
@@ -125,14 +163,10 @@ class TrashedClientsPage extends ConsumerWidget {
                             await ref
                                 .read(clientsRepoProvider)
                                 .restoreClient(client.id);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Cliente restaurado'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
+
+                            // --- USA EL HELPER ADAPTADO ---
+                            _showSnackbar(context, 'Cliente restaurado');
+
                             // Refrescar ambas listas
                             ref.invalidate(
                               trashedClientsProvider,
@@ -141,14 +175,8 @@ class TrashedClientsPage extends ConsumerWidget {
                               clientsListProvider,
                             ); // <-- Refrescar lista principal
                           } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Error: $e'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
+                            // --- USA EL HELPER ADAPTADO ---
+                            _showSnackbar(context, 'Error: $e', isError: true);
                           }
                         },
                       ),
@@ -156,7 +184,8 @@ class TrashedClientsPage extends ConsumerWidget {
                       IconButton(
                         icon: Icon(
                           Icons.delete_forever,
-                          color: Colors.red.shade700,
+                          // --- ADAPTADO AL TEMA ---
+                          color: cs.error,
                         ),
                         tooltip: 'Eliminar permanentemente',
                         onPressed: () =>

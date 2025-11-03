@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart'; // Necesitarás flutter_hooks
+// ignore: legacy_Linter_file_Name
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
@@ -40,12 +41,25 @@ class ClientsPage extends HookConsumerWidget {
     // 4. Observamos el provider que trae los datos
     final asyncClients = ref.watch(clientsListProvider(searchQuery));
 
-    // 5. Colores
-    const Color darkBrown = Color(0xFF7A4A4A);
+    // 5. --- OBTENER COLORES DEL TEMA ---
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    // (Se eliminó 'darkBrown')
+    // --- FIN ---
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Clientes'),
+        // --- ADAPTADO AL TEMA ---
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
+        elevation: 1,
+        titleTextStyle: tt.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: cs.onSurface,
+        ),
+        actionsIconTheme: IconThemeData(color: cs.onSurfaceVariant),
+        // --- FIN ADAPTACIÓN ---
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
@@ -67,14 +81,17 @@ class ClientsPage extends HookConsumerWidget {
               controller: searchController,
               decoration: InputDecoration(
                 labelText: 'Buscar por nombre o teléfono...',
-                prefixIcon: const Icon(Icons.search, color: darkBrown),
+                // --- ADAPTADO AL TEMA ---
+                prefixIcon: Icon(Icons.search, color: cs.primary),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12.0),
+                  borderSide: BorderSide(color: cs.outline),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12.0),
-                  borderSide: const BorderSide(color: darkBrown, width: 2.0),
+                  borderSide: BorderSide(color: cs.primary, width: 2.0),
                 ),
+                // --- FIN ADAPTACIÓN ---
               ),
               onChanged: (query) {
                 // Usamos el debouncer para actualizar el provider
@@ -87,8 +104,11 @@ class ClientsPage extends HookConsumerWidget {
           // 6. Lista de resultados reactiva
           Expanded(
             child: asyncClients.when(
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: darkBrown),
+              loading: () => Center(
+                // --- ADAPTADO AL TEMA ---
+                // El color por defecto es cs.primary
+                child: CircularProgressIndicator(),
+                // --- FIN ADAPTACIÓN ---
               ),
               error: (err, stack) =>
                   Center(child: Text('Error al cargar clientes: $err')),
@@ -118,15 +138,19 @@ class ClientsPage extends HookConsumerWidget {
                           '${c.phone ?? "Sin teléfono"} • ${c.email ?? "Sin email"}',
                         ),
                         leading: CircleAvatar(
-                          backgroundColor: darkBrown.withOpacity(0.1),
-                          foregroundColor: darkBrown,
+                          // --- ADAPTADO AL TEMA ---
+                          backgroundColor: cs.primaryContainer,
+                          foregroundColor: cs.onPrimaryContainer,
+                          // --- FIN ADAPTACIÓN ---
                           child: Text(
                             c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C',
                           ),
                         ),
-                        trailing: const Icon(
+                        trailing: Icon(
                           Icons.chevron_right,
-                          color: Colors.grey,
+                          // --- ADAPTADO AL TEMA ---
+                          color: cs.onSurfaceVariant, // Color neutral
+                          // --- FIN ADAPTACIÓN ---
                         ),
                         onTap: () => context.push('/clients/${c.id}'),
                       );
@@ -140,8 +164,12 @@ class ClientsPage extends HookConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/clients/new'),
-        backgroundColor: darkBrown,
-        child: const Icon(Icons.add, color: Colors.white),
+        // --- ADAPTADO AL TEMA ---
+        // (Estilo "branded" FAB)
+        backgroundColor: cs.primary,
+        foregroundColor: cs.onPrimary,
+        child: const Icon(Icons.add),
+        // --- FIN ADAPTACIÓN ---
       ),
     );
   }

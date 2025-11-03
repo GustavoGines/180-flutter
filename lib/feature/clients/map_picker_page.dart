@@ -3,6 +3,32 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
+// --- ESTILO JSON PARA EL MAPA OSCURO ---
+// Este es un estilo estándar "oscuro" de Google.
+const String _darkMapStyle = '''
+[
+  {"elementType": "geometry", "stylers": [{"color": "#242f3e"}]},
+  {"elementType": "labels.text.stroke", "stylers": [{"color": "#242f3e"}]},
+  {"elementType": "labels.text.fill", "stylers": [{"color": "#746855"}]},
+  {"featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{"color": "#d59563"}]},
+  {"featureType": "poi", "elementType": "labels.text.fill", "stylers": [{"color": "#d59563"}]},
+  {"featureType": "poi.park", "elementType": "geometry", "stylers": [{"color": "#263c3f"}]},
+  {"featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{"color": "#6b9a76"}]},
+  {"featureType": "road", "elementType": "geometry", "stylers": [{"color": "#38414e"}]},
+  {"featureType": "road", "elementType": "geometry.stroke", "stylers": [{"color": "#212a37"}]},
+  {"featureType": "road", "elementType": "labels.text.fill", "stylers": [{"color": "#9ca5b3"}]},
+  {"featureType": "road.highway", "elementType": "geometry", "stylers": [{"color": "#746855"}]},
+  {"featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{"color": "#1f2835"}]},
+  {"featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{"color": "#f3d19c"}]},
+  {"featureType": "transit", "elementType": "geometry", "stylers": [{"color": "#2f3948"}]},
+  {"featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{"color": "#d59563"}]},
+  {"featureType": "water", "elementType": "geometry", "stylers": [{"color": "#17263c"}]},
+  {"featureType": "water", "elementType": "labels.text.fill", "stylers": [{"color": "#515c6d"}]},
+  {"featureType": "water", "elementType": "labels.text.stroke", "stylers": [{"color": "#17263c"}]}
+]
+''';
+// --- FIN DEL ESTILO JSON ---
+
 /// Un selector de mapa visual a pantalla completa.
 /// Devuelve el `LatLng` seleccionado al hacer pop.
 class MapPickerPage extends StatefulWidget {
@@ -75,8 +101,26 @@ class _MapPickerPageState extends State<MapPickerPage> {
 
   @override
   Widget build(BuildContext context) {
+    // --- OBTENER DATOS DEL TEMA ---
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final tt = theme.textTheme;
+    final bool isDarkMode = theme.brightness == Brightness.dark;
+    // --- FIN ---
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Seleccionar Ubicación')),
+      // --- APPBAR ADAPTADA ---
+      appBar: AppBar(
+        title: const Text('Seleccionar Ubicación'),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
+        elevation: 1,
+        titleTextStyle: tt.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: cs.onSurface,
+        ),
+      ),
+      // --- FIN APPBAR ---
       body: Stack(
         children: [
           GoogleMap(
@@ -86,6 +130,13 @@ class _MapPickerPageState extends State<MapPickerPage> {
             ),
             onMapCreated: (controller) {
               _mapController = controller;
+
+              // --- APLICAR ESTILO OSCURO SI ES NECESARIO ---
+              if (isDarkMode) {
+                controller.setMapStyle(_darkMapStyle);
+              }
+              // --- FIN ---
+
               // Si ya determinamos la posición (en initState), mover la cámara
               if (!_isLoading) {
                 controller.animateCamera(
@@ -110,6 +161,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
               child: Icon(
                 Icons.location_pin,
                 size: 48.0,
+                // Esto ya estaba bien, usa el color primario del tema
                 color: Theme.of(context).colorScheme.primary,
               ),
             ),
@@ -127,6 +179,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
               child: FilledButton.icon(
                 icon: const Icon(Icons.check),
                 label: const Text('Seleccionar esta ubicación'),
+                // Esto ya estaba bien, usa el estilo por defecto del tema
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 32,
@@ -145,7 +198,9 @@ class _MapPickerPageState extends State<MapPickerPage> {
           // Indicador de carga inicial
           if (_isLoading)
             Container(
-              color: Colors.white.withOpacity(0.5),
+              // --- OVERLAY ADAPTADO AL TEMA ---
+              color: cs.surface.withOpacity(0.5),
+              // --- FIN ---
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],

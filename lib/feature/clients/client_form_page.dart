@@ -12,13 +12,26 @@ class ClientFormPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bool isEditMode = clientId != null;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     if (isEditMode) {
       // Modo Edición: Cargar datos primero
       // USAMOS EL PROVIDER DEL REPO
       final asyncClient = ref.watch(clientDetailsProvider(clientId!));
       return Scaffold(
-        appBar: AppBar(title: const Text('Editar Cliente')),
+        // --- ADAPTADO AL TEMA ---
+        appBar: AppBar(
+          title: const Text('Editar Cliente'),
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
+          elevation: 1,
+          titleTextStyle: tt.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+          ),
+        ),
+        // --- FIN ADAPTACIÓN ---
         body: asyncClient.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, stack) => Center(child: Text('Error: $err')),
@@ -34,7 +47,18 @@ class ClientFormPage extends ConsumerWidget {
     } else {
       // Modo Creación: Mostrar formulario vacío
       return Scaffold(
-        appBar: AppBar(title: const Text('Nuevo Cliente')),
+        // --- ADAPTADO AL TEMA ---
+        appBar: AppBar(
+          title: const Text('Nuevo Cliente'),
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
+          elevation: 1,
+          titleTextStyle: tt.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+          ),
+        ),
+        // --- FIN ADAPTACIÓN ---
         body: const _ClientForm(), // Pasa null
       );
     }
@@ -81,6 +105,22 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     super.dispose();
   }
 
+  // --- Helper de SnackBar adaptado al tema ---
+  void _showSnackbar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    final cs = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: isError ? TextStyle(color: cs.onError) : null,
+        ),
+        backgroundColor: isError ? cs.error : null,
+      ),
+    );
+  }
+  // --- Fin Helper ---
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return; // Validación falló
@@ -121,12 +161,8 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       ref.invalidate(clientsListProvider);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(successMessage),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // --- USA EL HELPER ADAPTADO ---
+        _showSnackbar(successMessage);
         context.pop(); // Volver a la página anterior
       }
     } catch (e) {
@@ -153,9 +189,8 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
         }
         // Si no fue un 409, muestra el error normal
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-        );
+        // --- USA EL HELPER ADAPTADO ---
+        _showSnackbar(errorMessage, isError: true);
       }
     } finally {
       if (mounted) {
@@ -168,6 +203,9 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
   }
 
   Future<void> _handleDelete() async {
+    // Obtenemos el ColorScheme ANTES del diálogo
+    final cs = Theme.of(context).colorScheme;
+
     // 1. Pedir confirmación
     final didConfirm = await showDialog<bool>(
       context: context,
@@ -183,7 +221,12 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            // --- ADAPTADO AL TEMA ---
+            style: FilledButton.styleFrom(
+              backgroundColor: cs.error,
+              foregroundColor: cs.onError,
+            ),
+            // --- FIN ADAPTACIÓN ---
             child: const Text('Sí, Enviar a Papelera'),
           ),
         ],
@@ -206,23 +249,15 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       ); // Invalida este cliente
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cliente enviado a la papelera'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // --- USA EL HELPER ADAPTADO ---
+        _showSnackbar('Cliente enviado a la papelera');
         // Salir de la página de edición
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al eliminar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // --- USA EL HELPER ADAPTADO ---
+        _showSnackbar('Error al eliminar: $e', isError: true);
       }
     } finally {
       if (mounted) {
@@ -231,7 +266,6 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     }
   }
 
-  // 👇 Esta función estaba bien, solo corregimos el provider
   Future<void> _showRestoreDialog(Client clientToRestore) async {
     final didConfirm = await showDialog<bool>(
       context: context,
@@ -247,6 +281,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
+            // Este botón usa el estilo 'primary' por defecto, lo cual es correcto.
             child: const Text('Sí, Restaurar'),
           ),
         ],
@@ -265,22 +300,14 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       ref.invalidate(trashedClientsProvider); // <-- USAR NOMBRE CORRECTO
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cliente restaurado con éxito'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // --- USA EL HELPER ADAPTADO ---
+        _showSnackbar('Cliente restaurado con éxito');
         context.pop(); // Cierra la página de creación
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al restaurar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // --- USA EL HELPER ADAPTADO ---
+        _showSnackbar('Error al restaurar: $e', isError: true);
       }
     } finally {
       if (mounted) {
@@ -291,15 +318,22 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
 
   @override
   Widget build(BuildContext context) {
-    const Color darkBrown = Color(0xFF7A4A4A);
+    // --- OBTENER COLORES DEL TEMA ---
+    final cs = Theme.of(context).colorScheme;
+
+    // --- ESTILOS ADAPTADOS AL TEMA ---
     final inputStyle = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12.0),
-      borderSide: const BorderSide(color: Colors.grey),
+      borderSide: BorderSide(color: cs.outline), // Usa color de borde del tema
     );
     final focusedStyle = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12.0),
-      borderSide: const BorderSide(color: darkBrown, width: 2.0),
+      borderSide: BorderSide(
+        color: cs.primary,
+        width: 2.0,
+      ), // Usa color primario
     );
+    // --- FIN ESTILOS ADAPTADOS ---
 
     return Form(
       key: _formKey,
@@ -312,7 +346,8 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               labelText: 'Nombre Completo *',
               border: inputStyle,
               focusedBorder: focusedStyle,
-              prefixIcon: const Icon(Icons.person, color: darkBrown),
+              // --- ADAPTADO AL TEMA ---
+              prefixIcon: Icon(Icons.person, color: cs.primary),
             ),
             validator: (value) => (value == null || value.trim().isEmpty)
                 ? 'El nombre es obligatorio'
@@ -326,7 +361,8 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               labelText: 'Teléfono',
               border: inputStyle,
               focusedBorder: focusedStyle,
-              prefixIcon: const Icon(Icons.phone, color: darkBrown),
+              // --- ADAPTADO AL TEMA ---
+              prefixIcon: Icon(Icons.phone, color: cs.primary),
             ),
             keyboardType: TextInputType.phone,
           ),
@@ -337,7 +373,8 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               labelText: 'Email',
               border: inputStyle,
               focusedBorder: focusedStyle,
-              prefixIcon: const Icon(Icons.email, color: darkBrown),
+              // --- ADAPTADO AL TEMA ---
+              prefixIcon: Icon(Icons.email, color: cs.primary),
             ),
             keyboardType: TextInputType.emailAddress,
           ),
@@ -349,7 +386,8 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               labelText: 'Notas Adicionales',
               border: inputStyle,
               focusedBorder: focusedStyle,
-              prefixIcon: const Icon(Icons.note_alt, color: darkBrown),
+              // --- ADAPTADO AL TEMA ---
+              prefixIcon: Icon(Icons.note_alt, color: cs.primary),
             ),
             maxLines: 3,
             textCapitalization: TextCapitalization.sentences,
@@ -358,24 +396,27 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
           FilledButton.icon(
             onPressed: _isLoading ? null : _submit,
             icon: _isLoading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      // --- ADAPTADO AL TEMA ---
+                      color: cs.onPrimary, // Contraste con el botón
                     ),
                   )
                 : const Icon(Icons.save),
             label: Text(isEditMode ? 'Guardar Cambios' : 'Crear Cliente'),
+            // --- ADAPTADO AL TEMA ---
             style: FilledButton.styleFrom(
-              backgroundColor: darkBrown,
-              foregroundColor: Colors.white,
+              // Se eliminan backgroundColor y foregroundColor
+              // para usar los defaults del tema (primary/onPrimary)
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
+            // --- FIN ADAPTACIÓN ---
           ),
           if (isEditMode) ...[
             const SizedBox(height: 16),
@@ -385,14 +426,16 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               onPressed: _isLoading ? null : _handleDelete,
               icon: const Icon(Icons.delete_outline),
               label: const Text('Enviar a Papelera'),
+              // --- ADAPTADO AL TEMA ---
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red.shade700,
-                side: BorderSide(color: Colors.red.shade300),
+                foregroundColor: cs.error, // Texto y borde de error
+                side: BorderSide(color: cs.error),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
+              // --- FIN ADAPTACIÓN ---
             ),
           ],
         ],
