@@ -558,7 +558,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   SpeedDial(
                     icon: Icons.add,
                     activeIcon: Icons.close,
-                    foregroundColor: Colors.white,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     spacing: 5,
                     buttonSize: const Size(
                       56,
@@ -788,7 +788,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.cake),
+              leading: Icon(
+                Icons.cake,
+                color: Theme.of(context).colorScheme.secondary,
+              ),
               title: const Text('Mini Torta / Accesorio'),
               onTap: () {
                 Navigator.of(context).pop();
@@ -796,7 +799,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.cake_outlined),
+              leading: Icon(
+                Icons.cake_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               title: const Text('Torta por Kilo'),
               onTap: () {
                 Navigator.of(context).pop();
@@ -804,7 +810,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.icecream),
+              leading: Icon(
+                Icons.icecream,
+                color: Theme.of(context).colorScheme.tertiary,
+              ),
               title: const Text('Producto de Mesa Dulce'),
               onTap: () {
                 Navigator.of(context).pop();
@@ -1083,12 +1092,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           }
                         },
                   child: isUploading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
@@ -1623,12 +1632,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           }
                         },
                   child: isUploading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
@@ -2049,12 +2058,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           }
                         },
                   child: isUploading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
