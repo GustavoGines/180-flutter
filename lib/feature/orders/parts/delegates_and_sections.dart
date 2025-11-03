@@ -340,8 +340,8 @@ class _MonthBannerState extends State<_MonthBanner>
                         ? Image(
                             image: widget.logoImage!,
                             fit: BoxFit.contain,
-                            width: 120,
-                            height: 120,
+                            width: 130,
+                            height: 130,
                           )
                         : const SizedBox(width: 120, height: 120),
                   ),

@@ -45,7 +45,6 @@ class NewOrderPage extends ConsumerWidget {
     Color darkBrown = Theme.of(context).colorScheme.primary;
     Color primaryPink = Theme.of(context).colorScheme.secondary;
 
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -2356,7 +2355,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           height: 1,
                           indent: 16,
                           endIndent: 16,
-                          color: primaryPink.withAlpha(128),
+                          color: Theme.of(context).colorScheme.surfaceContainer,
                         ),
                         Row(
                           children: [
@@ -2374,7 +2373,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             Container(
                               height: 30,
                               width: 1,
-                              color: primaryPink.withAlpha(128),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainer,
                             ),
                             Expanded(
                               child: ListTile(
