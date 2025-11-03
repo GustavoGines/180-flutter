@@ -62,9 +62,15 @@ class PdfGenerator {
 
   // 3. CORRECCIÓN: Ahora acepta pw.ImageProvider? (nullable)
   pw.Widget _buildHeader(Order order, pw.ImageProvider? logo) {
+    final PdfColor darkBrown = PdfColor.fromInt(0xFF7A4A4A);
+    final PdfColor primaryPink = PdfColor.fromInt(0xFFF8B6B6);
+
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      // ✅ CAMBIO CLAVE: Alinear verticalmente al centro
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
+        // 1. Columna de Texto
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
@@ -73,37 +79,41 @@ class PdfGenerator {
               style: pw.TextStyle(
                 fontSize: 20,
                 fontWeight: pw.FontWeight.bold,
-                // Usamos el color sin el Int, para mejor compatibilidad:
-                color: PdfColor.fromInt(0xFF7A4A4A), // darkBrown
+                color: darkBrown,
               ),
             ),
+            pw.SizedBox(height: 5),
             pw.Text(
               'Fecha del Pedido: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
               style: const pw.TextStyle(fontSize: 12),
             ),
+            pw.SizedBox(height: 2),
             pw.Text(
               'Pedido N°: ${order.id}',
               style: const pw.TextStyle(fontSize: 12),
             ),
           ],
         ),
+
+        // 2. Logo Container (este código está perfecto como lo dejamos)
         if (logo != null)
-          pw.Image(
-            logo,
-            width: 250, // Logo Agrandado
-            height: 250, // Logo Agrandado
+          pw.Container(
+            width: 230,
+            height: 230,
+            child: pw.Image(logo, fit: pw.BoxFit.contain),
           )
         else
+          // Fallback
           pw.Container(
-            width: 120,
-            height: 60,
-            alignment: pw.Alignment.centerRight,
+            width: 150,
+            height: 150,
+            alignment: pw.Alignment.center,
             child: pw.Text(
               '180°',
               style: pw.TextStyle(
-                fontSize: 24,
+                fontSize: 32,
                 fontWeight: pw.FontWeight.bold,
-                color: PdfColor.fromInt(0xFFF8B6B6),
+                color: primaryPink,
               ),
             ),
           ),

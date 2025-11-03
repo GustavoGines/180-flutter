@@ -11,7 +11,8 @@ class PdfPreviewPage extends ConsumerWidget {
   final int orderId;
   const PdfPreviewPage({super.key, required this.orderId});
 
-  static const Color darkBrown = Color(0xFF7A4A4A);
+  // 🚨 ELIMINADO: Ya no necesitamos 'darkBrown' estático.
+  // static const Color darkBrown = Color(0xFF7A4A4A);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,16 +22,24 @@ class PdfPreviewPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vista Previa de Pedido'),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: darkBrown),
+        // 🚨 ELIMINADO: 'backgroundColor' y 'iconTheme'
+        // Tu 'appBarTheme' global se encargará de esto
+        // automáticamente para ambos modos (light y dark).
       ),
       body: orderAsync.when(
-        loading: () =>
-            const Center(child: CircularProgressIndicator(color: darkBrown)),
+        loading: () => Center(
+          // ✅ CAMBIO: Usar el color primario del tema actual
+          child: CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
         error: (err, stack) => Center(
           child: Text(
             'Error al cargar pedido: $err',
-            style: const TextStyle(color: Colors.red),
+            // ✅ CAMBIO: Usar el color de error del tema
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+            ), // TODO: Usar cs.error
           ),
         ),
         data: (order) {
@@ -38,26 +47,16 @@ class PdfPreviewPage extends ConsumerWidget {
             return const Center(child: Text('Pedido no encontrado.'));
           }
 
-          // 2. Usamos PdfPreview para mostrar el documento
+          // El 'PdfPreview' en sí mismo tiene su propio tema (generalmente
+          // gris) para el visor, pero el 'AppBar' y el fondo
+          // de la página ahora están adaptados.
           return PdfPreview(
-            // La función build debe devolver un Future<Uint8List>
             build: (format) => PdfGenerator().generatePdfBytes(order),
-
-            // Opciones de estilo y botones (Solo las compatibles)
-            allowSharing: true, // Permitir compartir
-            allowPrinting: true, // Permitir imprimir
-            canDebug: false, // Desactivar el debug de PDF
-            // Corregido: Usar 'pdfFileName' o 'fileName' (preferimos fileName)
-            // La opción pdfFileName fue eliminada en versiones recientes.
+            allowSharing: true,
+            allowPrinting: true,
+            canDebug: false,
             pdfFileName:
                 'Pedido_${order.id}_${DateFormat('yyyyMMdd').format(order.eventDate)}.pdf',
-
-            // ❌ REMOVIDO: previewPagePageDecoration (No existe en el API de PdfPreview)
-            // ❌ REMOVIDO: PdfTextAction (No existe directamente en PdfPreview)
-            // ❌ REMOVIDO: maxPageWidth (No es una propiedad directa de PdfPreview)
-
-            // Usar la opción 'pageFormats' si necesitas forzar el tamaño de la hoja (A4, Letter)
-            // pageFormats: const {'A4': PdfPageFormat.a4},
           );
         },
       ),
