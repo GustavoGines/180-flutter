@@ -14,10 +14,8 @@ import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 // --- AÑADIDOS PARA COMPRESIÓN ---
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:pasteleria_180_flutter/core/json_utils.dart';
 import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
-import 'package:path_provider/path_provider.dart';
 // --- FIN DE AÑADIDOS ---
 
 // --- IMPORTAR EL CATÁLOGO ---
@@ -132,6 +130,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   );
 
   bool get isEditMode => widget.order != null;
+  // La Key será un ID temporal (ej: "placeholder_12345"),
+  // el Value será el archivo a subir.
+  final Map<String, XFile> _filesToUpload = {};
 
   @override
   void initState() {
@@ -736,58 +737,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
-  // --- FUNCIÓN COMPRIMIR Y SUBIR (sin cambios) ---
-  Future<String?> _compressAndUpload(XFile imageFile, WidgetRef ref) async {
-    final tempDir = await getTemporaryDirectory();
-    final fileName =
-        '${DateTime.now().millisecondsSinceEpoch}_${imageFile.name.split('/').last}.jpg';
-    final tempPath = '${tempDir.path}/$fileName';
-
-    File? tempFile;
-
-    try {
-      final compressedBytes = await FlutterImageCompress.compressWithFile(
-        imageFile.path,
-        minWidth: 1200,
-        minHeight: 1200,
-        quality: 80,
-        format: CompressFormat.jpeg,
-      );
-
-      XFile fileToUpload;
-
-      if (compressedBytes != null) {
-        tempFile = File(tempPath);
-        await tempFile.writeAsBytes(compressedBytes);
-        fileToUpload = XFile(tempFile.path);
-        debugPrint('Imagen comprimida a: ${tempFile.lengthSync()} bytes');
-      } else {
-        fileToUpload = imageFile;
-        debugPrint(
-          'Compresión falló, subiendo original: ${await imageFile.length()} bytes',
-        );
-      }
-
-      final url = await ref.read(ordersRepoProvider).uploadImage(fileToUpload);
-      await tempFile?.delete();
-      return url;
-    } catch (e) {
-      debugPrint("Error en _compressAndUpload: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error subiendo imagen: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
-          ),
-        );
-      }
-      try {
-        await tempFile?.delete();
-      } catch (_) {}
-      return null;
-    }
-  }
-
   // --- DIÁLOGOS DE ITEMS (MiniTorta, Torta, MesaDulce) ---
   // (Sin cambios en la lógica interna de estos diálogos)
   void _addItemDialog() {
@@ -875,8 +824,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     List<String> existingImageUrls = List<String>.from(
       customData['photo_urls'] ?? [],
     );
-    List<XFile> newImageFiles = [];
-    bool isUploading = false;
+    // 🚨 ELIMINADO: List<XFile> newImageFiles = [];
 
     final finalPriceController = TextEditingController();
 
@@ -907,7 +855,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<Product>(
-                      value:
+                      initialValue:
                           selectedProduct, // Usar 'value' en lugar de 'initialValue'
                       items: miniCakeProducts.map((Product product) {
                         return DropdownMenuItem<Product>(
@@ -981,36 +929,49 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         spacing: 8.0,
                         runSpacing: 8.0,
                         children: [
-                          ...existingImageUrls.map(
-                            (url) => _buildImageThumbnail(
-                              url,
-                              true,
-                              () => setDialogState(
-                                () => existingImageUrls.remove(url),
-                              ),
-                            ),
-                          ),
-                          ...newImageFiles.map(
-                            (file) => _buildImageThumbnail(
-                              file,
-                              false,
-                              () => setDialogState(
-                                () => newImageFiles.remove(file),
-                              ),
-                            ),
-                          ),
+                          // ✅ CAMBIO: Este 'map' ahora maneja URLs y Placeholders
+                          ...existingImageUrls.map((url) {
+                            final bool isPlaceholder = url.startsWith(
+                              'placeholder_',
+                            );
+                            final dynamic imageSource = isPlaceholder
+                                ? _filesToUpload[url]
+                                : url;
+
+                            return _buildImageThumbnail(
+                              imageSource,
+                              !isPlaceholder, // 'isNetwork' es true si NO es placeholder
+                              () => setDialogState(() {
+                                // Si es placeholder, borrarlo también del Map
+                                if (isPlaceholder) {
+                                  _filesToUpload.remove(url);
+                                }
+                                existingImageUrls.remove(url);
+                              }),
+                            );
+                          }).toList(),
+                          // 🚨 ELIMINADO: El loop '...newImageFiles.map(...)'
                         ],
                       ),
                     ),
                     TextButton.icon(
                       icon: const Icon(Icons.photo_library),
                       label: const Text('Añadir Fotos'),
+                      // ✅ CAMBIO: onPressed ahora crea placeholders
                       onPressed: () async {
                         final pickedFiles = await picker.pickMultiImage();
                         if (pickedFiles.isNotEmpty) {
-                          setDialogState(
-                            () => newImageFiles.addAll(pickedFiles),
-                          );
+                          setDialogState(() {
+                            for (var file in pickedFiles) {
+                              // 1. Crear ID único
+                              final String placeholderId =
+                                  'placeholder_${DateTime.now().millisecondsSinceEpoch}_${file.name.replaceAll(' ', '_')}';
+                              // 2. Guardar archivo en el Map del formulario
+                              _filesToUpload[placeholderId] = file;
+                              // 3. Guardar placeholder en la lista local del diálogo
+                              existingImageUrls.add(placeholderId);
+                            }
+                          });
                         }
                       },
                     ),
@@ -1034,84 +995,64 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(),
-                  onPressed: isUploading
-                      ? null
-                      : () async {
-                          if (selectedProduct == null) return;
-                          final qty = int.tryParse(qtyController.text) ?? 0;
+                  // ✅ CAMBIO: onPressed simplificado. No más 'isUploading' o 'async'.
+                  onPressed: () {
+                    if (selectedProduct == null) return;
+                    final qty = int.tryParse(qtyController.text) ?? 0;
 
-                          if (qty <= 0) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'La cantidad debe ser mayor a 0.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
+                    if (qty <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('La cantidad debe ser mayor a 0.'),
+                        ),
+                      );
+                      return;
+                    }
 
-                          setDialogState(() => isUploading = true);
+                    // 'existingImageUrls' ya tiene todas las URLs y placeholders
+                    final allImageUrls = existingImageUrls;
 
-                          final List<String> newUploadedUrls = [];
-                          if (newImageFiles.isNotEmpty) {
-                            for (final imageFile in newImageFiles) {
-                              final url = await _compressAndUpload(
-                                imageFile,
-                                ref,
-                              );
-                              if (url != null) newUploadedUrls.add(url);
-                            }
-                          }
-                          final allImageUrls = [
-                            ...existingImageUrls,
-                            ...newUploadedUrls,
-                          ];
-                          final itemNotes = itemNotesController.text.trim();
-                          final adjustmentNotes = adjustmentNotesController.text
-                              .trim();
+                    final itemNotes = itemNotesController.text.trim();
+                    final adjustmentNotes = adjustmentNotesController.text
+                        .trim();
 
-                          final newItem = OrderItem(
-                            id: isEditing ? existingItem.id : null,
-                            name: selectedProduct!.name,
-                            qty: qty,
-                            basePrice: basePrice,
-                            adjustments: adjustments,
-                            customizationNotes: adjustmentNotes.isEmpty
-                                ? null
-                                : adjustmentNotes,
-                            customizationJson: {
-                              'product_category':
-                                  selectedProduct!.category.name,
-                              'product_unit': selectedProduct!.unit.name,
-                              if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
-                              if (allImageUrls.isNotEmpty)
-                                'photo_urls': allImageUrls,
-                            },
-                          );
+                    final customization = {
+                      'product_category': selectedProduct!.category.name,
+                      'product_name': selectedProduct!.name,
+                      if (adjustmentNotes.isNotEmpty)
+                        'customization_notes': adjustmentNotes,
+                      if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
+                      if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
+                    };
+                    customization.removeWhere(
+                      (key, value) => (value is List && value.isEmpty),
+                    );
 
-                          _updateItemsAndRecalculate(() {
-                            if (isEditing) {
-                              _items[itemIndex!] = newItem;
-                            } else {
-                              _items.add(newItem);
-                            }
-                          });
+                    final newItem = OrderItem(
+                      id: isEditing ? existingItem.id : null,
+                      name: selectedProduct!.name,
+                      qty: qty,
+                      basePrice: basePrice,
+                      adjustments: adjustments,
+                      customizationNotes: adjustmentNotes.isEmpty
+                          ? null
+                          : adjustmentNotes,
+                      customizationJson: customization,
+                    );
 
-                          if (dialogContext.mounted) {
-                            Navigator.pop(dialogContext);
-                          }
-                        },
-                  child: isUploading
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        )
-                      : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
+                    _updateItemsAndRecalculate(() {
+                      if (isEditing) {
+                        _items[itemIndex!] = newItem;
+                      } else {
+                        _items.add(newItem);
+                      }
+                    });
+
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
+                  },
+                  child: Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
                 ),
               ],
             );
@@ -1196,8 +1137,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     List<String> existingImageUrls = List<String>.from(
       customData['photo_urls'] ?? [],
     );
-    List<XFile> newImageFiles = [];
-    bool isUploading = false;
+    // 🚨 ELIMINADO: List<XFile> newImageFiles = [];
 
     final calculatedBasePriceController = TextEditingController();
     final finalPriceController = TextEditingController();
@@ -1463,24 +1403,27 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         spacing: 8.0,
                         runSpacing: 8.0,
                         children: [
-                          ...existingImageUrls.map(
-                            (url) => _buildImageThumbnail(
-                              url,
-                              true,
-                              () => setDialogState(
-                                () => existingImageUrls.remove(url),
-                              ),
-                            ),
-                          ),
-                          ...newImageFiles.map(
-                            (file) => _buildImageThumbnail(
-                              file,
-                              false,
-                              () => setDialogState(
-                                () => newImageFiles.remove(file),
-                              ),
-                            ),
-                          ),
+                          ...existingImageUrls.map((url) {
+                            final bool isPlaceholder = url.startsWith(
+                              'placeholder_',
+                            );
+                            final dynamic imageSource = isPlaceholder
+                                ? _filesToUpload[url]
+                                : url;
+
+                            if (imageSource == null) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return _buildImageThumbnail(
+                              imageSource,
+                              !isPlaceholder,
+                              () => setDialogState(() {
+                                if (isPlaceholder) _filesToUpload.remove(url);
+                                existingImageUrls.remove(url);
+                              }),
+                            );
+                          }).toList(),
                         ],
                       ),
                     ),
@@ -1490,9 +1433,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       onPressed: () async {
                         final pickedFiles = await picker.pickMultiImage();
                         if (pickedFiles.isNotEmpty) {
-                          setDialogState(
-                            () => newImageFiles.addAll(pickedFiles),
-                          );
+                          setDialogState(() {
+                            for (var file in pickedFiles) {
+                              final String placeholderId =
+                                  'placeholder_${DateTime.now().millisecondsSinceEpoch}_${file.name.replaceAll(' ', '_')}';
+                              _filesToUpload[placeholderId] = file;
+                              existingImageUrls.add(placeholderId);
+                            }
+                          });
                         }
                       },
                     ),
@@ -1527,7 +1475,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       controller: adjustmentNotesController,
                       decoration: const InputDecoration(
                         labelText: 'Notas del Ajuste Manual',
-                        hintText: 'Ej: Decoración compleja, descuento especial',
                       ),
                       textCapitalization: TextCapitalization.sentences,
                     ),
@@ -1551,107 +1498,82 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(),
-                  onPressed: isUploading
-                      ? null
-                      : () async {
-                          if (selectedCakeType == null) return;
-                          final weight =
-                              double.tryParse(
-                                weightController.text.replaceAll(',', '.'),
-                              ) ??
-                              0.0;
-                          final adjustmentNotes = adjustmentNotesController.text
-                              .trim();
+                  onPressed: () {
+                    if (selectedCakeType == null) return;
 
-                          if (weight <= 0 || calculatedBasePrice <= 0) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('El peso debe ser mayor a 0.'),
-                              ),
-                            );
-                            return;
-                          }
+                    final weight =
+                        double.tryParse(
+                          weightController.text.replaceAll(',', '.'),
+                        ) ??
+                        0.0;
+                    final adjustmentNotes = adjustmentNotesController.text
+                        .trim();
 
-                          setDialogState(() => isUploading = true);
+                    if (weight <= 0 || calculatedBasePrice <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('El peso debe ser mayor a 0.'),
+                        ),
+                      );
+                      return;
+                    }
 
-                          final List<String> newUploadedUrls = [];
-                          if (newImageFiles.isNotEmpty) {
-                            for (final imageFile in newImageFiles) {
-                              final url = await _compressAndUpload(
-                                imageFile,
-                                ref,
-                              );
-                              if (url != null) newUploadedUrls.add(url);
-                            }
-                          }
-                          final allImageUrls = [
-                            ...existingImageUrls,
-                            ...newUploadedUrls,
-                          ];
+                    final allImageUrls = existingImageUrls;
 
-                          final customization = {
-                            'product_category': selectedCakeType!.category.name,
-                            'cake_type': selectedCakeType!.name,
-                            'weight_kg': weight,
-                            'selected_fillings': selectedFillings
-                                .map((f) => f.name)
-                                .toList(),
-                            'selected_extra_fillings': selectedExtraFillings
-                                .map((f) => f.name)
-                                .toList(),
-                            'selected_extras_kg': selectedExtrasKg
-                                .map((ex) => ex.name)
-                                .toList(),
-                            'selected_extras_unit': selectedExtrasUnit
-                                .map(
-                                  (sel) => {
-                                    'name': sel.extra.name,
-                                    'quantity': sel.quantity,
-                                  },
-                                )
-                                .toList(),
-                            if (notesController.text.trim().isNotEmpty)
-                              'item_notes': notesController.text.trim(),
-                            if (allImageUrls.isNotEmpty)
-                              'photo_urls': allImageUrls,
-                          };
-                          customization.removeWhere(
-                            (key, value) => (value is List && value.isEmpty),
-                          );
+                    final customization = {
+                      'product_category': selectedCakeType!.category.name,
+                      'cake_type': selectedCakeType!.name,
+                      'weight_kg': weight,
+                      'selected_fillings': selectedFillings
+                          .map((f) => f.name)
+                          .toList(),
+                      'selected_extra_fillings': selectedExtraFillings
+                          .map((f) => f.name)
+                          .toList(),
+                      'selected_extras_kg': selectedExtrasKg
+                          .map((ex) => ex.name)
+                          .toList(),
+                      'selected_extras_unit': selectedExtrasUnit
+                          .map(
+                            (sel) => {
+                              'name': sel.extra.name,
+                              'quantity': sel.quantity,
+                            },
+                          )
+                          .toList(),
+                      if (notesController.text.trim().isNotEmpty)
+                        'item_notes': notesController.text.trim(),
+                      if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
+                    };
+                    customization.removeWhere(
+                      (key, value) => (value is List && value.isEmpty),
+                    );
 
-                          final newItem = OrderItem(
-                            id: isEditing ? existingItem.id : null,
-                            name: selectedCakeType!.name,
-                            qty: 1,
-                            basePrice: calculatedBasePrice,
-                            adjustments: manualAdjustments,
-                            customizationNotes: adjustmentNotes.isEmpty
-                                ? null
-                                : adjustmentNotes,
-                            customizationJson: customization,
-                          );
+                    final newItem = OrderItem(
+                      id: isEditing ? existingItem.id : null,
+                      name: selectedCakeType!.name,
+                      qty: 1,
+                      basePrice: calculatedBasePrice,
+                      adjustments: manualAdjustments,
+                      customizationNotes: adjustmentNotes.isEmpty
+                          ? null
+                          : adjustmentNotes,
+                      customizationJson: customization,
+                    );
 
-                          _updateItemsAndRecalculate(() {
-                            if (isEditing) {
-                              _items[itemIndex!] = newItem;
-                            } else {
-                              _items.add(newItem);
-                            }
-                          });
-                          if (dialogContext.mounted) {
-                            Navigator.pop(dialogContext);
-                          }
-                        },
-                  child: isUploading
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        )
-                      : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
+                    _updateItemsAndRecalculate(() {
+                      if (isEditing) {
+                        _items[itemIndex!] = newItem;
+                      } else {
+                        _items.add(newItem);
+                      }
+                    });
+
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
+                  },
+                  child: Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
                 ),
               ],
             );
@@ -1706,8 +1628,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     List<String> existingImageUrls = List<String>.from(
       customData['photo_urls'] ?? [],
     );
-    List<XFile> newImageFiles = [];
-    bool isUploading = false;
+    // 🚨 ELIMINADO: List<XFile> newImageFiles = [];
 
     final finalPriceController = TextEditingController();
 
@@ -1936,24 +1857,29 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         spacing: 8.0,
                         runSpacing: 8.0,
                         children: [
-                          ...existingImageUrls.map(
-                            (url) => _buildImageThumbnail(
-                              url,
-                              true,
-                              () => setDialogState(
-                                () => existingImageUrls.remove(url),
-                              ),
-                            ),
-                          ),
-                          ...newImageFiles.map(
-                            (file) => _buildImageThumbnail(
-                              file,
-                              false,
-                              () => setDialogState(
-                                () => newImageFiles.remove(file),
-                              ),
-                            ),
-                          ),
+                          ...existingImageUrls.map((url) {
+                            final bool isPlaceholder = url.startsWith(
+                              'placeholder_',
+                            );
+                            final dynamic imageSource = isPlaceholder
+                                ? _filesToUpload[url]
+                                : url;
+
+                            if (imageSource == null) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return _buildImageThumbnail(
+                              imageSource,
+                              !isPlaceholder,
+                              () => setDialogState(() {
+                                if (isPlaceholder) {
+                                  _filesToUpload.remove(url);
+                                }
+                                existingImageUrls.remove(url);
+                              }),
+                            );
+                          }).toList(),
                         ],
                       ),
                     ),
@@ -1963,9 +1889,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       onPressed: () async {
                         final pickedFiles = await picker.pickMultiImage();
                         if (pickedFiles.isNotEmpty) {
-                          setDialogState(
-                            () => newImageFiles.addAll(pickedFiles),
-                          );
+                          setDialogState(() {
+                            for (var file in pickedFiles) {
+                              final String placeholderId =
+                                  'placeholder_${DateTime.now().millisecondsSinceEpoch}_${file.name.replaceAll(' ', '_')}';
+                              _filesToUpload[placeholderId] = file;
+                              existingImageUrls.add(placeholderId);
+                            }
+                          });
                         }
                       },
                     ),
@@ -1989,95 +1920,66 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(),
-                  onPressed: isUploading
-                      ? null
-                      : () async {
-                          if (selectedProduct == null) return;
+                  onPressed: () {
+                    if (selectedProduct == null) return;
 
-                          final qty = int.tryParse(qtyController.text) ?? 0;
-                          final adjustmentNotes = notesController.text.trim();
-                          final itemNotes = itemNotesController.text.trim();
+                    final qty = int.tryParse(qtyController.text) ?? 0;
+                    final adjustmentNotes = notesController.text.trim();
+                    final itemNotes = itemNotesController.text.trim();
 
-                          if (qty <= 0 ||
-                              basePrice <= 0 ||
-                              (selectedProduct!.pricesBySize != null &&
-                                  selectedSize == null)) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Verifica la cantidad y/o tamaño.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
+                    if (qty <= 0 ||
+                        basePrice <= 0 ||
+                        (selectedProduct!.pricesBySize != null &&
+                            selectedSize == null)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Verifica la cantidad y/o tamaño.'),
+                        ),
+                      );
+                      return;
+                    }
 
-                          setDialogState(() => isUploading = true);
+                    final allImageUrls = existingImageUrls;
 
-                          final List<String> newUploadedUrls = [];
-                          if (newImageFiles.isNotEmpty) {
-                            for (final imageFile in newImageFiles) {
-                              final url = await _compressAndUpload(
-                                imageFile,
-                                ref,
-                              );
-                              if (url != null) newUploadedUrls.add(url);
-                            }
-                          }
-                          final allImageUrls = [
-                            ...existingImageUrls,
-                            ...newUploadedUrls,
-                          ];
+                    final customization = {
+                      'product_category': selectedProduct!.category.name,
+                      'product_unit': selectedProduct!.unit.name,
+                      if (selectedProduct!.pricesBySize != null)
+                        'selected_size': selectedSize!.name,
+                      if (selectedProduct!.allowHalfDozen)
+                        'is_half_dozen': isHalfDozen,
+                      if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
+                      if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
+                    };
+                    customization.removeWhere(
+                      (key, value) => (value is List && value.isEmpty),
+                    );
 
-                          final customization = {
-                            'product_category': selectedProduct!.category.name,
-                            'product_unit': selectedProduct!.unit.name,
-                            if (selectedProduct!.pricesBySize != null)
-                              'selected_size': selectedSize!.name,
-                            if (selectedProduct!.allowHalfDozen)
-                              'is_half_dozen': isHalfDozen,
-                            if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
-                            if (allImageUrls.isNotEmpty)
-                              'photo_urls': allImageUrls,
-                          };
-                          customization.removeWhere(
-                            (key, value) => (value is List && value.isEmpty),
-                          );
+                    final newItem = OrderItem(
+                      id: isEditing ? existingItem.id : null,
+                      name: selectedProduct!.name,
+                      qty: qty,
+                      basePrice: basePrice,
+                      adjustments: manualAdjustments,
+                      customizationNotes: adjustmentNotes.isEmpty
+                          ? null
+                          : adjustmentNotes,
+                      customizationJson: customization,
+                    );
 
-                          final newItem = OrderItem(
-                            id: isEditing ? existingItem.id : null,
-                            name: selectedProduct!.name,
-                            qty: qty,
-                            basePrice: basePrice,
-                            adjustments: manualAdjustments,
-                            customizationNotes: adjustmentNotes.isEmpty
-                                ? null
-                                : adjustmentNotes,
-                            customizationJson: customization,
-                          );
+                    _updateItemsAndRecalculate(() {
+                      if (isEditing) {
+                        _items[itemIndex!] = newItem;
+                      } else {
+                        _items.add(newItem);
+                      }
+                    });
 
-                          _updateItemsAndRecalculate(() {
-                            if (isEditing) {
-                              _items[itemIndex!] = newItem;
-                            } else {
-                              _items.add(newItem);
-                            }
-                          });
-
-                          if (dialogContext.mounted) {
-                            Navigator.pop(dialogContext);
-                          }
-                        },
-                  child: isUploading
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        )
-                      : Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
+                  },
+                  child: Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
                 ),
               ],
             );
@@ -2093,64 +1995,61 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     bool isNetwork,
     VoidCallback onRemove,
   ) {
+    Widget imageWidget;
+
+    if (isNetwork) {
+      imageWidget = Image.network(
+        imageSource as String,
+        height: 80,
+        width: 80,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 80,
+            width: 80,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => Container(
+          height: 80,
+          width: 80,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: Icon(
+            Icons.broken_image,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    } else {
+      imageWidget = Image.file(
+        File((imageSource as XFile).path),
+        height: 80,
+        width: 80,
+        fit: BoxFit.cover,
+      );
+    }
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: isNetwork
-              ? Image.network(
-                  imageSource as String,
-                  height: 80,
-                  width: 80,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Container(
-                      height: 80,
-                      width: 80,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                              : null,
-                        ),
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    height: 80,
-                    width: 80,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    child: Icon(
-                      Icons.broken_image,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
-                    ),
-                  ),
-                )
-              : Image.file(
-                  File((imageSource as XFile).path),
-                  height: 80,
-                  width: 80,
-                  fit: BoxFit.cover,
-                ),
-        ),
+        ClipRRect(borderRadius: BorderRadius.circular(8), child: imageWidget),
         Positioned(
           top: -14,
           right: -14,
           child: IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.cancel_rounded,
-              color: Colors.redAccent,
+              color: Theme.of(context).colorScheme.error,
               size: 28,
             ),
             onPressed: onRemove,
@@ -2212,7 +2111,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     _recalculateTotals();
 
     if (_depositAmount > _grandTotal + 0.01) {
-      // Añadimos una pequeña tolerancia
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -2222,12 +2120,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           duration: Duration(seconds: 4),
         ),
       );
-      // Detiene el proceso si el depósito es mayor al total
       return;
     }
 
-    // --- 6a. Nueva Validación ---
-    // (Añadir validación de dirección si el costo de envío es > 0)
     if (_deliveryCost > 0 && _selectedAddressId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2260,7 +2155,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           content: Text(
             'El total calculado es cero o negativo. Revisa los precios de los productos.',
             style: TextStyle(
-              // Color de texto sobre el contenedor secundario
               color: Theme.of(context).colorScheme.onSecondaryContainer,
             ),
           ),
@@ -2277,7 +2171,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     String t(TimeOfDay x) =>
         '${x.hour.toString().padLeft(2, '0')}:${x.minute.toString().padLeft(2, '0')}';
 
-    // --- 6b. PAYLOAD ACTUALIZADO CON DIRECCIÓN ---
     final payload = {
       'client_id': _selectedClient!.id,
       'event_date': fmt.format(_date),
@@ -2286,15 +2179,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       'status': isEditMode ? widget.order!.status : 'confirmed',
       'deposit': _depositAmount,
       'delivery_cost': _deliveryCost > 0 ? _deliveryCost : null,
-      'delivery_address_id':
-          _selectedAddressId, // <-- AQUÍ ESTÁ LA NUEVA FUNCIONALIDAD
+      'delivery_address_id': _selectedAddressId,
       'notes': _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
       'client_address_id': _selectedAddressId,
       'items': _items.map((item) => item.toJson()).toList(),
     };
-    // ------------------------------------------
 
     debugPrint('--- Payload a Enviar ---');
     debugPrint(payload.toString());
@@ -2303,12 +2194,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       if (isEditMode) {
         await ref
             .read(ordersRepoProvider)
-            .updateOrder(widget.order!.id, payload);
+            .updateOrderWithFiles(widget.order!.id, payload, _filesToUpload);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pedido actualizado con éxito.'),
-              backgroundColor: Colors.green,
+            SnackBar(
+              content: Text(
+                'Pedido actualizado con éxito.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onTertiaryContainer,
+                ),
+              ),
+              backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
             ),
           );
           ref.invalidate(orderByIdProvider(widget.order!.id));
@@ -2316,12 +2212,19 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           context.pop();
         }
       } else {
-        await ref.read(ordersRepoProvider).createOrder(payload);
+        await ref
+            .read(ordersRepoProvider)
+            .createOrderWithFiles(payload, _filesToUpload);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pedido creado con éxito.'),
-              backgroundColor: Colors.green,
+            SnackBar(
+              content: Text(
+                'Pedido creado con éxito.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onTertiaryContainer,
+                ),
+              ),
+              backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
             ),
           );
           ref.invalidate(ordersWindowProvider);

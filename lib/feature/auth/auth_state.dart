@@ -38,3 +38,9 @@ class AuthController extends Notifier<AuthState> {
 final authStateProvider = NotifierProvider<AuthController, AuthState>(
   AuthController.new,
 );
+
+// provider que expone el token actual desde secure storage
+final authTokenProvider = FutureProvider<String?>((ref) async {
+  final authRepo = ref.read(authRepoProvider);
+  return await authRepo.getToken();
+});
