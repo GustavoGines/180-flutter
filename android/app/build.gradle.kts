@@ -16,6 +16,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -78,6 +79,8 @@ dependencies {
     // Firebase
     implementation("com.google.firebase:firebase-appdistribution-api:16.0.0-beta17")
     add("devImplementation", "com.google.firebase:firebase-appdistribution:16.0.0-beta17")
+
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 /*

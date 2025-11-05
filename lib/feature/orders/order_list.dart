@@ -4,10 +4,6 @@ import 'package:intl/intl.dart';
 import '../../core/models/order.dart';
 import 'orders_repository.dart';
 
-final ordersRepoProvider = Provider<OrdersRepository>(
-  (ref) => OrdersRepository(),
-);
-
 final ordersProvider = FutureProvider.family<List<Order>, int>((
   ref,
   offset,
@@ -35,10 +31,9 @@ class OrderList extends ConsumerWidget {
       data: (orders) => ListView.separated(
         padding: const EdgeInsets.all(12),
         itemCount: orders.length,
-        shrinkWrap: true, // 👈 se ajusta al contenido
-        physics:
-            const NeverScrollableScrollPhysics(), // 👈 no hace scroll propio
-        separatorBuilder: (_, _) => const Divider(height: 1),
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (_, i) {
           final o = orders[i];
           return ListTile(

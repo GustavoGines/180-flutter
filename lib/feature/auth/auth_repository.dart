@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -103,6 +105,34 @@ class AuthRepository {
       // Imprime el error para depuración (ej. token inválido, contraseña corta, etc.)
       debugPrint('Error en resetPassword: $e');
       return false;
+    }
+  }
+
+  /// POST /api/devices/register
+  /// Envía el token FCM del dispositivo al backend para registrarlo.
+  Future<void> registerDevice(String fcmToken) async {
+    // Detectar la plataforma
+    String platform = 'unknown';
+    if (kIsWeb) {
+      platform = 'web';
+    } else if (Platform.isAndroid) {
+      platform = 'android';
+    } else if (Platform.isIOS) {
+      platform = 'ios';
+    }
+
+    try {
+      await _dio.post(
+        '/devices/register',
+        data: {'fcm_token': fcmToken, 'platform': platform},
+      );
+      debugPrint('Token FCM registrado en el backend exitosamente.');
+    } on DioException catch (e) {
+      // Si el token ya existe (422 o 304), no es un error crítico.
+      // Si es un 401 (no logueado), fallará silenciosamente.
+      debugPrint('Error al registrar el token FCM: ${e.response?.data}');
+    } catch (e) {
+      debugPrint('Error inesperado al registrar token FCM: $e');
     }
   }
 }
