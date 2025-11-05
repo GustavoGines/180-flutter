@@ -506,7 +506,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
   // --- Selector de Cliente Completo con SpeedDial ---
   Widget _buildClientSelector(BuildContext context) {
-    // Usamos un Builder para que el SpeedDial tenga el contexto correcto
     return Builder(
       builder: (context) {
         return Column(
@@ -518,8 +517,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 children: [
                   Expanded(
                     child: TypeAheadField<Client>(
-                      // ... (TypeAheadField se mantiene sin cambios)
                       controller: _clientNameController,
+                      debounceDuration: const Duration(milliseconds: 500),
                       suggestionsCallback: (pattern) async {
                         if (pattern.length < 2) return [];
                         if (_selectedClient != null) {
@@ -527,7 +526,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             _selectedClient = null;
                           });
                         }
-                        return ref.read(clientsListProvider(pattern).future);
+                        return ref.watch(clientsListProvider(pattern).future);
                       },
                       itemBuilder: (context, client) => ListTile(
                         leading: const Icon(Icons.person),
@@ -565,32 +564,43 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     ),
                   ),
                   const SizedBox(width: 8),
-
-                  // 👇 REEMPLAZO DEL BOTÓN FIJO POR EL SPEED DIAL
                   SpeedDial(
                     icon: Icons.add,
+
                     activeIcon: Icons.close,
+
                     foregroundColor: Theme.of(context).colorScheme.onPrimary,
+
                     spacing: 5,
+
                     buttonSize: const Size(
                       56,
+
                       56,
                     ), // Mismo tamaño que un FAB estándar
+
                     childrenButtonSize: const Size(56, 56),
+
                     direction: SpeedDialDirection.down,
+
                     curve: Curves.easeInOut,
 
                     children: [
                       // Opción 1: Seleccionar desde Contactos
                       SpeedDialChild(
                         child: const Icon(Icons.contact_phone_outlined),
+
                         label: 'Desde Contactos',
+
                         onTap: _selectClientFromContacts,
                       ),
+
                       // Opción 2: Agregar Nuevo Manualmente
                       SpeedDialChild(
                         child: const Icon(Icons.person_add_alt_1),
+
                         label: 'Nuevo Manualmente',
+
                         onTap: _addClientManuallyDialog,
                       ),
                     ],
@@ -598,34 +608,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 ],
               )
             else
-              // --- VISTA "PILL" (Se mantiene sin cambios) ---
               Card(
                 elevation: 0,
-                // Usa un color contenedor del tema
-                color: Theme.of(
-                  context,
-                ).colorScheme.tertiaryContainer, // <-- SOLUCIÓN
+                color: Theme.of(context).colorScheme.tertiaryContainer,
                 margin: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  // El borde puede usar un color 'outline'
                   side: BorderSide(
                     color: Theme.of(context).colorScheme.outlineVariant,
-                  ), // <-- SOLUCIÓN
+                  ),
                 ),
                 child: ListTile(
                   leading: Icon(
                     Icons.person,
                     color: Theme.of(context).colorScheme.onTertiaryContainer,
-                  ), // <-- SOLUCIÓN
+                  ),
                   title: Text(
                     _selectedClient!.name,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      // Usa el color de texto SOBRE el contenedor
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onTertiaryContainer, // <-- SOLUCIÓN
+                      color: Theme.of(context).colorScheme.onTertiaryContainer,
                     ),
                   ),
                   subtitle: Text(
@@ -634,7 +636,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       color: Theme.of(
                         context,
                       ).colorScheme.onTertiaryContainer.withOpacity(0.8),
-                    ), // <-- SOLUCIÓN
+                    ),
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,

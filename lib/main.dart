@@ -7,17 +7,15 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:pasteleria_180_flutter/core/network/dio_client.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
+// ✅ 1. Importa el nuevo servicio
+import 'package:pasteleria_180_flutter/core/services/firebase_messaging_service.dart';
 
 Future<void> pingApi() async {
   try {
     final dio = DioClient().dio;
-    // Llama al nuevo endpoint /ping
-    final res = await dio.get('/ping'); // <-- CAMBIAR '/' por '/ping'
-    debugPrint(
-      'PING API → HTTP ${res.statusCode} ${res.data}',
-    ); // Muestra la respuesta
+    final res = await dio.get('/ping');
+    debugPrint('PING API → HTTP ${res.statusCode} ${res.data}');
   } catch (e) {
-    // El error ahora podría ser 401 si no estás logueado y pusiste /ping dentro del middleware
     debugPrint('PING API ERROR → $e');
   }
 }
@@ -27,21 +25,32 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeDateFormatting('es_AR', null);
 
-  // Verificar que en release entró el API_BASE
   debugPrint('CONFIG → FLAVOR=$kFlavor  API_BASE=$kApiBase');
 
-  // 👇 Inicializá el cliente y logueá su baseUrl real
   await DioClient().init();
   debugPrint('DIO baseUrl → ${DioClient().dio.options.baseUrl}');
 
-  // Ejecutá el ping SOLO si:
-  // - estás en dev, y
-  // - activaste el flag, o estás en debug
   if (kFlavor == 'dev' && (kEnablePing || kDebugMode)) {
-    // no bloquees el arranque
     // ignore: discarded_futures
     pingApi();
   }
 
-  runApp(const ProviderScope(child: One80App()));
+  // ✅ 2. Crear el Contenedor de Riverpod
+  // Esto nos da acceso a los providers ANTES de que los widgets se dibujen
+  final container = ProviderContainer();
+
+  try {
+    // ✅ 3. Inicializar el servicio de notificaciones
+    // Esperamos a que pida permiso y envíe el token al backend
+    await container.read(firebaseMessagingServiceProvider).init();
+    debugPrint('Firebase Messaging Service inicializado.');
+  } catch (e) {
+    debugPrint('Error al inicializar Firebase Messaging: $e');
+  }
+
+  // ✅ 4. Iniciar la App
+  // Le pasamos el 'container' que ya creamos para que Riverpod no se reinicie
+  runApp(
+    UncontrolledProviderScope(container: container, child: const One80App()),
+  );
 }
