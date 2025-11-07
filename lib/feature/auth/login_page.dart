@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'auth_repository.dart'; // Asegúrate de que esta ruta sea correcta
 import 'auth_state.dart'; // Asegúrate de que esta ruta sea correcta
+import '../../core/services/firebase_messaging_service.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -38,8 +39,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           .read(authRepoProvider)
           .login(email: _email.text.trim(), password: _password.text);
       if (ok) {
+        // 1. OBTENEMOS Y SETEAMOS EL USUARIO (como ya lo tenías)
         final user = await ref.read(authRepoProvider).me();
         ref.read(authStateProvider.notifier).setUser(user);
+
+        // ✅ 2. REGISTRAMOS FCM (AQUÍ ES EL LUGAR CORRECTO)
+        // Ahora que 'authStateProvider' SÍ tiene el usuario,
+        // esta llamada funcionará.
+        try {
+          await ref.read(firebaseMessagingServiceProvider).init();
+          debugPrint('✅ Reinit de FCM tras login exitoso.');
+        } catch (e) {
+          debugPrint('⚠️ Error al reintentar registro FCM tras login: $e');
+        }
+
+        // 3. El router se encargará de navegar solo.
       } else {
         setState(() => _error = 'Credenciales inválidas');
       }

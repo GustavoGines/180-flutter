@@ -4,7 +4,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:pasteleria_180_flutter/core/services/firebase_messaging_service.dart';
 import '../../core/models/user.dart';
 import '../../core/network/dio_client.dart';
 
@@ -34,17 +33,11 @@ class AuthRepository {
       // Re-inicializamos Dio para que use el nuevo token en las siguientes peticiones
       await init();
 
-      // 🔔 Notificar a FCM que el usuario ya puede registrar su token
-      try {
-        final container = ProviderContainer();
-        await container.read(firebaseMessagingServiceProvider).init();
-        debugPrint('✅ Reinit de FCM tras login exitoso.');
-      } catch (e) {
-        debugPrint('⚠️ Error al reintentar registro FCM tras login: $e');
-      }
       return true;
+    } else {
+      debugPrint('❌ Error: Token no recibido en la respuesta de login.');
+      return false;
     }
-    return false;
   }
 
   // Obtiene los datos del usuario actualmente autenticado
