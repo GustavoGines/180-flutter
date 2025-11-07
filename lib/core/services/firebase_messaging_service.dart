@@ -184,4 +184,11 @@ class FirebaseMessagingService {
       }
     });
   }
+
+  /// Limpia el token cacheado y el provider al cerrar sesión.
+  void clearTokenCache() {
+    _lastToken = null;
+    ref.read(fcmTokenProvider.notifier).state = null;
+    debugPrint("🧼 [FCM] Cache de token local limpiado.");
+  }
 }

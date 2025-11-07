@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/user.dart';
 import 'auth_repository.dart';
+import '../../core/services/firebase_messaging_service.dart';
 
 class AuthState {
   final AppUser? user;
@@ -41,7 +42,14 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
+    // 1. Llama al logout de la API (que borra el token de la DB)
     await ref.read(authRepoProvider).logout();
+
+    // ✅ 2. LLAMA AL NUEVO LIMPIADOR
+    // Esto resetea _lastToken a null
+    ref.read(firebaseMessagingServiceProvider).clearTokenCache();
+
+    // 3. Actualiza el estado local (como ya lo tenías)
     state = const AuthState(initialLoading: false);
   }
 }
