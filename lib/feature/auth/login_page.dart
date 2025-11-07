@@ -1,11 +1,8 @@
-import 'dart:io'; // ✅ AÑADIDO: Para chequear Platform.isAndroid/isIOS
-import 'package:flutter/foundation.dart'; // ✅ AÑADIDO: Para kDebugMode
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'auth_repository.dart'; // Asegúrate de que esta ruta sea correcta
 import 'auth_state.dart'; // Asegúrate de que esta ruta sea correcta
-import '../../core/app_distribution.dart'; // ✅ AÑADIDO
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -40,16 +37,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       final ok = await ref
           .read(authRepoProvider)
           .login(email: _email.text.trim(), password: _password.text);
-
       if (ok) {
-        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          try {
-            await checkTesterUpdate();
-          } catch (e) {
-            debugPrint('Error al chequear App Distribution: $e');
-          }
-        }
-
         final user = await ref.read(authRepoProvider).me();
         ref.read(authStateProvider.notifier).setUser(user);
       } else {

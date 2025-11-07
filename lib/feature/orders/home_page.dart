@@ -3,6 +3,7 @@ library orders_home;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'dart:collection';
@@ -67,7 +68,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     _loadVersion();
     _loadLogo();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _autoCheckForUpdateIfEnabled();
+      _promptToEnableTesterModeOnFirstLoad();
     });
 
     _itemPositionsListener.itemPositions.addListener(_onScrollPositionChanged);
@@ -89,6 +90,37 @@ class _HomePageState extends ConsumerState<HomePage> {
     setState(() {
       _logoImageProvider = logo;
     });
+  }
+
+  /// Comprueba si el modo tester debe activarse, pero solo
+  /// la primera vez que se carga el Home.
+  Future<void> _promptToEnableTesterModeOnFirstLoad() async {
+    if (!Platform.isAndroid || (kFlavor != 'dev' && !kDebugMode)) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    const key = 'fad_explainer_shown';
+    final alreadyShown = prefs.getBool(key) ?? false;
+
+    // Si el usuario ya vio este aviso (ya sea que aceptó o
+    // lo vio en el login), no hacemos NADA al iniciar el Home.
+    if (alreadyShown) {
+      debugPrint(
+        'ℹ️ Modo de prueba ya gestionado. No se mostrará el aviso de carga.',
+      );
+      // Aquí sí podemos llamar al chequeo silencioso
+      _autoCheckForUpdateIfEnabled();
+      return;
+    }
+
+    // --- ES LA PRIMERA VEZ ---
+    // Esperamos 2s a que la UI de Home cargue (como pediste)
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    // Llamamos al flujo interactivo COMPLETO.
+    // Esto mostrará el diálogo (porque la pref es false)
+    debugPrint('✨ Mostrando aviso de "Modo de Prueba" por primera vez...');
+    await _checkForUpdate(interactive: true);
   }
 
   @override

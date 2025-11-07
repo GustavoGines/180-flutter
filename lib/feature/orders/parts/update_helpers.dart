@@ -36,7 +36,7 @@ extension _UpdateHelpers on _HomePageState {
     if (!Platform.isAndroid || kFlavor != 'dev') return;
 
     if (interactive) {
-      final proceed = await _maybeShowTesterExplainerOnce();
+      final proceed = await maybeShowTesterExplainerOnce(context);
       if (!proceed) return;
     }
 
@@ -134,54 +134,6 @@ extension _UpdateHelpers on _HomePageState {
         message: 'Reintentá en unos minutos.\nDetalle: $e',
       );
     }
-  }
-
-  Future<bool> _maybeShowTesterExplainerOnce() async {
-    final prefs = await SharedPreferences.getInstance();
-    const key = 'fad_explainer_shown';
-    final alreadyShown = prefs.getBool(key) ?? false;
-
-    // Si ya se mostró (y no se reinstaló la app), no repetir
-    if (alreadyShown && mounted) {
-      debugPrint('ℹ️ Modo de prueba ya activado previamente.');
-      return true;
-    }
-
-    if (!mounted) return false;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Activar modo de prueba'),
-        content: const Text(
-          'Bienvenido/a a la versión de pruebas de 180° App.\n\n'
-          'Para recibir actualizaciones automáticas y avisos de nuevas '
-          'versiones, es necesario habilitar el **modo de prueba** por única vez.\n\n'
-          'Se te pedirá iniciar sesión con tu cuenta de Google y aceptar '
-          'las notificaciones de la app.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Más tarde'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Activar ahora'),
-          ),
-        ],
-      ),
-    );
-
-    if (ok == true) {
-      await prefs.setBool(key, true);
-      debugPrint('✅ Modo de prueba activado y guardado.');
-      return true;
-    }
-
-    debugPrint('🚫 Usuario pospuso la activación del modo de prueba.');
-    return false;
   }
 
   // 👇 MODIFICADO: Ahora devuelve el controlador
