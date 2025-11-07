@@ -4,15 +4,20 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:pasteleria_180_flutter/core/services/firebase_messaging_service.dart';
 import '../../core/models/user.dart';
 import '../../core/network/dio_client.dart';
 
 // Se define el provider aquí para que sea accesible globalmente
-final authRepoProvider = Provider<AuthRepository>((ref) => AuthRepository());
+final authRepoProvider = Provider<AuthRepository>((ref) => AuthRepository(ref));
 
 class AuthRepository {
   final Dio _dio = DioClient().dio;
   final _storage = const FlutterSecureStorage();
+
+  final Ref ref;
+
+  AuthRepository(this.ref);
 
   // Inicializa el cliente Dio (ej. para cargar el token si ya existe)
   Future<void> init() async => DioClient().init();
@@ -49,8 +54,21 @@ class AuthRepository {
   // Cierra la sesión en el backend y borra el token local
   Future<void> logout() async {
     try {
+      // ✅ PASO 1: Intentar des-registrar el dispositivo
+      final fcmToken = ref.read(fcmTokenProvider);
+
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        await _dio.post(
+          '/devices/unregister', // 👈 El nuevo endpoint de Laravel
+          data: {'fcm_token': fcmToken},
+        );
+        debugPrint("📱 Token FCM des-registrado del backend.");
+      } else {
+        debugPrint("📱 No se encontró token FCM local para des-registrar.");
+      }
       // Llama a la ruta /logout de tu API Laravel
       await _dio.post('/logout');
+      debugPrint("🔑 Sesión de Sanctum invalidada en el backend.");
     } catch (e) {
       // Incluso si la API falla, deslogueamos localmente
       debugPrint('API logout call failed, logging out locally anyway: $e');

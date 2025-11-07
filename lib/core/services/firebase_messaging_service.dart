@@ -15,6 +15,9 @@ final notificationTapPayloadProvider = StateProvider<Map<String, dynamic>?>(
   (ref) => null,
 );
 
+/// 📦 Provider global para el token FCM actual del dispositivo
+final fcmTokenProvider = StateProvider<String?>((ref) => null);
+
 /// 🚀 Provider para el servicio principal de Firebase Messaging
 final firebaseMessagingServiceProvider = Provider<FirebaseMessagingService>(
   (ref) => FirebaseMessagingService(ref),
@@ -101,6 +104,9 @@ class FirebaseMessagingService {
 
   /// 🧭 Registra el token solo si cambia
   Future<void> _registerTokenOnce(String token) async {
+    // Guarda el token en el provider para que el resto de la app lo vea.
+    ref.read(fcmTokenProvider.notifier).state = token;
+
     if (_lastToken == token) {
       debugPrint("ℹ️ [FCM] Token no cambió, no se vuelve a registrar.");
       return;
