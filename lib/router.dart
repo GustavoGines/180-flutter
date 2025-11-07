@@ -1,8 +1,10 @@
 // lib/router.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:go_router/go_router.dart';
 
+// Páginas
 import 'feature/auth/loading_page.dart';
 import 'feature/auth/login_page.dart';
 import 'feature/orders/home_page.dart';
@@ -19,165 +21,153 @@ import 'feature/clients/client_detail_page.dart';
 import 'feature/users/presentation/users_list_page.dart';
 import 'feature/users/presentation/edit_user_page.dart';
 import 'feature/orders/services/pdf_preview_page.dart';
+import 'core/services/firebase_messaging_service.dart';
 
-final goRouterNotifierProvider = Provider((ref) => GoRouterNotifier(ref));
+// 🔔 Notificador de GoRouter
+final goRouterNotifierProvider = ChangeNotifierProvider((ref) {
+  return GoRouterNotifier(ref);
+});
 
 class GoRouterNotifier extends ChangeNotifier {
   final Ref _ref;
   GoRouterNotifier(this._ref) {
-    _ref.listen<AuthState>(authStateProvider, (_, _) => notifyListeners());
+    _ref.listen<AuthState>(authStateProvider, (prev, next) {
+      if (prev?.user != next.user ||
+          prev?.initialLoading != next.initialLoading) {
+        notifyListeners();
+      }
+    });
+    _ref.listen<Map<String, dynamic>?>(notificationTapPayloadProvider, (
+      prev,
+      next,
+    ) {
+      if (next != null) notifyListeners();
+    });
   }
 }
 
+// ✅ Router principal
 final routerProvider = Provider<GoRouter>((ref) {
-  final notifier = ref.watch(goRouterNotifierProvider);
+  final notifier = ref.read(goRouterNotifierProvider);
 
   return GoRouter(
     debugLogDiagnostics: true,
     initialLocation: '/loading',
     refreshListenable: notifier,
+
     routes: [
-      GoRoute(
-        path: '/loading',
-        builder: (context, state) => const LoadingPage(),
-      ),
-      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(path: '/loading', builder: (_, __) => const LoadingPage()),
+      GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
       GoRoute(
         path: '/forgot-password',
-        builder: (context, state) => const ForgotPasswordPage(),
+        builder: (_, __) => const ForgotPasswordPage(),
       ),
       GoRoute(
-        path: '/reset-password', // Ruta para el deep link
-        builder: (context, state) {
+        path: '/reset-password',
+        builder: (_, state) {
           final token = state.uri.queryParameters['token'];
           final email = state.uri.queryParameters['email'];
-
           if (token != null && email != null) {
             return ResetPasswordPage(token: token, email: email);
-          } else {
-            return const LoginPage();
           }
+          return const LoginPage();
         },
       ),
-
-      GoRoute(path: '/', builder: (context, state) => const HomePage()),
-
-      // --- GRUPO DE RUTAS DE PEDIDOS (ORDERS) ---
-      GoRoute(
-        path: '/new_order',
-        builder: (context, state) => const NewOrderPage(),
-      ),
+      GoRoute(path: '/', builder: (_, __) => const HomePage()),
+      GoRoute(path: '/new_order', builder: (_, __) => const NewOrderPage()),
       GoRoute(
         path: '/order/:id',
-        builder: (context, state) {
-          final orderId = int.parse(state.pathParameters['id']!);
-          return OrderDetailPage(orderId: orderId);
-        },
+        builder: (_, state) =>
+            OrderDetailPage(orderId: int.parse(state.pathParameters['id']!)),
         routes: [
           GoRoute(
             path: 'edit',
-            builder: (context, state) {
-              final orderId = int.parse(state.pathParameters['id']!);
-              return NewOrderPage(orderId: orderId);
-            },
+            builder: (_, state) =>
+                NewOrderPage(orderId: int.parse(state.pathParameters['id']!)),
           ),
-          // 👇 RUTA FALTANTE PARA LA VISTA PREVIA DE PDF
           GoRoute(
             path: 'pdf/preview',
-            builder: (context, state) {
-              final orderId = int.parse(state.pathParameters['id']!);
-              return PdfPreviewPage(orderId: orderId);
-            },
+            builder: (_, state) =>
+                PdfPreviewPage(orderId: int.parse(state.pathParameters['id']!)),
           ),
         ],
       ),
-
-      // --- NUEVO GRUPO DE RUTAS DE USUARIOS ---
       GoRoute(
         path: '/users',
-        builder: (context, state) => const UsersListPage(),
+        builder: (_, __) => const UsersListPage(),
         routes: [
-          // Ruta para crear: /users/new
-          GoRoute(
-            path: 'new',
-            builder: (context, state) => const CreateUserPage(),
-          ),
-          // Ruta para editar: /users/:id/edit
+          GoRoute(path: 'new', builder: (_, __) => const CreateUserPage()),
           GoRoute(
             path: ':id/edit',
-            builder: (context, state) {
-              final id = int.parse(state.pathParameters['id']!);
-              return EditUserPage(userId: id);
-            },
+            builder: (_, state) =>
+                EditUserPage(userId: int.parse(state.pathParameters['id']!)),
           ),
         ],
       ),
-
-      // --- NUEVO GRUPO DE RUTAS DE CLIENTES ---
       GoRoute(
         path: '/clients',
-        builder: (context, state) => const ClientsPage(), // Muestra la lista
+        builder: (_, __) => const ClientsPage(),
         routes: [
-          // Ruta para crear: /clients/new
-          GoRoute(
-            path: 'new',
-            builder: (context, state) => const ClientFormPage(),
-          ),
-          // Ruta para la papelera: /clients/trashed
+          GoRoute(path: 'new', builder: (_, __) => const ClientFormPage()),
           GoRoute(
             path: 'trashed',
-            builder: (context, state) => const TrashedClientsPage(),
+            builder: (_, __) => const TrashedClientsPage(),
           ),
-
-          // --- RUTA DE DETALLE (LA QUE FALTABA) ---
           GoRoute(
-            path: ':id', // Esto machea /clients/1, /clients/9, etc.
-            builder: (context, state) {
-              final id = int.parse(state.pathParameters['id']!);
-              // Apunta a la PÁGINA DE DETALLE
-              return ClientDetailPage(id: id);
-            },
+            path: ':id',
+            builder: (_, state) =>
+                ClientDetailPage(id: int.parse(state.pathParameters['id']!)),
             routes: [
-              // Sub-ruta para editar: /clients/:id/edit
               GoRoute(
                 path: 'edit',
-                builder: (context, state) {
-                  final id = int.parse(state.pathParameters['id']!);
-                  // Apunta a la PÁGINA DE FORMULARIO
-                  return ClientFormPage(clientId: id);
-                },
+                builder: (_, state) => ClientFormPage(
+                  clientId: int.parse(state.pathParameters['id']!),
+                ),
               ),
             ],
           ),
         ],
       ),
-      GoRoute(
-        path: '/order/:id',
-        builder: (context, state) {
-          final orderId = int.parse(state.pathParameters['id']!);
-          return OrderDetailPage(orderId: orderId);
-        },
-      ),
     ],
+
+    // 🔁 Redirección central
     redirect: (context, state) {
-      final isLoggedIn = ref.read(authStateProvider).isAuthenticated;
-      final location = state.matchedLocation;
+      final auth = ref.read(authStateProvider);
+      final isLoading = auth.initialLoading;
+      final isLoggedIn = auth.isAuthenticated;
+      final payload = ref.read(notificationTapPayloadProvider);
 
-      final isGoingToLogin = location == '/login';
-      final isGoingToLoading = location == '/loading';
-      final isGoingToForgotPassword = location == '/forgot-password';
-      final isGoingToReset = location == '/reset-password';
+      final loc = state.matchedLocation;
+      final atLoading = loc == '/loading';
+      final atLogin = loc == '/login';
+      final atForgot = loc == '/forgot-password';
+      final atReset = loc == '/reset-password';
 
-      if (!isLoggedIn &&
-          !isGoingToLogin &&
-          !isGoingToLoading &&
-          !isGoingToForgotPassword &&
-          !isGoingToReset) {
-        return '/login';
+      // Mientras carga → quedarse en /loading
+      if (isLoading) return atLoading ? null : '/loading';
+
+      // Redirección de notificaciones
+      if (payload != null && isLoggedIn) {
+        ref.read(notificationTapPayloadProvider.notifier).state = null;
+        final type = payload['type'];
+        final orderId = payload['orderId'];
+        if (type == 'order_detail' && orderId != null) {
+          return '/order/${int.tryParse(orderId)}';
+        }
       }
 
-      if (isLoggedIn && (isGoingToLogin || isGoingToLoading)) {
-        return '/';
+      // Usuario no autenticado
+      if (!isLoggedIn && !atLogin && !atForgot && !atReset) {
+        debugPrint('🚪 Usuario no logueado → /login');
+        Future.microtask(() => context.go('/login'));
+        return null;
+      }
+
+      // Usuario autenticado pero en login/loading → home
+      if (isLoggedIn && (atLogin || atLoading)) {
+        debugPrint('🏠 Usuario logueado → /');
+        Future.microtask(() => context.go('/'));
+        return null;
       }
 
       return null;

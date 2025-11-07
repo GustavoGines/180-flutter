@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Importa los temas y el provider
+// Importa el router y los temas
 import 'router.dart';
 import 'core/theme/theme_data.dart';
 import 'core/theme/theme_provider.dart';
 
-// Colores de la marca (opcional, pero bueno tenerlos centralizados)
+// 🎨 Constantes de color y estilo
 const Color primaryPink = Color(0xFFF8B6B6);
 const Color darkBrown = Color(0xFF7A4A4A);
 const Color lightBrownText = Color(0xFFA57D7D);
 
-// 👇 LISTA DE ÍCONOS PARA EL SELECTOR DE TEMA EN EL MENÚ
 const Map<AppThemeMode, IconData> themeModeIcons = {
   AppThemeMode.system: Icons.brightness_auto_outlined,
   AppThemeMode.light: Icons.light_mode_outlined,
@@ -24,11 +23,11 @@ class One80App extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // ✅ Router estable, sin re-crearse en cada cambio
     final router = ref.watch(routerProvider);
-    // 👇 1. Observa el modo seleccionado por el usuario
-    final themeModeOption = ref.watch(themeModeProvider);
 
-    // 2. Traduce la opción de usuario a la propiedad de Flutter
+    // ✅ Modo de tema actual (light/dark/system)
+    final themeModeOption = ref.watch(themeModeProvider);
     final themeMode = switch (themeModeOption) {
       AppThemeMode.system => ThemeMode.system,
       AppThemeMode.light => ThemeMode.light,
@@ -36,14 +35,13 @@ class One80App extends ConsumerWidget {
     };
 
     return MaterialApp.router(
-      title: '180 App',
+      title: '180° Pastelería',
       debugShowCheckedModeBanner: false,
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: themeMode,
 
-      // 👇 3. ASIGNA LOS TRES TEMAS
-      theme: lightTheme, // Usa el tema claro definido
-      darkTheme: darkTheme, // Usa el tema oscuro definido
-      themeMode: themeMode, // Usa el valor del provider (system, light, dark)
-      // --- LOCALIZACIONES (Sin cambios) ---
+      // ✅ Localización
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -52,7 +50,7 @@ class One80App extends ConsumerWidget {
       supportedLocales: const [Locale('es', 'AR')],
       locale: const Locale('es', 'AR'),
 
-      // --- FIN LOCALIZACIONES ---
+      // ✅ Nuevo router con GoRouter estable
       routerConfig: router,
     );
   }

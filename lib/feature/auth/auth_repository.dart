@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:pasteleria_180_flutter/core/services/firebase_messaging_service.dart';
 import '../../core/models/user.dart';
 import '../../core/network/dio_client.dart';
 
@@ -29,8 +30,18 @@ class AuthRepository {
     final token = res.data['token'] as String?;
     if (token != null && token.isNotEmpty) {
       await _storage.write(key: 'auth_token', value: token);
+      debugPrint('🔐 Token guardado correctamente: $token');
       // Re-inicializamos Dio para que use el nuevo token en las siguientes peticiones
       await init();
+
+      // 🔔 Notificar a FCM que el usuario ya puede registrar su token
+      try {
+        final container = ProviderContainer();
+        await container.read(firebaseMessagingServiceProvider).init();
+        debugPrint('✅ Reinit de FCM tras login exitoso.');
+      } catch (e) {
+        debugPrint('⚠️ Error al reintentar registro FCM tras login: $e');
+      }
       return true;
     }
     return false;
@@ -53,12 +64,15 @@ class AuthRepository {
     } finally {
       // Siempre borra el token del almacenamiento seguro
       await _storage.delete(key: 'auth_token');
+      debugPrint("🔑 Token eliminado del almacenamiento seguro.");
     }
   }
 
   // Lee el token desde el almacenamiento seguro
   Future<String?> getToken() async {
-    return await _storage.read(key: 'auth_token');
+    final token = await _storage.read(key: 'auth_token');
+    debugPrint('📦 Token leído de SecureStorage: $token');
+    return token;
   }
 
   /// Solicita un enlace de restablecimiento de contraseña.

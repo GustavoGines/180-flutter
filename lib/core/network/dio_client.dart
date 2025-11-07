@@ -26,11 +26,15 @@ class DioClient {
 
   Future<void> init() async {
     dio.interceptors.clear();
-    // Logger SOLO si lo pedís por flag o si estás en debug
+
+    // 1. Auth interceptor (SIEMPRE PRIMERO)
+    dio.interceptors.add(AuthInterceptor(storage));
+
+    // 2. Logger (SOLO UNO)
     if (kLogHttp || kDebugMode) {
       dio.interceptors.add(
         PrettyDioLogger(
-          requestHeader: false, // evita imprimir Authorization
+          requestHeader: true, // Ponlo en true si quieres ver el header de Auth
           requestBody: true,
           responseHeader: false,
           responseBody: true,
@@ -40,18 +44,15 @@ class DioClient {
       );
     }
 
-    // Auth interceptor
-    dio.interceptors.add(AuthInterceptor(storage));
-
-    // Logger (podés desactivarlo en prod si querés)
+    // 3. Error handler genérico (AL FINAL)
     dio.interceptors.add(
-      PrettyDioLogger(
-        requestHeader: true,
-        requestBody: true,
-        responseHeader: false,
-        responseBody: true,
-        error: true,
-        compact: true,
+      InterceptorsWrapper(
+        onError: (DioException e, handler) {
+          if (e.type == DioExceptionType.connectionError) {
+            debugPrint("🌐 Sin conexión a internet");
+          }
+          handler.next(e);
+        },
       ),
     );
   }

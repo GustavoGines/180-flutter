@@ -40,12 +40,12 @@ extension _UpdateHelpers on _HomePageState {
       if (!proceed) return;
     }
 
+    // 1️⃣ Pedir permiso de notificaciones si el usuario lo fuerza manualmente
     if (interactive) {
       final current = await Permission.notification.status;
       if (current.isDenied || current.isRestricted) {
         final granted = await Permission.notification.request();
         if (!granted.isGranted) {
-          if (!mounted) return;
           await _showResultSheet(
             icon: Icons.notifications_off_outlined,
             title: 'Notificaciones desactivadas',
@@ -56,7 +56,6 @@ extension _UpdateHelpers on _HomePageState {
         }
       }
       if (await Permission.notification.isPermanentlyDenied) {
-        if (!mounted) return;
         await _showResultSheet(
           icon: Icons.notifications_off_outlined,
           title: 'Permiso bloqueado',
@@ -66,73 +65,74 @@ extension _UpdateHelpers on _HomePageState {
       }
     }
 
-    // 👇 MODIFICADO: Ahora usamos el controlador
+    // 2️⃣ Mostrar sheet inicial de progreso
     _ProgressSheetController? sheetController;
     if (interactive) {
       sheetController = _showProgressSheet(message: 'Buscando actualización…');
     }
 
-    // 1. Define un tiempo mínimo de espera y guarda la hora de inicio
-    const minDisplayTime = Duration(milliseconds: 2500); // 2.5 segundos
+    const minDisplayTime = Duration(milliseconds: 2500);
     final startTime = DateTime.now();
 
     try {
-      final hasUpdate = await checkTesterUpdate();
+      // 3️⃣ Llamamos al método que realmente distingue entre “hay update” y “no hay”
+      final hasUpdate = await checkTesterUpdate(interactive: interactive);
 
-      // 2. Calcula cuánto tiempo ha pasado
-      final duration = DateTime.now().difference(startTime);
-      final remainingTime = minDisplayTime - duration;
+      // Espera mínima de UX
+      final elapsed = DateTime.now().difference(startTime);
+      final remaining = minDisplayTime - elapsed;
+      if (remaining > Duration.zero) await Future.delayed(remaining);
 
-      // 3. Si la búsqueda fue muy rápida, espera el tiempo restante
-      if (remainingTime > Duration.zero) {
-        await Future.delayed(remainingTime);
-      }
-
+      // =======================
+      // 🔁 Si hay actualización
+      // =======================
       if (hasUpdate) {
-        // ✅ ¡ÉXITO! HAY UPDATE
-        if (interactive && sheetController != null) {
-          // 1. Actualiza el texto del sheet existente
-          sheetController.update('Descargando actualización...');
-          // El sheet se queda abierto mostrando "Descargando..."
+        if (sheetController != null) {
+          sheetController.update('Nueva versión encontrada…');
         }
 
+        // 🔹 Mostrar feedback antes de descargar
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (sheetController != null) {
+          sheetController.update('Descargando actualización…');
+        }
+
+        // No hacemos nada aquí, porque `updateIfNewReleaseAvailable()`
+        // ya maneja internamente el proceso de descarga y de instalación.
+
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Nueva versión encontrada. Iniciando actualización…'),
+            content: Text(
+              'Actualización iniciada. La app se reiniciará al finalizar.',
+            ),
+            duration: Duration(seconds: 5),
           ),
         );
       } else {
-        // ✅ ÉXITO, PERO NO HAY UPDATE
-        if (interactive && sheetController != null) {
-          // 1. Cierra el sheet de "Buscando..."
-          sheetController.close();
-        }
-        if (!mounted) return;
+        // ============================
+        // 🟢 No hay nueva actualización
+        // ============================
+        if (sheetController != null) sheetController.close();
 
-        // 2. Muestra el sheet "Estás al día" (como pediste)
-        if (interactive) {
-          await _showResultSheet(
-            icon: Icons.check_circle_outline,
-            title: 'Estás al día',
-            message: 'No hay actualizaciones disponibles por ahora.',
-          );
-        }
-      }
-    } catch (e) {
-      // ❌ ERROR
-      if (interactive && sheetController != null) {
-        // 1. Cierra el sheet de "Buscando..."
-        sheetController.close();
-      }
-      if (interactive && mounted) {
-        // 2. Muestra el error
         await _showResultSheet(
-          icon: Icons.error_outline,
-          title: 'No pudimos buscar',
-          message: 'Reintentá en unos minutos.\nDetalle: $e',
+          icon: Icons.check_circle_outline,
+          title: 'Estás al día',
+          message: 'No hay actualizaciones disponibles por ahora.',
         );
       }
+    } catch (e) {
+      // =====================
+      // ❌ ERROR EN PROCESO
+      // =====================
+      if (sheetController != null) sheetController.close();
+
+      await _showResultSheet(
+        icon: Icons.error_outline,
+        title: 'No pudimos buscar',
+        message: 'Reintentá en unos minutos.\nDetalle: $e',
+      );
     }
   }
 
@@ -140,27 +140,35 @@ extension _UpdateHelpers on _HomePageState {
     final prefs = await SharedPreferences.getInstance();
     const key = 'fad_explainer_shown';
     final alreadyShown = prefs.getBool(key) ?? false;
-    if (alreadyShown && mounted) return true;
+
+    // Si ya se mostró (y no se reinstaló la app), no repetir
+    if (alreadyShown && mounted) {
+      debugPrint('ℹ️ Modo de prueba ya activado previamente.');
+      return true;
+    }
 
     if (!mounted) return false;
+
     final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Habilitar alertas de pruebas'),
+        title: const Text('Activar modo de prueba'),
         content: const Text(
-          'Para avisarte cuando haya una nueva versión de la app, necesitamos habilitar '
-          'las alertas de pruebas UNA sola vez. Se te pedirá iniciar sesión con tu cuenta '
-          'de Google y aceptar notificaciones.',
+          'Bienvenido/a a la versión de pruebas de 180° App.\n\n'
+          'Para recibir actualizaciones automáticas y avisos de nuevas '
+          'versiones, es necesario habilitar el **modo de prueba** por única vez.\n\n'
+          'Se te pedirá iniciar sesión con tu cuenta de Google y aceptar '
+          'las notificaciones de la app.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Ahora no'),
+            child: const Text('Más tarde'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Continuar'),
+            child: const Text('Activar ahora'),
           ),
         ],
       ),
@@ -168,8 +176,11 @@ extension _UpdateHelpers on _HomePageState {
 
     if (ok == true) {
       await prefs.setBool(key, true);
+      debugPrint('✅ Modo de prueba activado y guardado.');
       return true;
     }
+
+    debugPrint('🚫 Usuario pospuso la activación del modo de prueba.');
     return false;
   }
 
@@ -384,7 +395,7 @@ extension _UpdateHelpers on _HomePageState {
     }
     try {
       // Intentamos buscar la actualización (sin mostrar UI)
-      await checkTesterUpdate();
+      await checkTesterUpdate(interactive: false);
     } catch (_) {
       // Ignoramos errores en el chequeo automático,
       // no queremos molestar al usuario.

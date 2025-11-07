@@ -1,126 +1,179 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
+import 'package:riverpod/riverpod.dart';
 import 'package:pasteleria_180_flutter/feature/auth/auth_repository.dart';
+import 'package:pasteleria_180_flutter/feature/auth/auth_state.dart';
 
-// 1. Provider para nuestro nuevo servicio
-final firebaseMessagingServiceProvider = Provider<FirebaseMessagingService>((
-  ref,
-) {
-  // El servicio "observa" el repositorio de auth para poder usarlo
-  final authRepo = ref.watch(authRepoProvider);
-  return FirebaseMessagingService(authRepo);
-});
+/// 📦 Provider global para leer el payload cuando el usuario toca una notificación
+final notificationTapPayloadProvider = StateProvider<Map<String, dynamic>?>(
+  (ref) => null,
+);
 
-// Esta función se llama si la app está terminada y se abre por una notificación
+/// 🚀 Provider para el servicio principal de Firebase Messaging
+final firebaseMessagingServiceProvider = Provider<FirebaseMessagingService>(
+  (ref) => FirebaseMessagingService(ref),
+);
+
+/// 🧠 Handler global si llega un mensaje con la app cerrada completamente
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  debugPrint("Handling a background message: ${message.messageId}");
+  debugPrint("📩 [Background] Mensaje recibido: ${message.messageId}");
 }
 
 class FirebaseMessagingService {
-  final AuthRepository _authRepository;
-  FirebaseMessagingService(this._authRepository);
+  final Ref ref;
+  FirebaseMessagingService(this.ref);
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
-
-  // (Opcional) Instancia para notificaciones locales (en primer plano)
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
-  /// Inicializa todo el servicio de notificaciones
+  static String? _lastToken;
+
+  /// Inicializa permisos, listeners y registro del token
   Future<void> init() async {
-    // 1. Pide permiso (iOS y Android 13+)
     await _requestPermission();
 
-    // 2. Obtiene el token y lo registra en nuestro backend (Laravel)
-    await _getTokenAndRegister();
+    // ✅ Registrar solo si el usuario está autenticado
+    final authState = ref.read(authStateProvider);
+    if (authState.user != null) {
+      await _getTokenAndRegister();
+    } else {
+      debugPrint("⚠️ [FCM] Usuario no autenticado → no se registra token.");
+    }
 
-    // 3. Configura el listener de token (si el token cambia, lo re-registra)
-    _fcm.onTokenRefresh.listen(_authRepository.registerDevice);
+    // 🔁 Escuchar cambios de token (por reinstalación o limpieza de caché)
+    _fcm.onTokenRefresh.listen((token) async {
+      final authState = ref.read(authStateProvider);
+      if (authState.user != null) {
+        await _registerTokenOnce(token);
+      } else {
+        debugPrint("⚠️ [FCM] Ignorando refresh: usuario no logueado.");
+      }
+    });
 
-    // 4. Configura el handler para notificaciones en background/terminado
+    // 🔔 Configurar listeners de notificaciones
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // 5. (Opcional) Configura notificaciones en primer plano
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      await _initLocalNotifications();
+      await _setupNotificationTapListeners();
       _listenForForegroundMessages();
     }
+
+    debugPrint("✅ [FCM] Firebase Messaging Service inicializado.");
   }
 
-  /// Pide permiso al usuario
+  /// 🔐 Solicita permisos de notificación
   Future<void> _requestPermission() async {
-    NotificationSettings settings = await _fcm.requestPermission(
+    final settings = await _fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint('Permiso de notificación concedido.');
+      debugPrint('✅ Permiso de notificación concedido.');
     } else {
-      debugPrint('Permiso de notificación denegado.');
+      debugPrint('🚫 Permiso de notificación denegado.');
     }
   }
 
-  /// Obtiene el token y lo envía al AuthRepository
+  /// 📡 Obtiene el token FCM y lo registra si es nuevo
   Future<void> _getTokenAndRegister() async {
     try {
-      final String? fcmToken = await _fcm.getToken();
-      if (fcmToken != null) {
-        debugPrint('Mi FCM Token es: $fcmToken');
-        // ¡Aquí es donde llamamos a tu API de Laravel!
-        await _authRepository.registerDevice(fcmToken);
+      final token = await _fcm.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _registerTokenOnce(token);
       } else {
-        debugPrint('No se pudo obtener el token FCM.');
+        debugPrint('⚠️ [FCM] No se pudo obtener token.');
       }
     } catch (e) {
-      debugPrint('Error al obtener el token FCM: $e');
+      debugPrint('❌ [FCM] Error al obtener token: $e');
     }
   }
 
-  // --- Lógica Opcional para Notificaciones en Primer Plano ---
-
-  Future<void> _initLocalNotifications() async {
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings(
-          '@drawable/notification_icon',
-        ); // Usa tu ícono
-
-    // (Añadir config de iOS si es necesario)
-    const InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
-
-    await _localNotifications.initialize(initializationSettings);
+  /// 🧭 Registra el token solo si cambia
+  Future<void> _registerTokenOnce(String token) async {
+    if (_lastToken == token) {
+      debugPrint("ℹ️ [FCM] Token no cambió, no se vuelve a registrar.");
+      return;
+    }
+    _lastToken = token;
+    debugPrint('📲 [FCM] Token nuevo: $token');
+    try {
+      await ref.read(authRepoProvider).registerDevice(token);
+      debugPrint('✅ [FCM] Token registrado correctamente en backend.');
+    } catch (e) {
+      debugPrint('❌ [FCM] Error al registrar token: $e');
+    }
   }
 
+  /// 💬 Listener para taps de notificaciones
+  Future<void> _setupNotificationTapListeners() async {
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('🟢 [FCM] TAP (Background): ${message.data}');
+      _handleTap(message.data);
+    });
+
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null) {
+        debugPrint('🟣 [FCM] TAP (Terminated): ${message.data}');
+        _handleTap(message.data);
+      }
+    });
+
+    const androidSettings = AndroidInitializationSettings(
+      '@drawable/notification_icon',
+    );
+    const initSettings = InitializationSettings(android: androidSettings);
+
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        if (response.payload != null && response.payload!.isNotEmpty) {
+          debugPrint('🟡 [FCM] TAP (Foreground): ${response.payload}');
+          _handleTap(jsonDecode(response.payload!) as Map<String, dynamic>);
+        }
+      },
+    );
+  }
+
+  /// 📤 Publica el payload del tap en Riverpod
+  void _handleTap(Map<String, dynamic> data) {
+    ref.read(notificationTapPayloadProvider.notifier).state = data;
+  }
+
+  /// 🔔 Listener para notificaciones en primer plano
   void _listenForForegroundMessages() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('¡Notificación recibida en primer plano!');
-      RemoteNotification? notification = message.notification;
-      AndroidNotification? android = message.notification?.android;
+      debugPrint('💌 [FCM] Notificación recibida en primer plano');
+      final notification = message.notification;
+      final android = message.notification?.android;
 
       if (notification != null && (android != null || kIsWeb)) {
-        // Muestra la notificación local
         _localNotifications.show(
           notification.hashCode,
           notification.title,
           notification.body,
           NotificationDetails(
             android: AndroidNotificationDetails(
-              'high_importance_channel', // ID del Canal
-              'Notificaciones de Pedidos', // Nombre del Canal
-              channelDescription: 'Recordatorios de pedidos y actualizaciones.',
+              'high_importance_channel',
+              'Notificaciones de Pedidos',
+              channelDescription:
+                  'Recordatorios de pedidos y actualizaciones de 180° Pastelería.',
               importance: Importance.max,
               priority: Priority.high,
-              icon: '@mipmap/ic_launcher', // Tu ícono
+              icon: '@drawable/notification_icon',
             ),
           ),
+          payload: jsonEncode(message.data),
         );
       }
     });
