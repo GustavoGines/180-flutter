@@ -290,30 +290,49 @@ class _FlatListBuilder {
           // 'muted' ahora usa la variable local
           final bool muted = !weekHasOrdersInThisMonth;
 
+          // 1. Guardamos el índice ANTES de añadir el separador de semana
+          final int weekSeparatorIndex = flatList.length;
+
           flatList.add(
             _ListItem(_ItemType.weekSeparator, {
               'ws': ws,
               'we': we,
-              'total': weekTotalForThisMonth, // <-- Usa el total corregido
+              'total': weekTotalForThisMonth,
               'muted': muted,
               'current_month': month,
             }),
           );
 
-          // Si no hay pedidos en la semana, no intentes dibujar los días
-          if (muted) continue;
+          // 2. ELIMINAMOS el 'if (muted) continue;' de aquí.
+          //    El loop de días ahora se ejecuta SIEMPRE.
 
-          // Este código solo se ejecuta si la semana tiene pedidos
+          // 3. Iteramos los 7 días de la semana
           for (int i = 0; i < 7; i++) {
             final day = ws.add(Duration(days: i));
-            if (day.month != month.month) continue; // Filtra días del otro mes
+
+            // Filtramos días de otro mes
+            if (day.month != month.month) continue;
+
             final list = byDay[day];
-            if (list == null || list.isEmpty) continue;
 
-            flatList.add(_ListItem(_ItemType.dayHeader, list));
+            if (list == null || list.isEmpty) {
+              // 4. DÍA VACÍO: Apuntamos al índice del separador de semana
+              dayIndexMap[day] = weekSeparatorIndex;
+            } else {
+              // 5. DÍA CON PEDIDOS:
+              // Guardamos el índice de su futuro DayHeader
+              final int dayHeaderIndex = flatList.length;
+              dayIndexMap[day] = dayHeaderIndex;
 
-            for (final order in list) {
-              flatList.add(_ListItem(_ItemType.orderCard, order));
+              // 6. PERO, solo añadimos los items (headers y cards)
+              //    si la semana NO está "muted" (colapsada).
+              if (!muted) {
+                flatList.add(_ListItem(_ItemType.dayHeader, list));
+
+                for (final order in list) {
+                  flatList.add(_ListItem(_ItemType.orderCard, order));
+                }
+              }
             }
           }
         }

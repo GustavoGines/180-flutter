@@ -44,7 +44,11 @@ class OrdersWindowNotifier extends rp.AsyncNotifier<List<Order>> {
       centerMonth.month - _kBackMonths,
       1,
     );
-    final to = DateTime(centerMonth.year, centerMonth.month + _kFwdMonths, 1);
+    final to = DateTime(
+      centerMonth.year,
+      centerMonth.month + _kFwdMonths + 1, // 👈 Sumamos 1 mes más
+      1,
+    ).subtract(const Duration(days: 1)); // 👈 Y restamos 1 día
 
     final orders = await repository.getOrders(from: from, to: to);
 
@@ -123,6 +127,73 @@ class OrdersWindowNotifier extends rp.AsyncNotifier<List<Order>> {
       // 3. Si la API falla, lanzamos un error
       state = AsyncError(e, s);
     }
+  }
+
+  Future<void> addOrder(Order newOrder) async {
+    final previousState = await future;
+    final newList = [...previousState, newOrder];
+
+    // Lógica de sort (copiada de tu 'build')
+    const statusOrder = {
+      'confirmed': 1,
+      'ready': 2,
+      'delivered': 3,
+      'canceled': 4,
+    };
+    newList.sort((a, b) {
+      final dayCmp =
+          DateTime(
+            a.eventDate.year,
+            a.eventDate.month,
+            a.eventDate.day,
+          ).compareTo(
+            DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
+          );
+      if (dayCmp != 0) return dayCmp;
+      final timeCmp = a.startTime.compareTo(b.startTime);
+      if (timeCmp != 0) return timeCmp;
+      final pa = statusOrder[a.status] ?? 99;
+      final pb = statusOrder[b.status] ?? 99;
+      return pa.compareTo(pb);
+    });
+
+    state = AsyncData(newList);
+  }
+
+  // 👇 AÑADIR ESTE MÉTODO
+  Future<void> updateOrder(Order updatedOrder) async {
+    final previousState = await future;
+
+    // Reemplaza el item viejo por el nuevo
+    final newList = previousState.map((order) {
+      return order.id == updatedOrder.id ? updatedOrder : order;
+    }).toList();
+
+    // Lógica de sort (copiada de tu 'build')
+    const statusOrder = {
+      'confirmed': 1,
+      'ready': 2,
+      'delivered': 3,
+      'canceled': 4,
+    };
+    newList.sort((a, b) {
+      final dayCmp =
+          DateTime(
+            a.eventDate.year,
+            a.eventDate.month,
+            a.eventDate.day,
+          ).compareTo(
+            DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
+          );
+      if (dayCmp != 0) return dayCmp;
+      final timeCmp = a.startTime.compareTo(b.startTime);
+      if (timeCmp != 0) return timeCmp;
+      final pa = statusOrder[a.status] ?? 99;
+      final pb = statusOrder[b.status] ?? 99;
+      return pa.compareTo(pb);
+    });
+
+    state = AsyncData(newList);
   }
 }
 

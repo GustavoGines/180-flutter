@@ -2194,9 +2194,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     try {
       if (isEditMode) {
-        await ref
+        // 1. Llama a la API y captura la orden actualizada
+        final Order updatedOrder = await ref
             .read(ordersRepoProvider)
             .updateOrderWithFiles(widget.order!.id, payload, _filesToUpload);
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -2209,14 +2211,22 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
             ),
           );
+
+          // 2. 🔥 ACTUALIZA LA LISTA LOCAL (en vez de invalidate)
+          await ref
+              .read(ordersWindowProvider.notifier)
+              .updateOrder(updatedOrder);
+
+          // 3. Invalida solo el detalle (para la pág de detalle)
           ref.invalidate(orderByIdProvider(widget.order!.id));
-          ref.invalidate(ordersWindowProvider);
           context.pop();
         }
       } else {
-        await ref
+        // 1. Llama a la API y captura la orden creada
+        final Order createdOrder = await ref
             .read(ordersRepoProvider)
             .createOrderWithFiles(payload, _filesToUpload);
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -2229,7 +2239,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
             ),
           );
-          ref.invalidate(ordersWindowProvider);
+
+          // 2. 🔥 AÑADE A LA LISTA LOCAL (en vez de invalidate)
+          await ref.read(ordersWindowProvider.notifier).addOrder(createdOrder);
+
           context.pop();
         }
       }

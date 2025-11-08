@@ -1162,21 +1162,25 @@ class OrderDetailPage extends ConsumerWidget {
 
     if (confirm) {
       try {
-        await ref.read(ordersRepoProvider).markAsPaid(order.id);
+        // 1. Capturamos la orden actualizada (CORREGIDO A Order?)
+        final Order? updatedOrder = await ref
+            .read(ordersRepoProvider)
+            .markAsPaid(order.id);
 
-        // Invalidamos los providers para refrescar la UI
+        // 2. 🔥 CHEQUEAMOS SI NO ES NULLA ANTES DE ACTUALIZAR
+        if (updatedOrder != null) {
+          await ref
+              .read(ordersWindowProvider.notifier)
+              .updateOrder(updatedOrder);
+        }
+
+        // 3. Invalida solo la página actual (esto refrescará desde la API de todos modos)
         ref.invalidate(orderByIdProvider(order.id));
-        ref.invalidate(ordersWindowProvider);
 
         if (!context.mounted) return;
-        // --- ADAPTADO AL TEMA ---
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pedido marcado como pagado.'),
-            // Deja que el tema decida el color de éxito
-          ),
+          const SnackBar(content: Text('Pedido marcado como pagado.')),
         );
-        // --- FIN ---
       } catch (e) {
         if (!context.mounted) return;
         // --- 👇 CORRECCIÓN SNACKBAR ( foregroundColor -> style ) 👇 ---
@@ -1189,7 +1193,6 @@ class OrderDetailPage extends ConsumerWidget {
             backgroundColor: cs.error,
           ),
         );
-        // --- 👆 FIN CORRECCIÓN 👆 ---
       }
     }
   }
@@ -1206,20 +1209,28 @@ class OrderDetailPage extends ConsumerWidget {
     // --- FIN ---
 
     try {
-      await ref.read(ordersRepoProvider).updateStatus(order.id, newStatus);
-      ref.invalidate(orderByIdProvider(order.id)); // Refresca esta página
-      ref.invalidate(ordersWindowProvider); // Refresca la home
+      // 1. Capturamos la orden actualizada
+      // (Tu repo devuelve Order? pero updateOrderStatus en el Notifier también lo hace)
+      // (Asumimos que updateStatus no devuelve null si tiene éxito)
+      final Order? updatedOrder = await ref
+          .read(ordersRepoProvider)
+          .updateStatus(order.id, newStatus);
+
+      if (updatedOrder != null) {
+        // 2. 🔥 ACTUALIZA LA LISTA LOCAL (en vez de invalidate)
+        await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
+      }
+
+      // 3. Invalida solo la página actual
+      ref.invalidate(orderByIdProvider(order.id));
 
       if (context.mounted) {
-        // --- ADAPTADO AL TEMA ---
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Estado actualizado.'),
             duration: Duration(seconds: 2),
-            // Deja que el tema decida el color
           ),
         );
-        // --- FIN ---
       }
     } catch (e) {
       if (context.mounted) {

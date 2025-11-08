@@ -65,7 +65,7 @@ class OrdersRepository {
 
     final res = await _dio.get(
       '/orders',
-      queryParameters: {'from': fromStr, 'to': toStr},
+      queryParameters: {'from': fromStr, 'to': toStr, 'per_page': 5000},
     );
 
     final data = res.data;
