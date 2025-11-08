@@ -751,13 +751,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           children: [
             ListTile(
               leading: Icon(
-                Icons.cake,
-                color: Theme.of(context).colorScheme.secondary,
+                Icons.card_giftcard, // ⬅️ CAMBIO: Ícono para Box
+                color: Theme.of(
+                  context,
+                ).colorScheme.tertiary, // ⬅️ CAMBIO: Color
               ),
-              title: const Text('Mini Torta / Accesorio'),
+              title: const Text('Box Dulce'), // ⬅️ CAMBIO: Nuevo texto
               onTap: () {
                 Navigator.of(context).pop();
-                _addMiniCakeDialog();
+                _addBoxDialog(); // ⬅️ CAMBIO: Llamada a _addBoxDialog
               },
             ),
             ListTile(
@@ -765,7 +767,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 Icons.cake_outlined,
                 color: Theme.of(context).colorScheme.primary,
               ),
-              title: const Text('Torta por Kilo'),
+              title: const Text('Tortas y Mini Tortas'),
               onTap: () {
                 Navigator.of(context).pop();
                 _addCakeDialog();
@@ -776,7 +778,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 Icons.icecream,
                 color: Theme.of(context).colorScheme.tertiary,
               ),
-              title: const Text('Producto de Mesa Dulce'),
+              title: const Text('Mesa Dulce'),
               onTap: () {
                 Navigator.of(context).pop();
                 _addMesaDulceDialog();
@@ -794,15 +796,16 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  void _addMiniCakeDialog({OrderItem? existingItem, int? itemIndex}) {
+  void _addBoxDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
     Map<String, dynamic> customData = isEditing
         ? (existingItem.customizationJson ?? {})
         : {};
 
+    // ⬅️ CAMBIO: Usar boxProducts
     Product? selectedProduct = isEditing
-        ? miniCakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
-        : miniCakeProducts.first;
+        ? boxProducts.firstWhereOrNull((p) => p.name == existingItem.name)
+        : boxProducts.first;
 
     double basePrice = isEditing
         ? existingItem.basePrice
@@ -850,19 +853,23 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text(isEditing ? 'Editar Item' : 'Añadir Item'),
+              title: Text(
+                isEditing ? 'Editar Item Box' : 'Añadir Item Box',
+              ), // ⬅️ CAMBIO: Título Box
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<Product>(
-                      initialValue:
+                      value:
                           selectedProduct, // Usar 'value' en lugar de 'initialValue'
-                      items: miniCakeProducts.map((Product product) {
+                      items: boxProducts.map((Product product) {
+                        // ⬅️ CAMBIO: boxProducts
                         return DropdownMenuItem<Product>(
                           value: product,
                           child: Text(
+                            // ⬅️ CAMBIO: Mostrar precio base en el selector
                             '${product.name} (\$${product.price.toStringAsFixed(0)})',
                           ),
                         );
@@ -889,7 +896,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       decoration: InputDecoration(
                         labelText: 'Ajuste Manual al Precio Unitario (\$)',
                         hintText: 'Ej: 500 (extra), -200 (descuento)',
-                        prefixText: '${basePrice.toStringAsFixed(0)} + ',
+                        prefixText:
+                            '\$${basePrice.toStringAsFixed(0)} + ', // ⬅️ CAMBIO: Muestra el precio base
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
                         signed: true,
@@ -931,7 +939,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         spacing: 8.0,
                         runSpacing: 8.0,
                         children: [
-                          // ✅ CAMBIO: Este 'map' ahora maneja URLs y Placeholders
                           ...existingImageUrls.map((url) {
                             final bool isPlaceholder = url.startsWith(
                               'placeholder_',
@@ -940,52 +947,38 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 ? _filesToUpload[url]
                                 : url;
 
+                            if (imageSource == null) {
+                              return const SizedBox.shrink();
+                            }
+
                             return _buildImageThumbnail(
                               imageSource,
-                              !isPlaceholder, // 'isNetwork' es true si NO es placeholder
+                              !isPlaceholder,
                               () => setDialogState(() {
-                                // Si es placeholder, borrarlo también del Map
-                                if (isPlaceholder) {
-                                  _filesToUpload.remove(url);
-                                }
+                                if (isPlaceholder) _filesToUpload.remove(url);
                                 existingImageUrls.remove(url);
                               }),
                             );
                           }).toList(),
-                          // 🚨 ELIMINADO: El loop '...newImageFiles.map(...)'
                         ],
                       ),
                     ),
                     TextButton.icon(
                       icon: const Icon(Icons.photo_library),
                       label: const Text('Añadir Fotos'),
-                      // ✅ CAMBIO: onPressed ahora crea placeholders
                       onPressed: () async {
                         final pickedFiles = await picker.pickMultiImage();
                         if (pickedFiles.isNotEmpty) {
                           setDialogState(() {
                             for (var file in pickedFiles) {
-                              // 1. Crear ID único
                               final String placeholderId =
                                   'placeholder_${DateTime.now().millisecondsSinceEpoch}_${file.name.replaceAll(' ', '_')}';
-                              // 2. Guardar archivo en el Map del formulario
                               _filesToUpload[placeholderId] = file;
-                              // 3. Guardar placeholder en la lista local del diálogo
                               existingImageUrls.add(placeholderId);
                             }
                           });
                         }
                       },
-                    ),
-                    const Divider(),
-                    TextFormField(
-                      controller: finalPriceController,
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Precio Final Item (Cant * (Base + Ajuste))',
-                        prefixText: '\$',
-                      ),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -997,12 +990,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 ),
                 FilledButton(
                   style: FilledButton.styleFrom(),
-                  // ✅ CAMBIO: onPressed simplificado. No más 'isUploading' o 'async'.
                   onPressed: () {
                     if (selectedProduct == null) return;
-                    final qty = int.tryParse(qtyController.text) ?? 0;
 
-                    if (qty <= 0) {
+                    final qty = int.tryParse(qtyController.text) ?? 0;
+                    final adjustmentNotes = adjustmentNotesController.text
+                        .trim();
+
+                    if (qty <= 0 || basePrice <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('La cantidad debe ser mayor a 0.'),
@@ -1011,19 +1006,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       return;
                     }
 
-                    // 'existingImageUrls' ya tiene todas las URLs y placeholders
                     final allImageUrls = existingImageUrls;
-
-                    final itemNotes = itemNotesController.text.trim();
-                    final adjustmentNotes = adjustmentNotesController.text
-                        .trim();
 
                     final customization = {
                       'product_category': selectedProduct!.category.name,
-                      'product_name': selectedProduct!.name,
-                      if (adjustmentNotes.isNotEmpty)
-                        'customization_notes': adjustmentNotes,
-                      if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
+                      'box_type': selectedProduct!.name,
+                      if (itemNotesController.text.trim().isNotEmpty)
+                        'item_notes': itemNotesController.text.trim(),
                       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
                     };
                     customization.removeWhere(
@@ -1079,6 +1068,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
     final adjustmentsController = TextEditingController(
       text: isEditing ? existingItem.adjustments.toStringAsFixed(0) : '0',
+    );
+    final multiplierAdjustmentController = TextEditingController(
+      text:
+          customData['multiplier_adjustment_per_kg']?.toStringAsFixed(0) ?? '0',
     );
     final notesController = TextEditingController(
       text: customData['item_notes'] as String? ?? '',
@@ -1146,6 +1139,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     double calculatedBasePrice = 0.0;
     double manualAdjustments = 0.0;
+    double multiplierAdjustment = 0.0;
 
     void calculateCakePrice() {
       if (selectedCakeType == null) {
@@ -1156,6 +1150,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       double weight =
           double.tryParse(weightController.text.replaceAll(',', '.')) ?? 0.0;
       manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
+      multiplierAdjustment =
+          double.tryParse(multiplierAdjustmentController.text) ?? 0.0;
 
       if (weight <= 0) {
         calculatedBasePriceController.text = 'N/A';
@@ -1163,7 +1159,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         return;
       }
 
-      double base = selectedCakeType!.price * weight;
+      double base = (selectedCakeType!.price + multiplierAdjustment) * weight;
       double extraFillingsPrice = selectedExtraFillings.fold(
         0.0,
         (sum, f) => sum + (f.extraCostPerKg * weight),
@@ -1321,6 +1317,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         return DropdownMenuItem<Product>(
                           value: product,
                           child: Text(
+                            // ⬅️ CAMBIO: Mostrar precio base en el selector
                             '${product.name} (\$${product.price.toStringAsFixed(0)}/kg)',
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1351,6 +1348,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         FilteringTextInputFormatter.allow(
                           RegExp(r'^\d*[\.,]?\d{0,2}'),
                         ),
+                      ],
+                      onChanged: (_) => setDialogState(calculateCakePrice),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: multiplierAdjustmentController,
+                      decoration: InputDecoration(
+                        labelText:
+                            'Ajuste Multiplicador al Precio Base/kg (\$)',
+                        hintText: 'Ej: 1000 (+\$1000/kg extra)',
+                        // Se usa el precio base de la torta seleccionada, no la calculada
+                        prefixText:
+                            '\$${selectedCakeType?.price.toStringAsFixed(0) ?? '0'} + ',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        signed: true,
+                        decimal: false,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
                       ],
                       onChanged: (_) => setDialogState(calculateCakePrice),
                     ),
@@ -1447,14 +1464,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       },
                     ),
                     const Divider(),
-                    TextFormField(
-                      controller: calculatedBasePriceController,
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Precio Base Calculado',
-                        prefixText: '\$',
-                      ),
-                    ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: adjustmentsController,
@@ -2080,8 +2089,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         category = ProductCategory.torta;
       } else if (mesaDulceProducts.any((p) => p.name == item.name)) {
         category = ProductCategory.mesaDulce;
-      } else if (miniCakeProducts.any((p) => p.name == item.name)) {
-        category = ProductCategory.miniTorta;
+      } else if (boxProducts.any((p) => p.name == item.name)) {
+        category = ProductCategory.box;
       }
     }
 
@@ -2089,8 +2098,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       _addCakeDialog(existingItem: item, itemIndex: index);
     } else if (category == ProductCategory.mesaDulce) {
       _addMesaDulceDialog(existingItem: item, itemIndex: index);
-    } else if (category == ProductCategory.miniTorta) {
-      _addMiniCakeDialog(existingItem: item, itemIndex: index);
+    } else if (category == ProductCategory.box) {
+      _addBoxDialog(existingItem: item, itemIndex: index);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2407,6 +2416,16 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                       if (category == ProductCategory.torta) {
                         details += '${custom['weight_kg']}kg';
+
+                        // ⬅️ NUEVO: Muestra el ajuste multiplicador por kg
+                        final multiplierAdj =
+                            custom['multiplier_adjustment_per_kg'] as double? ??
+                            0.0;
+                        if (multiplierAdj != 0.0) {
+                          details +=
+                              ' | Ajuste/kg: ${_currencyFormat.format(multiplierAdj)}';
+                        }
+
                         if (custom['selected_fillings'] != null &&
                             (custom['selected_fillings'] as List).isNotEmpty) {
                           details +=
@@ -2420,6 +2439,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         } else if (custom['is_half_dozen'] == true) {
                           details += ' (Media Docena)';
                         }
+                      } else if (category == ProductCategory.box) {
+                        // ⬅️ NUEVO: Mostrar el detalle del Box
+                        details = 'Categoría: Box';
                       }
                       if (item.customizationNotes != null) {
                         details += ' | Notas: ${item.customizationNotes}';

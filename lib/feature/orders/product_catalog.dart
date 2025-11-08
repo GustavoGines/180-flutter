@@ -2,7 +2,7 @@
 // Basado en la lista de precios de 10/2025.
 
 // Categorías principales
-enum ProductCategory { torta, mesaDulce, miniTorta } // Añadido MiniTorta
+enum ProductCategory { torta, mesaDulce, box } // Añadido Box
 
 // Unidades comunes
 enum ProductUnit { kg, dozen, halfDozen, unit, size12cm, size18cm, size24cm }
@@ -109,7 +109,16 @@ const List<CakeExtra> cakeExtras = [
   CakeExtra(name: 'Turrón Arcor', isPerUnit: true, costPerUnit: 500.0),
   CakeExtra(name: 'Obleas Opera', isPerUnit: true, costPerUnit: 1000.0),
   // Añadir aquí extras como "Lámina Comestible" o "Papel Fotográfico" si tienen costo base
-  // CakeExtra(name: 'Lámina Comestible (aprox)', costPerUnit: 1500.0, isPerUnit: true), // Ejemplo
+  CakeExtra(
+    name: 'Lámina Comestible (aprox)',
+    costPerUnit: 2500.0,
+    isPerUnit: true,
+  ), // Ejemplo
+  CakeExtra(
+    name: 'Papel Fotográfico (aprox)',
+    costPerUnit: 1500.0,
+    isPerUnit: true,
+  ), // Ejemplo
 ];
 
 // --- DEFINICIÓN GENERAL DE PRODUCTO ---
@@ -124,6 +133,8 @@ class Product {
   // Para productos que se venden por docena pero también media docena
   final bool allowHalfDozen;
   final double? halfDozenPrice; // Precio si allowHalfDozen es true
+  // ⬅️ NUEVO: Ajuste multiplicador por kg para tortas (ej: para forzar precio por encima de base)
+  final double multiplierAdjustmentPerKg;
 
   const Product({
     required this.name,
@@ -133,29 +144,67 @@ class Product {
     this.pricesBySize,
     this.allowHalfDozen = false,
     this.halfDozenPrice,
+    this.multiplierAdjustmentPerKg = 0.0,
   });
 }
 
 // --- PRODUCTOS ESPECÍFICOS ---
 
-// Mini Tortas y Accesorios
-const List<Product> miniCakeProducts = [
+// Boxs
+const List<Product> boxProducts = [
+  // Box Dulce con Tartas Frutales (Imagen 1)
   Product(
-    name: 'Mini Torta Personalizada',
-    category: ProductCategory.miniTorta,
+    name: 'BOX DULCE: Tartas Frutales (Solo Duraznos)',
+    category: ProductCategory.box,
     unit: ProductUnit.unit,
-    price: 8500.0,
+    price: 13350.0,
   ),
   Product(
-    name: 'Cajita con Tarjeta (para Mini Torta)',
-    category: ProductCategory.miniTorta,
+    name: 'BOX DULCE: Tartas Frutales (Frutillas y Duraznos)',
+    category: ProductCategory.box,
     unit: ProductUnit.unit,
-    price: 2000.0,
+    price: 16350.0,
+  ),
+  // Box Romántico (Imagen 3)
+  Product(
+    name: 'BOX DULCE: Romántico (Torta Corazones/Te Amo)',
+    category: ProductCategory.box,
+    unit: ProductUnit.unit,
+    price: 18700.0,
+  ),
+  // Box Temático/Drip Cake Azul (Imagen 4)
+  Product(
+    name: 'BOX DULCE: Drip Cake Temático (Azules/Waffles)',
+    category: ProductCategory.box,
+    unit: ProductUnit.unit,
+    price: 19000.0,
+  ),
+  // Box Drip Cake Oreo (Imagen 2) y Cumpleañero (Imagen 5)
+  // Ambos comparten el mismo precio base de $21800, se listan separados por su contenido.
+  Product(
+    name: 'BOX DULCE: Drip Cake (Oreo/Rosado) + Jugo',
+    category: ProductCategory.box,
+    unit: ProductUnit.unit,
+    price: 21800.0,
+  ),
+  Product(
+    name: 'BOX DULCE: Cumpleañero (Torta/Taza)',
+    category: ProductCategory.box,
+    unit: ProductUnit.unit,
+    price: 21800.0,
   ),
 ];
 
 // Tortas (Precio por KG base)
 const List<Product> cakeProducts = [
+  // ⬅️ CAMBIO: La mini torta ahora es un tipo de torta con precio base
+  Product(
+    name: 'Mini Torta Personalizada (Base)',
+    category: ProductCategory.torta,
+    unit: ProductUnit.kg,
+    price: 8500.0, // ⬅️ Precio Base de 8500
+    multiplierAdjustmentPerKg: 0.0, // No aplica
+  ),
   Product(
     name: 'Torta Decorada con Crema Chantilly',
     category: ProductCategory.torta,
@@ -373,7 +422,7 @@ double? getPriceBySize(Product product, ProductUnit size) {
 
 // Lista combinada para facilitar la búsqueda inicial o selección general si fuera necesario
 final List<Product> allProducts = [
-  ...miniCakeProducts,
+  ...boxProducts,
   ...cakeProducts,
   ...mesaDulceProducts,
 ];

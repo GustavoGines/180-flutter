@@ -922,7 +922,7 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
         break;
-      case ProductCategory.miniTorta:
+      case ProductCategory.box:
         break;
       default:
         break;
