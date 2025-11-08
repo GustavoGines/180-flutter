@@ -10,6 +10,7 @@ import 'dart:collection';
 import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 // Importamos tu AppThemeMode y themeModeProvider
 import 'package:pasteleria_180_flutter/core/theme/theme_provider.dart';
 import 'package:riverpod/riverpod.dart' as rp;
@@ -371,8 +372,8 @@ class _HomePageState extends ConsumerState<HomePage> {
             children: [
               Consumer(
                 builder: (context, ref, child) {
-                  final totalIncome = ref.watch(monthlyIncomeProvider);
-                  final totalOrders = ref.watch(monthlyOrdersCountProvider);
+                  // final totalIncome = ref.watch(monthlyIncomeProvider);
+                  // final totalOrders = ref.watch(monthlyOrdersCountProvider);
                   final cs = Theme.of(context).colorScheme;
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -381,8 +382,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         Expanded(
                           child: _SummaryCard(
                             title: 'Ingreso Mes',
-                            value: totalIncome,
-                            isCurrency: true,
+                            valueProvider: monthlyIncomeProvider,
                             icon: Icons.trending_up,
                             color: cs.tertiary,
                           ),
@@ -391,8 +391,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         Expanded(
                           child: _SummaryCard(
                             title: 'Pedidos',
-                            value: totalOrders.toDouble(),
-                            isCurrency: false,
+                            valueProvider: monthlyOrdersCountProvider,
                             icon: Icons.shopping_bag_outlined,
                             color: cs.tertiary,
                           ),

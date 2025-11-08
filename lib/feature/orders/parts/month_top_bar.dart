@@ -40,17 +40,19 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
 
     debugPrint("--- [SCROLL] Scrolleando al ÍNDICE: $index ($month)");
 
+    const double alignmentAdjustment = 0.4;
+
     if (animate) {
       await _itemScrollController.scrollTo(
         index: index,
         duration: const Duration(milliseconds: 700),
         curve: Curves.easeInOutCubicEmphasized,
-        alignment: 0.5, // 0.5 = centrado
+        alignment: alignmentAdjustment, // 0.5 = centrado
       );
     } else {
       _itemScrollController.jumpTo(
         index: index,
-        alignment: 0.5, // 0.5 = centrado
+        alignment: alignmentAdjustment, // 0.5 = centrado
       );
     }
   }
