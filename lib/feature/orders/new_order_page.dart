@@ -825,26 +825,101 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       text: customData['item_notes'] as String? ?? '',
     );
 
+    // --- Rellenos y Extras (Inicialización para el Box) ---
+    List<Filling> selectedFillings =
+        (customData['selected_fillings'] as List<dynamic>? ?? [])
+            .map(
+              (name) => allFillings.firstWhereOrNull(
+                (f) => f.name == name?.toString(),
+              ),
+            )
+            .whereType<Filling>()
+            .toList();
+    List<Filling> selectedExtraFillings =
+        (customData['selected_extra_fillings'] as List<dynamic>? ?? [])
+            .map(
+              (name) => extraCostFillings.firstWhereOrNull(
+                (f) => f.name == name?.toString(),
+              ),
+            )
+            .whereType<Filling>()
+            .toList();
+    List<CakeExtra> selectedExtrasKg =
+        (customData['selected_extras_kg'] as List<dynamic>? ?? [])
+            .map(
+              (name) => cakeExtras.firstWhereOrNull(
+                (ex) => ex.name == name?.toString() && !ex.isPerUnit,
+              ),
+            )
+            .whereType<CakeExtra>()
+            .toList();
+    List<UnitExtraSelection> selectedExtrasUnit =
+        (customData['selected_extras_unit'] as List<dynamic>? ?? [])
+            .map((data) {
+              if (data is Map) {
+                final name = data['name']?.toString();
+                final extra = cakeExtras.firstWhereOrNull(
+                  (ex) => ex.name == name && ex.isPerUnit,
+                );
+                if (extra != null) {
+                  final quantity = toInt(data['quantity'], fallback: 1);
+                  return UnitExtraSelection(
+                    extra: extra,
+                    quantity: quantity >= 1 ? quantity : 1,
+                  );
+                }
+              }
+              return null;
+            })
+            .whereType<UnitExtraSelection>()
+            .toList();
+    // ------------------------------------------------
+
     final ImagePicker picker = ImagePicker();
     List<String> existingImageUrls = List<String>.from(
       customData['photo_urls'] ?? [],
     );
-    // 🚨 ELIMINADO: List<XFile> newImageFiles = [];
 
     final finalPriceController = TextEditingController();
+
+    double calculatedTotalBasePrice = basePrice;
 
     void calculatePrice() {
       final qty = int.tryParse(qtyController.text) ?? 0;
       final currentAdjustments =
           double.tryParse(adjustmentsController.text) ?? 0.0;
+
+      // --- Cálculo de costo por personalización (asumiendo 1 unidad de Mini Torta/Box) ---
+      double calculatedExtrasCost = 0.0;
+
+      // Rellenos/Extras por KG: Se suma el costo por KG una sola vez por Box.
+      calculatedExtrasCost += selectedExtraFillings.fold(
+        0.0,
+        (sum, f) => sum + f.extraCostPerKg,
+      );
+      calculatedExtrasCost += selectedExtrasKg.fold(
+        0.0,
+        (sum, ex) => sum + ex.costPerKg,
+      );
+
+      // Extras por Unidad (ej. lámina comestible): Suma Costo Unitario * Cantidad
+      calculatedExtrasCost += selectedExtrasUnit.fold(
+        0.0,
+        (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
+      );
+
+      // Nuevo precio base (incluye costo fijo del Box + costo de personalización)
+      calculatedTotalBasePrice = basePrice + calculatedExtrasCost;
+
       if (qty > 0) {
-        final finalUnitPrice = basePrice + currentAdjustments;
+        final finalUnitPrice = calculatedTotalBasePrice + currentAdjustments;
         finalPriceController.text = (finalUnitPrice * qty).toStringAsFixed(0);
       } else {
         finalPriceController.text = 'N/A';
       }
       adjustments = currentAdjustments;
     }
+    // ------------------------------------------------
 
     WidgetsBinding.instance.addPostFrameCallback((_) => calculatePrice());
     showDialog(
@@ -852,24 +927,138 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            // --- HELPER WIDGETS para rellenar la UI del Box ---
+            Widget buildFillingCheckbox(Filling filling, bool isExtraCost) {
+              bool isSelected = isExtraCost
+                  ? selectedExtraFillings.contains(filling)
+                  : selectedFillings.contains(filling);
+              return CheckboxListTile(
+                title: Text(filling.name),
+                subtitle: Text(
+                  // Muestra el costo fijo por ingrediente (asumiendo una aplicación unitaria/box)
+                  filling.extraCostPerKg > 0
+                      ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)} - Costo Fijo por Box)'
+                      : '(Gratis)',
+                ),
+                value: isSelected,
+                onChanged: (bool? value) {
+                  setDialogState(() {
+                    if (value == true) {
+                      if (isExtraCost) {
+                        selectedExtraFillings.add(filling);
+                      } else {
+                        selectedFillings.add(filling);
+                      }
+                    } else {
+                      if (isExtraCost) {
+                        selectedExtraFillings.remove(filling);
+                      } else {
+                        selectedFillings.remove(filling);
+                      }
+                    }
+                    calculatePrice();
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              );
+            }
+
+            Widget buildExtraKgCheckbox(CakeExtra extra) {
+              bool isSelected = selectedExtrasKg.contains(extra);
+              return CheckboxListTile(
+                title: Text(extra.name),
+                subtitle: Text(
+                  '(+\$${extra.costPerKg.toStringAsFixed(0)} - Costo Fijo por Box)',
+                ),
+                value: isSelected,
+                onChanged: (bool? value) {
+                  setDialogState(() {
+                    if (value == true) {
+                      selectedExtrasKg.add(extra);
+                    } else {
+                      selectedExtrasKg.remove(extra);
+                    }
+                    calculatePrice();
+                  });
+                },
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              );
+            }
+
+            Widget buildExtraUnitSelector(CakeExtra extra) {
+              UnitExtraSelection? selection = selectedExtrasUnit
+                  .firstWhereOrNull((sel) => sel.extra == extra);
+              bool isSelected = selection != null;
+
+              return ListTile(
+                leading: Checkbox(
+                  value: isSelected,
+                  onChanged: (bool? value) {
+                    setDialogState(() {
+                      if (value == true) {
+                        selectedExtrasUnit.add(
+                          UnitExtraSelection(extra: extra),
+                        );
+                      } else {
+                        selectedExtrasUnit.removeWhere(
+                          (sel) => sel.extra == extra,
+                        );
+                      }
+                      calculatePrice();
+                    });
+                  },
+                ),
+                title: Text(extra.name),
+                subtitle: Text(
+                  '(+\$${extra.costPerUnit.toStringAsFixed(0)} c/u)',
+                ),
+                trailing: isSelected
+                    ? SizedBox(
+                        width: 60,
+                        child: TextField(
+                          controller: TextEditingController(
+                            text: selection.quantity.toString(),
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          textAlign: TextAlign.center,
+                          decoration: const InputDecoration(labelText: 'Cant.'),
+                          onChanged: (value) {
+                            int qty = int.tryParse(value) ?? 1;
+                            if (qty < 1) {
+                              qty = 1;
+                            }
+                            selection.quantity = qty;
+                            calculatePrice();
+                          },
+                        ),
+                      )
+                    : null,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              );
+            }
+            // -----------------------------------------------------
+
             return AlertDialog(
-              title: Text(
-                isEditing ? 'Editar Item Box' : 'Añadir Item Box',
-              ), // ⬅️ CAMBIO: Título Box
+              title: Text(isEditing ? 'Editar Item Box' : 'Añadir Item Box'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<Product>(
-                      value:
-                          selectedProduct, // Usar 'value' en lugar de 'initialValue'
+                      value: selectedProduct,
                       items: boxProducts.map((Product product) {
-                        // ⬅️ CAMBIO: boxProducts
                         return DropdownMenuItem<Product>(
                           value: product,
                           child: Text(
-                            // ⬅️ CAMBIO: Mostrar precio base en el selector
                             '${product.name} (\$${product.price.toStringAsFixed(0)})',
                           ),
                         );
@@ -886,18 +1075,87 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     ),
                     TextFormField(
                       controller: qtyController,
-                      decoration: const InputDecoration(labelText: 'Cantidad'),
+                      decoration: const InputDecoration(
+                        labelText: 'Cantidad de Boxes',
+                      ), // Etiqueta más clara
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       onChanged: (_) => setDialogState(calculatePrice),
                     ),
+
+                    const SizedBox(height: 16),
+                    const Divider(),
+
+                    // --- SECCIÓN DE PERSONALIZACIÓN PARA MINI TORTA DENTRO DEL BOX ---
+                    Text(
+                      'Personalización de Mini Torta/Contenido:',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Rellenos Incluidos (Mini Torta)
+                    Text(
+                      'Rellenos Incluidos (Seleccionar para Mini Torta)',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    ...freeFillings.map((f) => buildFillingCheckbox(f, false)),
+                    const SizedBox(height: 8),
+
+                    // Rellenos con Costo Extra (Mini Torta)
+                    Text(
+                      'Rellenos con Costo Extra (Seleccionar para Mini Torta)',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    ...extraCostFillings.map(
+                      (f) => buildFillingCheckbox(f, true),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Extras por KG (Costo fijo aplicado una vez)
+                    Text(
+                      'Extras por Peso (Costo Fijo/Box)',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    ...cakeExtras
+                        .where((ex) => !ex.isPerUnit)
+                        .map(buildExtraKgCheckbox),
+                    const SizedBox(height: 8),
+
+                    // Extras por Unidad (Costo por Unidad)
+                    Text(
+                      'Extras por Unidad (Costo por Unidad/Box)',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    ...cakeExtras
+                        .where((ex) => ex.isPerUnit)
+                        .map(buildExtraUnitSelector),
+                    const SizedBox(height: 8),
+
+                    // Notas
+                    TextFormField(
+                      controller: itemNotesController,
+                      decoration: const InputDecoration(
+                        labelText:
+                            'Notas Generales del Box (Sabores, temáticas)',
+                        hintText:
+                            'Ej: Torta de chocolate, alfajores de frutilla...',
+                      ),
+                      maxLines: 2,
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Ajustes manuales
                     TextFormField(
                       controller: adjustmentsController,
                       decoration: InputDecoration(
-                        labelText: 'Ajuste Manual al Precio Unitario (\$)',
+                        labelText:
+                            'Ajuste Manual Adicional (SUMA al Precio Base Total \$)',
                         hintText: 'Ej: 500 (extra), -200 (descuento)',
                         prefixText:
-                            '\$${basePrice.toStringAsFixed(0)} + ', // ⬅️ CAMBIO: Muestra el precio base
+                            '\$${calculatedTotalBasePrice.toStringAsFixed(0)} + ',
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
                         signed: true,
@@ -911,24 +1169,25 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     TextFormField(
                       controller: adjustmentNotesController,
                       decoration: const InputDecoration(
-                        labelText: 'Notas de Ajuste/Personalización',
-                        hintText: 'Ej: Diseño especial, cambio de color, etc.',
-                      ),
-                      maxLines: 2,
-                      textCapitalization: TextCapitalization.sentences,
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: itemNotesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Notas Generales del Item',
-                        hintText: 'Ej: Sabor, temática...',
+                        labelText: 'Notas del Ajuste/Descuento',
+                        hintText: 'Ej: Descuento por promoción',
                       ),
                       maxLines: 2,
                       textCapitalization: TextCapitalization.sentences,
                     ),
                     const SizedBox(height: 16),
+
                     const Divider(),
+                    TextFormField(
+                      controller: finalPriceController,
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Precio Final Item (Total)',
+                        prefixText: '\$',
+                      ),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
                     const Text(
                       'Fotos de Referencia (Opcional)',
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -994,13 +1253,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     if (selectedProduct == null) return;
 
                     final qty = int.tryParse(qtyController.text) ?? 0;
+                    final itemNotes = itemNotesController.text.trim();
                     final adjustmentNotes = adjustmentNotesController.text
                         .trim();
 
-                    if (qty <= 0 || basePrice <= 0) {
+                    if (qty <= 0 || calculatedTotalBasePrice <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('La cantidad debe ser mayor a 0.'),
+                          content: Text('Verifica la cantidad y el precio.'),
                         ),
                       );
                       return;
@@ -1008,11 +1268,33 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                     final allImageUrls = existingImageUrls;
 
+                    // Cálculo del ajuste total: (Costo Extras) + (Ajuste Manual)
+                    // calculatedTotalBasePrice (Box Base + Extras) - basePrice (Solo Box Base) = Costo Extras
+                    final totalAdjustment =
+                        (calculatedTotalBasePrice - basePrice) + adjustments;
+
                     final customization = {
-                      'product_category': selectedProduct!.category.name,
+                      'product_category': ProductCategory.box.name,
                       'box_type': selectedProduct!.name,
-                      if (itemNotesController.text.trim().isNotEmpty)
-                        'item_notes': itemNotesController.text.trim(),
+                      // Guardar los detalles de personalización de la mini torta/box
+                      'selected_fillings': selectedFillings
+                          .map((f) => f.name)
+                          .toList(),
+                      'selected_extra_fillings': selectedExtraFillings
+                          .map((f) => f.name)
+                          .toList(),
+                      'selected_extras_kg': selectedExtrasKg
+                          .map((ex) => ex.name)
+                          .toList(),
+                      'selected_extras_unit': selectedExtrasUnit
+                          .map(
+                            (sel) => {
+                              'name': sel.extra.name,
+                              'quantity': sel.quantity,
+                            },
+                          )
+                          .toList(),
+                      if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
                       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
                     };
                     customization.removeWhere(
@@ -1023,8 +1305,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       id: isEditing ? existingItem.id : null,
                       name: selectedProduct!.name,
                       qty: qty,
-                      basePrice: basePrice,
-                      adjustments: adjustments,
+                      basePrice:
+                          basePrice, // Precio original del Box sin extras
+                      adjustments: totalAdjustment, // Ajuste total calculado
                       customizationNotes: adjustmentNotes.isEmpty
                           ? null
                           : adjustmentNotes,

@@ -174,7 +174,7 @@ const List<Product> boxProducts = [
   ),
   // Box Temático/Drip Cake Azul (Imagen 4)
   Product(
-    name: 'BOX DULCE: Drip Cake Temático (Azules/Waffles)',
+    name: 'BOX DULCE: Drip Cake Temático (Choc. Azules)',
     category: ProductCategory.box,
     unit: ProductUnit.unit,
     price: 19000.0,
