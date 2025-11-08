@@ -5,7 +5,16 @@
 enum ProductCategory { torta, mesaDulce, box } // Añadido Box
 
 // Unidades comunes
-enum ProductUnit { kg, dozen, halfDozen, unit, size12cm, size18cm, size24cm }
+enum ProductUnit {
+  kg,
+  dozen,
+  halfDozen,
+  unit,
+  size12cm,
+  size18cm,
+  size20cm,
+  size24cm,
+}
 
 // --- RELLENOS ---
 class Filling {
@@ -152,6 +161,13 @@ class Product {
 
 // Boxs
 const List<Product> boxProducts = [
+  // ⬅️ NUEVO: Opción de Box Personalizado
+  Product(
+    name: 'BOX DULCE Personalizado (Armar)',
+    category: ProductCategory.box,
+    unit: ProductUnit.unit,
+    price: 0.0, // El precio se calcula en base a los ítems seleccionados
+  ),
   // Box Dulce con Tartas Frutales (Imagen 1)
   Product(
     name: 'BOX DULCE: Tartas Frutales (Solo Duraznos)',
@@ -195,8 +211,42 @@ const List<Product> boxProducts = [
   ),
 ];
 
+// --- Nueva lista de Tortas de Tamaño Pequeño/Base para Boxes ---
+const List<Product> smallCakeProducts = [
+  Product(
+    name: 'Micro Torta (Base)',
+    category: ProductCategory.torta,
+    unit: ProductUnit.kg,
+    price: 4500.0,
+    multiplierAdjustmentPerKg: 0.0,
+  ),
+  Product(
+    name: 'Mini Torta Personalizada (Base)',
+    category: ProductCategory.torta,
+    unit: ProductUnit.kg,
+    price: 8500.0,
+    multiplierAdjustmentPerKg: 0.0,
+  ),
+  // Nota: Una torta de 1kg tiene un precio por kg mayor, que se puede seleccionar aquí como opción base si es necesario, pero manteniendo 1kg fijo.
+  Product(
+    name: 'Torta Base (1 kg)',
+    category: ProductCategory.torta,
+    unit: ProductUnit.kg,
+    price: 15500.0,
+    multiplierAdjustmentPerKg: 0.0,
+  ),
+];
+
 // Tortas (Precio por KG base)
 const List<Product> cakeProducts = [
+  // ⬅️ NUEVO: Micro Torta (Menor precio base, menor complejidad)
+  Product(
+    name: 'Micro Torta (Base)',
+    category: ProductCategory.torta,
+    unit: ProductUnit.kg,
+    price: 4500.0,
+    multiplierAdjustmentPerKg: 0.0,
+  ),
   // ⬅️ CAMBIO: La mini torta ahora es un tipo de torta con precio base
   Product(
     name: 'Mini Torta Personalizada (Base)',
@@ -234,6 +284,27 @@ const List<Product> cakeProducts = [
 
 // Mesa Dulce
 const List<Product> mesaDulceProducts = [
+  // ⬅️ NUEVO: Bizcochuelos
+  Product(
+    name: 'Bizcochuelo Vainilla',
+    category: ProductCategory.mesaDulce,
+    unit: ProductUnit.unit,
+    price: 0,
+    pricesBySize: {
+      ProductUnit.size20cm: 4000.0,
+      ProductUnit.size24cm: 5800.0, // Calculado: 4000 * 1.44
+    },
+  ),
+  Product(
+    name: 'Bizcochuelo Chocolate',
+    category: ProductCategory.mesaDulce,
+    unit: ProductUnit.unit,
+    price: 0,
+    pricesBySize: {
+      ProductUnit.size20cm: 4500.0,
+      ProductUnit.size24cm: 6500.0, // Calculado: 4500 * 1.44
+    },
+  ),
   // Alfajores (Precios estimados para media docena)
   Product(
     name: 'Alfajores de Maicena Común',
@@ -391,6 +462,19 @@ const List<Product> mesaDulceProducts = [
     allowHalfDozen: true,
     halfDozenPrice: 10200.0,
   ),
+  // ⬅️ NUEVO: Bandejas para Box Personalizado
+  Product(
+    name: 'Bandeja 25x25 cm',
+    category: ProductCategory.mesaDulce,
+    unit: ProductUnit.unit,
+    price: 1800.0,
+  ),
+  Product(
+    name: 'Bandeja 30x30 cm',
+    category: ProductCategory.mesaDulce,
+    unit: ProductUnit.unit,
+    price: 2000.0,
+  ),
 ];
 
 // Helper para obtener texto de unidad más descriptivo para la UI
@@ -408,6 +492,8 @@ String getUnitText(ProductUnit unit, {bool plural = false}) {
       return '12 cm';
     case ProductUnit.size18cm:
       return '18 cm';
+    case ProductUnit.size20cm:
+      return '20 cm';
     case ProductUnit.size24cm:
       return '24 cm';
   }

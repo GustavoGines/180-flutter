@@ -88,6 +88,21 @@ class NewOrderPage extends ConsumerWidget {
   }
 }
 
+// (Clase auxiliar para productos del Box)
+class BoxMesaDulceSelection {
+  final Product product;
+  int quantity;
+
+  // Para productos vendidos por tamaño (Tarta/Brownie Redondo), usamos esto en lugar de quantity
+  ProductUnit? selectedSize;
+
+  BoxMesaDulceSelection({
+    required this.product,
+    this.quantity = 1,
+    this.selectedSize,
+  });
+}
+
 // --- CLASE AUXILIAR PARA EXTRAS POR UNIDAD ---
 class UnitExtraSelection {
   final CakeExtra extra;
@@ -802,7 +817,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ? (existingItem.customizationJson ?? {})
         : {};
 
-    // ⬅️ CAMBIO: Usar boxProducts
+    const personalizedBoxName = 'BOX DULCE Personalizado (Armar)';
+
     Product? selectedProduct = isEditing
         ? boxProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : boxProducts.first;
@@ -825,7 +841,46 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       text: customData['item_notes'] as String? ?? '',
     );
 
-    // --- Rellenos y Extras (Inicialización para el Box) ---
+    // --- Control de ítems seleccionados para Box Personalizado (Mesa Dulce) ---
+    List<BoxMesaDulceSelection> selectedMesaDulceItems = [];
+    if (isEditing && existingItem.name == personalizedBoxName) {
+      final List<dynamic> itemsData =
+          customData['selected_mesa_dulce_items'] as List<dynamic>? ?? [];
+      for (var itemData in itemsData) {
+        final name = itemData['name'];
+        final qty = itemData['quantity'] ?? 1;
+        final sizeName = itemData['selected_size'];
+        final product = mesaDulceProducts.firstWhereOrNull(
+          (p) => p.name == name,
+        );
+        if (product != null) {
+          selectedMesaDulceItems.add(
+            BoxMesaDulceSelection(
+              product: product,
+              quantity: qty,
+              selectedSize: sizeName != null
+                  ? ProductUnit.values.firstWhereOrNull(
+                      (e) => e.name == sizeName,
+                    )
+                  : null,
+            ),
+          );
+        }
+      }
+    }
+
+    // 🎯 NUEVO: Inicialización de Torta Base solo si estamos editando un Box Predeterminado
+    // O si es un Box Personalizado que ya tenía una torta base seleccionada.
+    // Esto es para mantener la selección al editar.
+    Product? selectedBaseCake = customData['selected_base_cake'] != null
+        ? smallCakeProducts.firstWhereOrNull(
+            (p) => p.name == (customData['selected_base_cake'] as String?),
+          )
+        : smallCakeProducts.firstWhereOrNull(
+            (p) => p.name == 'Mini Torta Personalizada (Base)',
+          ); // Default: Mini Torta
+
+    // Para Boxes predefinidos (que contienen Mini Torta) o si se selecciona una en el Box Personalizado
     List<Filling> selectedFillings =
         (customData['selected_fillings'] as List<dynamic>? ?? [])
             .map(
@@ -885,32 +940,84 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     double calculatedTotalBasePrice = basePrice;
 
     void calculatePrice() {
+      final isPersonalizedBox = selectedProduct?.name == personalizedBoxName;
       final qty = int.tryParse(qtyController.text) ?? 0;
       final currentAdjustments =
           double.tryParse(adjustmentsController.text) ?? 0.0;
 
-      // --- Cálculo de costo por personalización (asumiendo 1 unidad de Mini Torta/Box) ---
       double calculatedExtrasCost = 0.0;
+      double calculatedSubItemsCost = 0.0;
 
-      // Rellenos/Extras por KG: Se suma el costo por KG una sola vez por Box.
-      calculatedExtrasCost += selectedExtraFillings.fold(
-        0.0,
-        (sum, f) => sum + f.extraCostPerKg,
-      );
-      calculatedExtrasCost += selectedExtrasKg.fold(
-        0.0,
-        (sum, ex) => sum + ex.costPerKg,
-      );
+      if (isPersonalizedBox) {
+        // CÁLCULO PARA BOX PERSONALIZADO (suma de ítems de Mesa Dulce)
 
-      // Extras por Unidad (ej. lámina comestible): Suma Costo Unitario * Cantidad
-      calculatedExtrasCost += selectedExtrasUnit.fold(
-        0.0,
-        (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
-      );
+        // 🎯 1. Sumar el costo de la Torta Base seleccionada (si hay una)
+        // Ya que el Box Personalizado tiene price: 0.0, este es el nuevo precio base
+        calculatedTotalBasePrice = selectedBaseCake?.price ?? 0.0;
 
-      // Nuevo precio base (incluye costo fijo del Box + costo de personalización)
-      calculatedTotalBasePrice = basePrice + calculatedExtrasCost;
+        // 2. Sumar el costo de los ítems de Mesa Dulce
+        for (var sel in selectedMesaDulceItems) {
+          double unitPrice = 0.0;
 
+          if (sel.product.pricesBySize != null) {
+            // Producto por tamaño
+            unitPrice = sel.product.pricesBySize![sel.selectedSize] ?? 0.0;
+          } else if (sel.product.unit == ProductUnit.dozen) {
+            // Producto por docena: precio se calcula por unidad
+            unitPrice = sel.product.price / 12.0;
+          } else if (sel.product.unit == ProductUnit.unit) {
+            // Producto por unidad
+            unitPrice = sel.product.price;
+          }
+
+          calculatedSubItemsCost += unitPrice * sel.quantity;
+        }
+
+        // Si el Box Personalizado NO tiene torta base (calculatedTotalBasePrice=0), el total es solo la suma de los sub-ítems.
+        // Si SÍ tiene torta base, la base es esa torta, y se suman los sub-ítems.
+        calculatedTotalBasePrice += calculatedSubItemsCost;
+
+        // 3. Sumar extras de Rellenos/Decoración (Si se seleccionó una torta base)
+        if (selectedBaseCake != null) {
+          calculatedExtrasCost += selectedExtraFillings.fold(
+            0.0,
+            (sum, f) => sum + f.extraCostPerKg,
+          );
+          calculatedExtrasCost += selectedExtrasKg.fold(
+            0.0,
+            (sum, ex) => sum + ex.costPerKg,
+          );
+          calculatedExtrasCost += selectedExtrasUnit.fold(
+            0.0,
+            (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
+          );
+          calculatedTotalBasePrice += calculatedExtrasCost;
+        }
+      } else {
+        // CÁLCULO PARA BOX PREDEFINIDO
+        // El precio base ya está en 'basePrice'. Solo sumamos los extras de la Mini Torta predefinida.
+
+        // 1. El precio base es fijo.
+        calculatedTotalBasePrice = basePrice;
+
+        // 2. Sumar extras de Rellenos/Decoración (Asumiendo que aplica a la Mini Torta que incluye el Box)
+        calculatedExtrasCost += selectedExtraFillings.fold(
+          0.0,
+          (sum, f) => sum + f.extraCostPerKg,
+        );
+        calculatedExtrasCost += selectedExtrasKg.fold(
+          0.0,
+          (sum, ex) => sum + ex.costPerKg,
+        );
+        calculatedExtrasCost += selectedExtrasUnit.fold(
+          0.0,
+          (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
+        );
+
+        calculatedTotalBasePrice += calculatedExtrasCost;
+      }
+
+      // Cálculo final
       if (qty > 0) {
         final finalUnitPrice = calculatedTotalBasePrice + currentAdjustments;
         finalPriceController.text = (finalUnitPrice * qty).toStringAsFixed(0);
@@ -922,12 +1029,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     // ------------------------------------------------
 
     WidgetsBinding.instance.addPostFrameCallback((_) => calculatePrice());
+
     showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            // --- HELPER WIDGETS para rellenar la UI del Box ---
+            final isCurrentPersonalizedBox =
+                selectedProduct?.name == personalizedBoxName;
+
+            // --- HELPER WIDGETS (Rellenos/Extras Predefinidos) ---
+            // (Los builders son los mismos que en la respuesta anterior, se mantienen)
+
             Widget buildFillingCheckbox(Filling filling, bool isExtraCost) {
               bool isSelected = isExtraCost
                   ? selectedExtraFillings.contains(filling)
@@ -935,7 +1048,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               return CheckboxListTile(
                 title: Text(filling.name),
                 subtitle: Text(
-                  // Muestra el costo fijo por ingrediente (asumiendo una aplicación unitaria/box)
                   filling.extraCostPerKg > 0
                       ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)} - Costo Fijo por Box)'
                       : '(Gratis)',
@@ -944,17 +1056,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 onChanged: (bool? value) {
                   setDialogState(() {
                     if (value == true) {
-                      if (isExtraCost) {
-                        selectedExtraFillings.add(filling);
-                      } else {
-                        selectedFillings.add(filling);
-                      }
+                      isExtraCost
+                          ? selectedExtraFillings.add(filling)
+                          : selectedFillings.add(filling);
                     } else {
-                      if (isExtraCost) {
-                        selectedExtraFillings.remove(filling);
-                      } else {
-                        selectedFillings.remove(filling);
-                      }
+                      isExtraCost
+                          ? selectedExtraFillings.remove(filling)
+                          : selectedFillings.remove(filling);
                     }
                     calculatePrice();
                   });
@@ -1044,6 +1152,165 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 contentPadding: EdgeInsets.zero,
               );
             }
+
+            // --- HELPER WIDGET PARA ITEM DE MESA DULCE UNITARIO/POR TAMAÑO ---
+            Widget buildMesaDulceItemSelector(Product product) {
+              BoxMesaDulceSelection? selection = selectedMesaDulceItems
+                  .firstWhereOrNull((sel) => sel.product == product);
+              bool isSelected = selection != null;
+
+              // Determinar el precio unitario base a mostrar
+              String basePriceText;
+              if (product.pricesBySize != null) {
+                basePriceText = '(Tamaños)';
+              } else if (product.unit == ProductUnit.dozen) {
+                // Muestra precio por unidad, dividiendo por 12
+                basePriceText =
+                    '(~\$${(product.price / 12).toStringAsFixed(0)} c/u)';
+              } else if (product.unit == ProductUnit.unit) {
+                // Muestra precio por unidad
+                basePriceText = '(+\$${product.price.toStringAsFixed(0)} c/u)';
+              } else {
+                basePriceText = '(Error de unidad)';
+              }
+
+              // Función centralizada para la selección
+              void toggleSelection(bool? value) {
+                setDialogState(() {
+                  if (value == true) {
+                    ProductUnit? defaultSize;
+                    if (product.pricesBySize != null) {
+                      // Si el producto es un bizcochuelo/tarta por tamaño, selecciona 20cm por defecto
+                      defaultSize =
+                          product.pricesBySize!.keys.firstWhereOrNull(
+                            (s) => s == ProductUnit.size20cm,
+                          ) ??
+                          product.pricesBySize!.keys.first;
+                    }
+
+                    selectedMesaDulceItems.add(
+                      BoxMesaDulceSelection(
+                        product: product,
+                        quantity: 1,
+                        selectedSize: defaultSize, // Usa el tamaño por defecto
+                      ),
+                    );
+                  } else {
+                    selectedMesaDulceItems.removeWhere(
+                      (sel) => sel.product == product,
+                    );
+                  }
+                  calculatePrice();
+                });
+              }
+
+              // Si el producto usa precios por tamaño (Tartas, Brownie Redondo)
+              if (product.pricesBySize != null) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      // Usamos ListTile y Checkbox manual
+                      leading: Checkbox(
+                        value: isSelected,
+                        onChanged: toggleSelection,
+                      ),
+                      title: Text('${product.name} $basePriceText'),
+                      onTap: () => toggleSelection(
+                        !isSelected,
+                      ), // Permite seleccionar al tocar la fila
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    if (isSelected)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 32.0, bottom: 8.0),
+                        child: DropdownButtonFormField<ProductUnit>(
+                          value: selection.selectedSize,
+                          items: product.pricesBySize!.keys
+                              .map(
+                                (size) => DropdownMenuItem(
+                                  value: size,
+                                  child: Text(
+                                    '${getUnitText(size)} (\$${product.pricesBySize![size]!.toStringAsFixed(0)})',
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (newSize) {
+                            setDialogState(() {
+                              selection.selectedSize = newSize;
+                              calculatePrice();
+                            });
+                          },
+                          decoration: const InputDecoration(
+                            labelText: 'Tamaño',
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              }
+              // Si el producto se cuenta por unidad (Docena o Unidad simple)
+              else {
+                return ListTile(
+                  leading: Checkbox(
+                    value: isSelected,
+                    onChanged: toggleSelection,
+                  ),
+                  title: Text('${product.name} $basePriceText'),
+                  onTap: () => toggleSelection(
+                    !isSelected,
+                  ), // Permite seleccionar al tocar la fila
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  // 🎯 TRAILING: El campo de cantidad compacto
+                  trailing: isSelected
+                      ? SizedBox(
+                          width: 60, // Ancho pequeño para el campo de número
+                          child: TextFormField(
+                            // Usamos TextFormField sin controller
+                            key: ValueKey(
+                              product.name,
+                            ), // Clave única para evitar errores de renderizado
+                            initialValue: selection.quantity.toString(),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            textAlign: TextAlign.center,
+                            decoration: InputDecoration(
+                              labelText: product.unit == ProductUnit.dozen
+                                  ? 'Uds.'
+                                  : 'Cant.',
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8.0,
+                                horizontal: 4.0,
+                              ),
+                              isDense: true,
+                            ),
+                            // Aquí actualizamos el modelo de datos directamente
+                            onChanged: (value) {
+                              int qty = int.tryParse(value) ?? 1;
+                              if (qty < 1) {
+                                qty = 1;
+                              }
+
+                              // 1. Actualizar el modelo de datos
+                              selection.quantity = qty;
+
+                              // 2. Notificar al StatefulBuilder más cercano (el del AlertDialog)
+                              setDialogState(() {
+                                calculatePrice();
+                              });
+                            },
+                          ),
+                        )
+                      : null,
+                );
+              }
+            }
             // -----------------------------------------------------
 
             return AlertDialog(
@@ -1053,8 +1320,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // SELECTOR DE PRODUCTO/BOX
                     DropdownButtonFormField<Product>(
-                      value: selectedProduct,
+                      initialValue: selectedProduct,
                       items: boxProducts.map((Product product) {
                         return DropdownMenuItem<Product>(
                           value: product,
@@ -1067,87 +1335,231 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         setDialogState(() {
                           selectedProduct = newValue;
                           basePrice = newValue?.price ?? 0.0;
+                          // Si cambia a/desde personalizado, ajusta la cantidad
+                          if (newValue?.name == personalizedBoxName) {
+                            qtyController.text = '1';
+                          }
+                          // 🎯 Limpiar selecciones de extras/rellenos si cambiamos de Box
+                          selectedFillings = [];
+                          selectedExtraFillings = [];
+                          selectedExtrasKg = [];
+                          selectedExtrasUnit = [];
+                          selectedMesaDulceItems = [];
+                          // 🎯 En Box Personalizado, el costo base empieza en 0.0, y en el predefinido se mantiene.
+                          if (newValue?.name == personalizedBoxName) {
+                            basePrice = 0.0;
+                          } else {
+                            basePrice = newValue?.price ?? 0.0;
+                            // Opcional: Re-seleccionar la torta base por defecto para el Box predefinido
+                            selectedBaseCake = smallCakeProducts
+                                .firstWhereOrNull(
+                                  (p) =>
+                                      p.name ==
+                                      'Mini Torta Personalizada (Base)',
+                                );
+                          }
+
                           calculatePrice();
                         });
                       },
                       decoration: const InputDecoration(labelText: 'Producto'),
                       isExpanded: true,
                     ),
-                    TextFormField(
-                      controller: qtyController,
-                      decoration: const InputDecoration(
-                        labelText: 'Cantidad de Boxes',
-                      ), // Etiqueta más clara
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      onChanged: (_) => setDialogState(calculatePrice),
-                    ),
+
+                    // CAMPO DE CANTIDAD (OCULTAR SI ES PERSONALIZADO)
+                    if (!isCurrentPersonalizedBox)
+                      TextFormField(
+                        controller: qtyController,
+                        decoration: const InputDecoration(
+                          labelText: 'Cantidad de Boxes',
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        onChanged: (_) => setDialogState(calculatePrice),
+                      ),
 
                     const SizedBox(height: 16),
                     const Divider(),
 
-                    // --- SECCIÓN DE PERSONALIZACIÓN PARA MINI TORTA DENTRO DEL BOX ---
-                    Text(
-                      'Personalización de Mini Torta/Contenido:',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    // --- SECCIÓN DE SELECCIÓN DE PRODUCTOS Y OPCIONES (SOLO PARA BOX PERSONALIZADO) ---
+                    if (isCurrentPersonalizedBox)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ⬅️ NUEVO: SELECTOR DE TORTA BASE
+                          Text(
+                            'Base de Torta para el Box Personalizado (Opcional):',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<Product>(
+                            value: selectedBaseCake,
+                            items: [
+                              // Opción para no incluir ninguna torta
+                              const DropdownMenuItem<Product>(
+                                value: null,
+                                child: Text(
+                                  'No Incluir Torta Base (Solo Mesa Dulce)',
+                                ),
+                              ),
+                              // Opciones de tortas
+                              ...smallCakeProducts.map((Product product) {
+                                return DropdownMenuItem<Product>(
+                                  value: product,
+                                  child: Text(
+                                    '${product.name} (\$${product.price.toStringAsFixed(0)} Base)',
+                                  ),
+                                );
+                              }),
+                            ].toList(),
+                            onChanged: (Product? newValue) {
+                              setDialogState(() {
+                                selectedBaseCake = newValue;
+                                // Limpiar rellenos/extras si se deselecciona la torta base
+                                if (newValue == null) {
+                                  selectedFillings = [];
+                                  selectedExtraFillings = [];
+                                  selectedExtrasKg = [];
+                                  selectedExtrasUnit = [];
+                                }
+                                calculatePrice();
+                              });
+                            },
+                            decoration: const InputDecoration(
+                              labelText: 'Tipo de Torta Base',
+                            ),
+                            isExpanded: true,
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Opciones de Rellenos/Extras solo si hay Torta Base seleccionada
+                          if (selectedBaseCake != null) ...[
+                            Text(
+                              'Personalización de Torta Base:',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            // Rellenos Incluidos (Mini Torta)
+                            Text(
+                              'Rellenos Incluidos (Mini Torta)',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            ...freeFillings.map(
+                              (f) => buildFillingCheckbox(f, false),
+                            ),
+                            const SizedBox(height: 8),
+                            // Rellenos con Costo Extra (Mini Torta)
+                            Text(
+                              'Rellenos con Costo Extra (Mini Torta)',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            ...extraCostFillings.map(
+                              (f) => buildFillingCheckbox(f, true),
+                            ),
+                            const SizedBox(height: 8),
+                            // Extras por Peso
+                            Text(
+                              'Extras por Peso (Costo Fijo/Box)',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            ...cakeExtras
+                                .where((ex) => !ex.isPerUnit)
+                                .map(buildExtraKgCheckbox),
+                            const SizedBox(height: 8),
+                            // Extras por Unidad
+                            Text(
+                              'Extras por Unidad (Costo por Unidad/Box)',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            ...cakeExtras
+                                .where((ex) => ex.isPerUnit)
+                                .map(buildExtraUnitSelector),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Selector de Productos de Mesa Dulce
+                          Text(
+                            'Productos de Mesa Dulce a Incluir:',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          // Lista de productos de Mesa Dulce para seleccionar
+                          ...mesaDulceProducts
+                              .map(buildMesaDulceItemSelector)
+                              .toList(),
+                          const SizedBox(height: 16),
+                        ],
+                      )
+                    // --- SECCIÓN DE PERSONALIZACIÓN (SOLO PARA BOX PREDEFINIDO) ---
+                    else
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Personalización de Mini Torta/Contenido:',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          // 🎯 MANTENEMOS la lógica de Extras/Rellenos para el Box Predeterminado
+                          // Rellenos Incluidos (Mini Torta)
+                          Text(
+                            'Rellenos Incluidos (Mini Torta)',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          ...freeFillings.map(
+                            (f) => buildFillingCheckbox(f, false),
+                          ),
+                          const SizedBox(height: 8),
+                          // Rellenos con Costo Extra (Mini Torta)
+                          Text(
+                            'Rellenos con Costo Extra (Mini Torta)',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          ...extraCostFillings.map(
+                            (f) => buildFillingCheckbox(f, true),
+                          ),
+                          const SizedBox(height: 8),
+                          // Extras por Peso
+                          Text(
+                            'Extras por Peso (Costo Fijo/Box)',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          ...cakeExtras
+                              .where((ex) => !ex.isPerUnit)
+                              .map(buildExtraKgCheckbox),
+                          const SizedBox(height: 8),
+                          // Extras por Unidad
+                          Text(
+                            'Extras por Unidad (Costo por Unidad/Box)',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          ...cakeExtras
+                              .where((ex) => ex.isPerUnit)
+                              .map(buildExtraUnitSelector),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
 
-                    // Rellenos Incluidos (Mini Torta)
-                    Text(
-                      'Rellenos Incluidos (Seleccionar para Mini Torta)',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    ...freeFillings.map((f) => buildFillingCheckbox(f, false)),
-                    const SizedBox(height: 8),
-
-                    // Rellenos con Costo Extra (Mini Torta)
-                    Text(
-                      'Rellenos con Costo Extra (Seleccionar para Mini Torta)',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    ...extraCostFillings.map(
-                      (f) => buildFillingCheckbox(f, true),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Extras por KG (Costo fijo aplicado una vez)
-                    Text(
-                      'Extras por Peso (Costo Fijo/Box)',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    ...cakeExtras
-                        .where((ex) => !ex.isPerUnit)
-                        .map(buildExtraKgCheckbox),
-                    const SizedBox(height: 8),
-
-                    // Extras por Unidad (Costo por Unidad)
-                    Text(
-                      'Extras por Unidad (Costo por Unidad/Box)',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    ...cakeExtras
-                        .where((ex) => ex.isPerUnit)
-                        .map(buildExtraUnitSelector),
-                    const SizedBox(height: 8),
-
-                    // Notas
+                    // NOTAS Y AJUSTES MANUALES (Visibles siempre)
                     TextFormField(
                       controller: itemNotesController,
-                      decoration: const InputDecoration(
-                        labelText:
-                            'Notas Generales del Box (Sabores, temáticas)',
+                      decoration: InputDecoration(
+                        labelText: isCurrentPersonalizedBox
+                            ? 'Notas para los ítems seleccionados'
+                            : 'Notas Generales del Box (Sabores, temáticas)',
                         hintText:
-                            'Ej: Torta de chocolate, alfajores de frutilla...',
+                            'Ej: Detalles de decoración o personalización del box.',
                       ),
                       maxLines: 2,
                       textCapitalization: TextCapitalization.sentences,
                     ),
                     const SizedBox(height: 16),
 
-                    // Ajustes manuales
                     TextFormField(
                       controller: adjustmentsController,
                       decoration: InputDecoration(
@@ -1175,9 +1587,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       maxLines: 2,
                       textCapitalization: TextCapitalization.sentences,
                     ),
-                    const SizedBox(height: 16),
-
                     const Divider(),
+
                     TextFormField(
                       controller: finalPriceController,
                       readOnly: true,
@@ -1192,6 +1603,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       'Fotos de Referencia (Opcional)',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
+                    // ... (Sección de fotos)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Wrap(
@@ -1205,11 +1617,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             final dynamic imageSource = isPlaceholder
                                 ? _filesToUpload[url]
                                 : url;
-
-                            if (imageSource == null) {
+                            if (imageSource == null)
                               return const SizedBox.shrink();
-                            }
-
                             return _buildImageThumbnail(
                               imageSource,
                               !isPlaceholder,
@@ -1252,15 +1661,35 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   onPressed: () {
                     if (selectedProduct == null) return;
 
-                    final qty = int.tryParse(qtyController.text) ?? 0;
+                    final qty = isCurrentPersonalizedBox
+                        ? 1
+                        : int.tryParse(qtyController.text) ?? 0;
                     final itemNotes = itemNotesController.text.trim();
                     final adjustmentNotes = adjustmentNotesController.text
                         .trim();
 
                     if (qty <= 0 || calculatedTotalBasePrice <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isCurrentPersonalizedBox &&
+                                    calculatedTotalBasePrice <= 0
+                                ? 'Debes seleccionar ítems y verificar precios.'
+                                : 'Verifica la cantidad y el precio.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+                    // Si es Box Personalizado, al menos un sub-item o la torta base debe estar seleccionada
+                    if (isCurrentPersonalizedBox &&
+                        selectedMesaDulceItems.isEmpty &&
+                        selectedBaseCake == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Verifica la cantidad y el precio.'),
+                          content: Text(
+                            'Debes seleccionar al menos un ítem de Mesa Dulce o una Torta Base para el Box Personalizado.',
+                          ),
                         ),
                       );
                       return;
@@ -1268,32 +1697,77 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                     final allImageUrls = existingImageUrls;
 
-                    // Cálculo del ajuste total: (Costo Extras) + (Ajuste Manual)
-                    // calculatedTotalBasePrice (Box Base + Extras) - basePrice (Solo Box Base) = Costo Extras
+                    // El ajuste total es la diferencia entre el precio calculado (incluyendo extras/sub-ítems)
+                    // y el precio base ORIGINAL del Box, MÁS el ajuste manual.
                     final totalAdjustment =
                         (calculatedTotalBasePrice - basePrice) + adjustments;
 
                     final customization = {
                       'product_category': ProductCategory.box.name,
                       'box_type': selectedProduct!.name,
-                      // Guardar los detalles de personalización de la mini torta/box
-                      'selected_fillings': selectedFillings
-                          .map((f) => f.name)
-                          .toList(),
-                      'selected_extra_fillings': selectedExtraFillings
-                          .map((f) => f.name)
-                          .toList(),
-                      'selected_extras_kg': selectedExtrasKg
-                          .map((ex) => ex.name)
-                          .toList(),
-                      'selected_extras_unit': selectedExtrasUnit
-                          .map(
-                            (sel) => {
-                              'name': sel.extra.name,
-                              'quantity': sel.quantity,
-                            },
-                          )
-                          .toList(),
+
+                      // Personalización para Box Predefinido
+                      if (!isCurrentPersonalizedBox) ...{
+                        // 🎯 NO se guarda 'selected_base_cake' aquí para boxes predefinidos,
+                        // ya que el precio ya lo incluye, pero se mantiene la info de rellenos/extras
+                        // si el Box tiene una mini torta.
+                        // Solo guardamos los extras de la Mini Torta:
+                        'selected_fillings': selectedFillings
+                            .map((f) => f.name)
+                            .toList(),
+                        'selected_extra_fillings': selectedExtraFillings
+                            .map((f) => f.name)
+                            .toList(),
+                        'selected_extras_kg': selectedExtrasKg
+                            .map((ex) => ex.name)
+                            .toList(),
+                        'selected_extras_unit': selectedExtrasUnit
+                            .map(
+                              (sel) => {
+                                'name': sel.extra.name,
+                                'quantity': sel.quantity,
+                              },
+                            )
+                            .toList(),
+                      },
+                      // Personalización para Box Armado
+                      if (isCurrentPersonalizedBox) ...{
+                        // 🎯 NUEVO: Guardar la torta base si fue seleccionada
+                        if (selectedBaseCake != null)
+                          'selected_base_cake': selectedBaseCake?.name,
+                        // Guardar la personalización de la torta base si existe
+                        if (selectedBaseCake != null) ...{
+                          'selected_fillings': selectedFillings
+                              .map((f) => f.name)
+                              .toList(),
+                          'selected_extra_fillings': selectedExtraFillings
+                              .map((f) => f.name)
+                              .toList(),
+                          'selected_extras_kg': selectedExtrasKg
+                              .map((ex) => ex.name)
+                              .toList(),
+                          'selected_extras_unit': selectedExtrasUnit
+                              .map(
+                                (sel) => {
+                                  'name': sel.extra.name,
+                                  'quantity': sel.quantity,
+                                },
+                              )
+                              .toList(),
+                        },
+                        // Guardar los ítems de Mesa Dulce
+                        'selected_mesa_dulce_items': selectedMesaDulceItems
+                            .map(
+                              (sel) => {
+                                'name': sel.product.name,
+                                'quantity': sel.quantity,
+                                if (sel.selectedSize != null)
+                                  'selected_size': sel.selectedSize!.name,
+                              },
+                            )
+                            .toList(),
+                      },
+
                       if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
                       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
                     };
@@ -1305,9 +1779,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       id: isEditing ? existingItem.id : null,
                       name: selectedProduct!.name,
                       qty: qty,
-                      basePrice:
-                          basePrice, // Precio original del Box sin extras
-                      adjustments: totalAdjustment, // Ajuste total calculado
+                      basePrice: selectedProduct!
+                          .price, // Usamos el precio original del producto
+                      adjustments:
+                          totalAdjustment, // Ajuste es la diferencia de precio
                       customizationNotes: adjustmentNotes.isEmpty
                           ? null
                           : adjustmentNotes,
@@ -1636,7 +2111,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<Product>(
-                      value: selectedCakeType,
+                      initialValue: selectedCakeType,
                       items: cakeProducts.map((Product product) {
                         final isCurrentProductMiniCake =
                             product.name == miniCakeName;
