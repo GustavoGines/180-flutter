@@ -45,9 +45,13 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
   }
 
   @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(ordersWindowProvider);
-    // final selMonth = ref.watch(selectedMonthProvider); // 👈 Ya no se necesita aquí
 
     // 👇 ESTE LISTENER ES BUENO:
     // Reconstruye la lista si los datos cambian (ej: borrar/editar)
@@ -60,25 +64,45 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
     });
 
     return ordersAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () {
+        // En _UnifiedOrdersList, el 'loading' nunca debería ejecutarse
+        // porque este widget solo se llama en el bloque 'data' de HomePage.
+        // Pero si lo estás usando en otro lado, se mantiene.
+        return const Center(child: CircularProgressIndicator());
+      },
       error: (err, _) => Center(child: Text('Error al cargar pedidos: $err')),
       data: (orders) {
-        // 👇 Llama a la versión simplificada en la carga inicial
+        int initialIndex = 0;
+
+        // 1. LÓGICA SÍNCRONA DE CONSTRUCCIÓN Y CÁLCULO DEL ÍNDICE
         if (_flatList.isEmpty) {
           _rebuildFlatList(orders);
+
+          final now = DateTime.now();
+          final currentMonthKey = DateTime(now.year, now.month, 1);
+          final todayKey = DateTime(now.year, now.month, now.day);
+
+          final dayIndex = widget.dayIndexMap[todayKey];
+
+          // El índice de inicio se calcula aquí antes de renderizar la lista.
+          initialIndex =
+              dayIndex ?? (widget.monthIndexMap[currentMonthKey] ?? 0);
         }
 
-        // 👇 MODIFICADO: Se eliminó el RefreshIndicator de aquí.
-        // Ahora solo devolvemos la lista.
+        // 2. USAR initialScrollIndex Y initialAlignment
         return ScrollablePositionedList.builder(
           itemScrollController: widget.itemScrollController,
           itemPositionsListener: widget.itemPositionsListener,
           physics: const AlwaysScrollableScrollPhysics(),
+
+          // ✅ Usamos el índice calculado solo en el primer render
+          initialScrollIndex: initialIndex,
+          initialAlignment: 0.15,
+
           itemCount: _flatList.length,
           itemBuilder: (context, index) {
+            // ... (Resto del itemBuilder)
             final item = _flatList[index];
-
-            // Lógica de traducción
             switch (item.type) {
               case _ItemType.monthBanner:
                 return _MonthBanner(
@@ -86,7 +110,6 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
                   logoImage: widget.logoImageProvider, // 👈 Pasa el logo aquí
                 );
 
-              // 👇 --- INICIO DE CAMBIOS ---
               case _ItemType.weekSeparator:
                 return _WeekSeparator(
                   weekStart: item.data['ws'],
@@ -98,7 +121,6 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
 
               case _ItemType.emptyMonthPlaceholder:
                 return _EmptyMonthPlaceholder(date: item.data);
-              // 👇 --- FIN ---
 
               case _ItemType.dayHeader:
                 return _DateHeader(orders: item.data);
@@ -112,87 +134,84 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
       },
     );
   }
-  // --- Widgets que extrajiste de los Slivers ---
+}
+// --- Widgets que extrajiste de los Slivers ---
 
-  Widget _buildOrderCard(BuildContext context, WidgetRef ref, Order order) {
-    // (Tu código de _buildOrderCard va aquí, sin cambios)
-    return Dismissible(
-      key: ValueKey(order.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        color: Colors.red.shade700,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              'ELIMINAR',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            SizedBox(width: 8),
-            Icon(Icons.delete_forever, color: Colors.white),
-          ],
-        ),
+Widget _buildOrderCard(BuildContext context, WidgetRef ref, Order order) {
+  // (Tu código de _buildOrderCard va aquí, sin cambios)
+  return Dismissible(
+    key: ValueKey(order.id),
+    direction: DismissDirection.endToStart,
+    background: Container(
+      color: Colors.red.shade700,
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Text(
+            'ELIMINAR',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(width: 8),
+          Icon(Icons.delete_forever, color: Colors.white),
+        ],
       ),
-      confirmDismiss: (direction) async {
-        final bool? didConfirm = await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: const Text('Confirmar Eliminación'),
-              content: const Text(
-                '¿Estás seguro de que quieres eliminar este pedido?',
+    ),
+    confirmDismiss: (direction) async {
+      final bool? didConfirm = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Confirmar Eliminación'),
+            content: const Text(
+              '¿Estás seguro de que quieres eliminar este pedido?',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancelar'),
               ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancelar'),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.red.shade700,
                 ),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.red.shade700,
-                  ),
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Eliminar'),
-                ),
-              ],
-            );
-          },
-        );
-
-        if (didConfirm == true) {
-          try {
-            // 👇 8. CORRECCIÓN DE TIPO (usa 'order.id' que es un 'int')
-            await ref.read(ordersWindowProvider.notifier).deleteOrder(order.id);
-
-            if (!context.mounted) return true; // Chequeo de seguridad
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Pedido #${order.id} eliminado.'),
-                backgroundColor: Colors.green,
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Eliminar'),
               ),
-            );
-            return true;
-          } catch (e) {
-            if (!context.mounted) return false; // Chequeo de seguridad
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error al eliminar: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            return false;
-          }
+            ],
+          );
+        },
+      );
+
+      if (didConfirm == true) {
+        try {
+          // 👇 8. CORRECCIÓN DE TIPO (usa 'order.id' que es un 'int')
+          await ref.read(ordersWindowProvider.notifier).deleteOrder(order.id);
+
+          if (!context.mounted) return true; // Chequeo de seguridad
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Pedido #${order.id} eliminado.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          return true;
+        } catch (e) {
+          if (!context.mounted) return false; // Chequeo de seguridad
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al eliminar: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return false;
         }
-        return false;
-      },
-      child: OrderCard(order: order),
-    );
-  }
+      }
+      return false;
+    },
+    child: OrderCard(order: order),
+  );
 }
 
 // -------------------------------------------------------------------

@@ -192,6 +192,23 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
+  // Agrega una función que centralice la actualización de la barra de meses:
+  void _scrollToCurrentMonthBar() {
+    final now = DateTime.now();
+    final currentMonthKey = DateTime(now.year, now.month, 1);
+
+    // Usamos un pequeño retraso para asegurar que el jumpTo de la lista
+    // principal ya se ejecutó en el microtask.
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (!mounted) return;
+      ref.read(selectedMonthProvider.notifier).setTo(currentMonthKey);
+      _monthBarKey.currentState?.scrollToCurrentMonth(
+        currentMonthKey,
+        animate: true,
+      );
+    });
+  }
+
   final GlobalKey<_MonthTopBarState> _monthBarKey =
       GlobalKey<_MonthTopBarState>();
 
@@ -202,33 +219,15 @@ class _HomePageState extends ConsumerState<HomePage> {
     final cs = Theme.of(context).colorScheme;
     final isRefreshing = ordersAsync is AsyncLoading;
 
+    // --- LÓGICA DE INICIALIZACIÓN Y SALTO EN BARRA DE MESES ---
     if (ordersAsync is AsyncData && !_didPerformInitialScroll) {
-      _didPerformInitialScroll = true;
+      _didPerformInitialScroll = true; // Marca la bandera
 
+      // Llama a la función de actualización de la barra de meses
+      // (la lista principal se encarga del scroll de pedidos)
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-
-        final now = DateTime.now();
-        final currentMonthKey = DateTime(now.year, now.month, 1);
-        final todayKey = DateTime(now.year, now.month, now.day);
-
-        final dayIndex = _dayIndexMap[todayKey];
-        final monthIndex = _monthIndexMap[currentMonthKey];
-
-        if (_itemScrollController.isAttached) {
-          if (dayIndex != null) {
-            _itemScrollController.jumpTo(index: dayIndex, alignment: 0.15);
-          } else if (monthIndex != null) {
-            _itemScrollController.jumpTo(index: monthIndex, alignment: 0.08);
-          }
-        }
-
-        ref.read(selectedMonthProvider.notifier).setTo(currentMonthKey);
-
-        _monthBarKey.currentState?.scrollToCurrentMonth(
-          currentMonthKey,
-          animate: true,
-        );
+        _scrollToCurrentMonthBar();
       });
     }
 
@@ -478,12 +477,39 @@ class _HomePageState extends ConsumerState<HomePage> {
         ],
       ),
 
-      body: _UnifiedOrdersList(
-        itemScrollController: _itemScrollController,
-        itemPositionsListener: _itemPositionsListener,
-        monthIndexMap: _monthIndexMap,
-        dayIndexMap: _dayIndexMap,
-        logoImageProvider: _logoImageProvider,
+      // EL CUERPO (BODY) DE LA PÁGINA
+      body: ordersAsync.when(
+        // 1. MIENTRAS CARGA: Muestra un spinner centrado.
+        loading: () => Center(
+          child: CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+
+        // 2. SI HAY ERROR: Muestra un mensaje de error.
+        error: (error, stackTrace) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 12),
+              const Text(
+                'Error al cargar pedidos',
+                style: TextStyle(fontSize: 16),
+              ),
+              Text('$error', textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+
+        // 3. SI HAY DATOS: Muestra la lista INSTANTÁNEAMENTE en la posición actual.
+        data: (orders) => _UnifiedOrdersList(
+          itemScrollController: _itemScrollController,
+          itemPositionsListener: _itemPositionsListener,
+          monthIndexMap: _monthIndexMap,
+          dayIndexMap: _dayIndexMap,
+          logoImageProvider: _logoImageProvider,
+        ),
       ),
     );
   }
