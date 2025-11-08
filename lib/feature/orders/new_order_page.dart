@@ -1063,15 +1063,24 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ? cakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : cakeProducts.first;
 
+    // Bandera para identificar la Mini Torta
+    const miniCakeName = 'Mini Torta Personalizada (Base)';
+
     final weightController = TextEditingController(
-      text: customData['weight_kg']?.toString() ?? '1.0',
+      // Si se está editando una mini torta, forzar a '1.0' para el cálculo interno.
+      text: existingItem?.name == miniCakeName
+          ? '1.0'
+          : customData['weight_kg']?.toString() ?? '1.0',
     );
     final adjustmentsController = TextEditingController(
       text: isEditing ? existingItem.adjustments.toStringAsFixed(0) : '0',
     );
     final multiplierAdjustmentController = TextEditingController(
-      text:
-          customData['multiplier_adjustment_per_kg']?.toStringAsFixed(0) ?? '0',
+      // Si se está editando una mini torta, forzar a '0'
+      text: existingItem?.name == miniCakeName
+          ? '0'
+          : customData['multiplier_adjustment_per_kg']?.toStringAsFixed(0) ??
+                '0',
     );
     final notesController = TextEditingController(
       text: customData['item_notes'] as String? ?? '',
@@ -1132,7 +1141,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     List<String> existingImageUrls = List<String>.from(
       customData['photo_urls'] ?? [],
     );
-    // 🚨 ELIMINADO: List<XFile> newImageFiles = [];
 
     final calculatedBasePriceController = TextEditingController();
     final finalPriceController = TextEditingController();
@@ -1147,27 +1155,47 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         finalPriceController.text = 'N/A';
         return;
       }
-      double weight =
-          double.tryParse(weightController.text.replaceAll(',', '.')) ?? 0.0;
-      manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
-      multiplierAdjustment =
-          double.tryParse(multiplierAdjustmentController.text) ?? 0.0;
 
-      if (weight <= 0) {
+      final isCurrentMiniCake = selectedCakeType?.name == miniCakeName;
+
+      // --- Lógica de Peso y Multiplicador ---
+      double weight = isCurrentMiniCake
+          ? 1.0 // Fuerza el peso a 1.0 si es Mini Torta
+          : double.tryParse(weightController.text.replaceAll(',', '.')) ?? 0.0;
+
+      manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
+
+      multiplierAdjustment = isCurrentMiniCake
+          ? 0.0 // Fuerza el multiplicador a 0 si es Mini Torta
+          : double.tryParse(multiplierAdjustmentController.text) ?? 0.0;
+
+      if (weight <= 0 && !isCurrentMiniCake) {
+        // Solo valida peso > 0 si NO es Mini Torta
         calculatedBasePriceController.text = 'N/A';
         finalPriceController.text = 'N/A';
         return;
       }
 
+      // Si es Mini Torta, el precio base es el precio listado (no multiplicado por el peso de 1.0)
+      // Para simplificar, usamos weight=1.0 y multiplierAdjustment=0.0, lo que hace la fórmula funcionar.
+
       double base = (selectedCakeType!.price + multiplierAdjustment) * weight;
+
+      // Multiplicador para Extras y Rellenos por KG (0 si es Mini Torta, sino el peso)
+      double multiplier = isCurrentMiniCake ? 0.0 : weight;
+
       double extraFillingsPrice = selectedExtraFillings.fold(
         0.0,
-        (sum, f) => sum + (f.extraCostPerKg * weight),
+        // Para Mini Torta, el costo extra se suma una vez, asumiendo que el costo base ya está por unidad/mini torta
+        // Si el costo del relleno por kg se debe sumar 1 vez (costo fijo), usamos 1.0 en lugar del peso real
+        (sum, f) => sum + (f.extraCostPerKg * multiplier),
       );
       double extrasKgPrice = selectedExtrasKg.fold(
         0.0,
-        (sum, ex) => sum + (ex.costPerKg * weight),
+        (sum, ex) => sum + (ex.costPerKg * multiplier),
       );
+
+      // Extras por Unidad (no dependen del peso)
       double extrasUnitPrice = selectedExtrasUnit.fold(
         0.0,
         (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
@@ -1190,6 +1218,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final isCurrentMiniCake = selectedCakeType?.name == miniCakeName;
+
             Widget buildFillingCheckbox(Filling filling, bool isExtraCost) {
               bool isSelected = isExtraCost
                   ? selectedExtraFillings.contains(filling)
@@ -1197,9 +1227,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               return CheckboxListTile(
                 title: Text(filling.name),
                 subtitle: Text(
-                  isExtraCost
-                      ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)}/kg)'
-                      : '(Gratis)',
+                  // Ajuste de texto para Mini Torta
+                  isCurrentMiniCake
+                      ? (filling.extraCostPerKg > 0
+                            ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)})'
+                            : '(Gratis)')
+                      : (isExtraCost
+                            ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)}/kg)'
+                            : '(Gratis)'),
                 ),
                 value: isSelected,
                 onChanged: (bool? value) {
@@ -1230,7 +1265,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               bool isSelected = selectedExtrasKg.contains(extra);
               return CheckboxListTile(
                 title: Text(extra.name),
-                subtitle: Text('(+\$${extra.costPerKg.toStringAsFixed(0)}/kg)'),
+                // Ajuste de texto para Mini Torta
+                subtitle: Text(
+                  isCurrentMiniCake
+                      ? '(+\$${extra.costPerKg.toStringAsFixed(0)})'
+                      : '(+\$${extra.costPerKg.toStringAsFixed(0)}/kg)',
+                ),
                 value: isSelected,
                 onChanged: (bool? value) {
                   setDialogState(() {
@@ -1293,7 +1333,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             if (qty < 1) {
                               qty = 1;
                             }
-                            selection.quantity = qty;
+                            selection.quantity =
+                                qty; // Usar selection! ya que isSelected es true
                             calculateCakePrice();
                           },
                         ),
@@ -1314,11 +1355,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     DropdownButtonFormField<Product>(
                       value: selectedCakeType,
                       items: cakeProducts.map((Product product) {
+                        final isCurrentProductMiniCake =
+                            product.name == miniCakeName;
                         return DropdownMenuItem<Product>(
                           value: product,
                           child: Text(
-                            // ⬅️ CAMBIO: Mostrar precio base en el selector
-                            '${product.name} (\$${product.price.toStringAsFixed(0)}/kg)',
+                            // Muestra el precio base y la unidad correcta
+                            '${product.name} (\$${product.price.toStringAsFixed(0)}${isCurrentProductMiniCake ? '/u' : '/kg'})',
                             overflow: TextOverflow.ellipsis,
                           ),
                         );
@@ -1326,6 +1369,19 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       onChanged: (Product? newValue) {
                         setDialogState(() {
                           selectedCakeType = newValue;
+                          final isNewValueMiniCake =
+                              newValue?.name == miniCakeName;
+
+                          if (isNewValueMiniCake) {
+                            // Si es Mini Torta, forzar valores y texto
+                            weightController.text = '1.0';
+                            multiplierAdjustmentController.text = '0';
+                          } else if (isCurrentMiniCake) {
+                            // Si veníamos de Mini Torta y cambiamos a Torta KG, inicializar campos
+                            weightController.text = '1.0';
+                            multiplierAdjustmentController.text = '0';
+                          }
+
                           calculateCakePrice();
                         });
                       },
@@ -1335,43 +1391,62 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       isExpanded: true,
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
-                      controller: weightController,
-                      decoration: const InputDecoration(
-                        labelText: 'Peso Estimado (kg)',
-                        hintText: 'Ej: 1.5',
+
+                    // --- PESO ESTIMADO (OCULTAR PARA MINI TORTA) ---
+                    if (!isCurrentMiniCake)
+                      Column(
+                        children: [
+                          TextFormField(
+                            controller: weightController,
+                            decoration: const InputDecoration(
+                              labelText: 'Peso Estimado (kg)',
+                              hintText: 'Ej: 1.5',
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^\d*[\.,]?\d{0,2}'),
+                              ),
+                            ],
+                            onChanged: (_) =>
+                                setDialogState(calculateCakePrice),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+
+                    // --- AJUSTE MULTIPLICADOR (OCULTAR PARA MINI TORTA) ---
+                    if (!isCurrentMiniCake)
+                      Column(
+                        children: [
+                          TextFormField(
+                            controller: multiplierAdjustmentController,
+                            decoration: InputDecoration(
+                              labelText:
+                                  'Ajuste Multiplicador al Precio Base/kg (\$)',
+                              hintText: 'Ej: 1000 (+\$1000/kg extra)',
+                              prefixText:
+                                  '\$${selectedCakeType?.price.toStringAsFixed(0) ?? '0'} + ',
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              signed: true,
+                              decimal: false,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'^-?\d*'),
+                              ),
+                            ],
+                            onChanged: (_) =>
+                                setDialogState(calculateCakePrice),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                       ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d*[\.,]?\d{0,2}'),
-                        ),
-                      ],
-                      onChanged: (_) => setDialogState(calculateCakePrice),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: multiplierAdjustmentController,
-                      decoration: InputDecoration(
-                        labelText:
-                            'Ajuste Multiplicador al Precio Base/kg (\$)',
-                        hintText: 'Ej: 1000 (+\$1000/kg extra)',
-                        // Se usa el precio base de la torta seleccionada, no la calculada
-                        prefixText:
-                            '\$${selectedCakeType?.price.toStringAsFixed(0) ?? '0'} + ',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        signed: true,
-                        decimal: false,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
-                      ],
-                      onChanged: (_) => setDialogState(calculateCakePrice),
-                    ),
-                    const SizedBox(height: 16),
+
+                    // Rellenos y Extras
                     Text(
                       'Rellenos Incluidos (Seleccionar)',
                       style: Theme.of(context).textTheme.titleSmall,
@@ -1464,11 +1539,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       },
                     ),
                     const Divider(),
+                    TextFormField(
+                      controller: calculatedBasePriceController,
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Precio Calculado',
+                        prefixText: '\$',
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: adjustmentsController,
                       decoration: InputDecoration(
-                        labelText: 'Ajuste Manual Adicional (\$)',
+                        labelText:
+                            'Ajuste Manual Adicional (SUMA al Precio Total del Item \$)',
                         hintText: 'Ej: 5000 (extra), -2000 (descuento)',
                         prefixText: '${calculatedBasePriceController.text} + ',
                       ),
@@ -1512,15 +1596,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   onPressed: () {
                     if (selectedCakeType == null) return;
 
-                    final weight =
-                        double.tryParse(
-                          weightController.text.replaceAll(',', '.'),
-                        ) ??
-                        0.0;
+                    // Obtener peso final (1.0 si es Mini Torta, sino el valor del campo)
+                    final weight = isCurrentMiniCake
+                        ? 1.0
+                        : double.tryParse(
+                                weightController.text.replaceAll(',', '.'),
+                              ) ??
+                              0.0;
+
+                    // Obtener ajuste multiplicador (0.0 si es Mini Torta, sino el valor del campo)
+                    final multiplierAdjustmentValue = isCurrentMiniCake
+                        ? 0.0
+                        : double.tryParse(
+                                multiplierAdjustmentController.text,
+                              ) ??
+                              0.0;
+
                     final adjustmentNotes = adjustmentNotesController.text
                         .trim();
 
-                    if (weight <= 0 || calculatedBasePrice <= 0) {
+                    if (weight <= 0 && !isCurrentMiniCake) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('El peso debe ser mayor a 0.'),
@@ -1535,6 +1630,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       'product_category': selectedCakeType!.category.name,
                       'cake_type': selectedCakeType!.name,
                       'weight_kg': weight,
+                      // Solo guardar el ajuste multiplicador si NO es Mini Torta
+                      if (!isCurrentMiniCake)
+                        'multiplier_adjustment_per_kg':
+                            multiplierAdjustmentValue,
                       'selected_fillings': selectedFillings
                           .map((f) => f.name)
                           .toList(),
@@ -1563,7 +1662,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     final newItem = OrderItem(
                       id: isEditing ? existingItem.id : null,
                       name: selectedCakeType!.name,
-                      qty: 1,
+                      qty: 1, // La cantidad es 1 para la torta/mini torta
                       basePrice: calculatedBasePrice,
                       adjustments: manualAdjustments,
                       customizationNotes: adjustmentNotes.isEmpty
