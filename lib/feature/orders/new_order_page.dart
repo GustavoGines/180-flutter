@@ -826,14 +826,24 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     double basePrice = isEditing
         ? existingItem.basePrice
         : selectedProduct?.price ?? 0.0;
-    double adjustments = isEditing ? existingItem.adjustments : 0.0;
+    // 🎯 Paso 1: Leer el Ajuste Manual Puro del JSON si existe
+    double manualAdjustmentValue = isEditing
+        ? (customData['manual_adjustment_value'] as double? ?? 0.0)
+        : 0.0;
+
+    // La variable 'adjustments' DEBE reflejar el valor inicial del controlador (el ajuste manual puro)
+    double adjustments = manualAdjustmentValue;
 
     final qtyController = TextEditingController(
       text: isEditing ? existingItem.qty.toString() : '1',
     );
+
     final adjustmentsController = TextEditingController(
-      text: adjustments.toStringAsFixed(0),
+      text: adjustments.toStringAsFixed(
+        0,
+      ), // ⬅️ Inicializado con el ajuste MANUAL PURO o 0
     );
+
     final adjustmentNotesController = TextEditingController(
       text: isEditing ? existingItem.customizationNotes ?? '' : '',
     );
@@ -937,70 +947,95 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     final finalPriceController = TextEditingController();
 
+    // -------------------------------------------------------------
+    // 🚨 CÁLCULO SÍNCRONO DEL PRECIO BASE CALCULADO (Para el prefixText)
+    // Se necesita para que el prefixText muestre el valor antes del postFrameCallback.
+    // -------------------------------------------------------------
     double calculatedTotalBasePrice = basePrice;
 
+    final isPersonalizedBox = selectedProduct?.name == personalizedBoxName;
+    double calculatedExtrasCost = 0.0;
+    double calculatedSubItemsCost = 0.0;
+
+    if (isPersonalizedBox) {
+      calculatedTotalBasePrice = selectedBaseCake?.price ?? 0.0;
+
+      // Sumar Mesa Dulce (sólo si se está editando un box personalizado)
+      for (var sel in selectedMesaDulceItems) {
+        double unitPrice = 0.0;
+        if (sel.product.pricesBySize != null) {
+          unitPrice = sel.product.pricesBySize![sel.selectedSize] ?? 0.0;
+        } else if (sel.product.unit == ProductUnit.dozen) {
+          unitPrice = sel.product.price / 12.0;
+        } else if (sel.product.unit == ProductUnit.unit) {
+          unitPrice = sel.product.price;
+        }
+        calculatedSubItemsCost += unitPrice * sel.quantity;
+      }
+      calculatedTotalBasePrice += calculatedSubItemsCost;
+    }
+
+    // Sumar extras de Torta (rellenos/extras por unidad/kg)
+    if (selectedBaseCake != null || !isPersonalizedBox) {
+      calculatedExtrasCost += selectedExtraFillings.fold(
+        0.0,
+        (sum, f) => sum + f.extraCostPerKg,
+      );
+      calculatedExtrasCost += selectedExtrasKg.fold(
+        0.0,
+        (sum, ex) => sum + ex.costPerKg,
+      );
+      calculatedExtrasCost += selectedExtrasUnit.fold(
+        0.0,
+        (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
+      );
+
+      calculatedTotalBasePrice += calculatedExtrasCost;
+    }
+    // -------------------------------------------------------------
+
+    // -------------------------------------------------------------
+    // FUNCIÓN calculatePrice (Ajustada para usar currentAdjustments y actualizar 'adjustments')
+    // -------------------------------------------------------------
     void calculatePrice() {
-      final isPersonalizedBox = selectedProduct?.name == personalizedBoxName;
       final qty = int.tryParse(qtyController.text) ?? 0;
+      // 🚨 CRÍTICO: La función asíncrona DEBE leer el valor actualizado del controlador
       final currentAdjustments =
           double.tryParse(adjustmentsController.text) ?? 0.0;
 
-      double calculatedExtrasCost = 0.0;
-      double calculatedSubItemsCost = 0.0;
+      // **Nota:** No necesitamos recalcular calculatedTotalBasePrice aquí si las selecciones
+      // no cambian; si cambian (ej. un checkbox), se debe hacer la re-evaluación completa.
+      // Asumiendo que los cambios en la UI (checkboxes, dropdowns) llaman a setDialogState(calculatePrice),
+      // este cálculo se realiza correctamente:
+
+      // Si hay cambios de selección en la UI, el cálculo de calculatedTotalBasePrice
+      // necesita ser re-ejecutado. Por seguridad, volvemos a calcular el costo base aquí.
+
+      // [INICIO RE-CÁLCULO DENTRO DE calculatePrice]
+      calculatedTotalBasePrice = basePrice;
+      calculatedSubItemsCost = 0.0;
+      calculatedExtrasCost = 0.0;
 
       if (isPersonalizedBox) {
-        // CÁLCULO PARA BOX PERSONALIZADO (suma de ítems de Mesa Dulce)
-
-        // 🎯 1. Sumar el costo de la Torta Base seleccionada (si hay una)
-        // Ya que el Box Personalizado tiene price: 0.0, este es el nuevo precio base
         calculatedTotalBasePrice = selectedBaseCake?.price ?? 0.0;
-
-        // 2. Sumar el costo de los ítems de Mesa Dulce
+        // Suma Mesa Dulce
         for (var sel in selectedMesaDulceItems) {
           double unitPrice = 0.0;
-
+          // ... (Lógica de precio unitario)
           if (sel.product.pricesBySize != null) {
-            // Producto por tamaño
             unitPrice = sel.product.pricesBySize![sel.selectedSize] ?? 0.0;
           } else if (sel.product.unit == ProductUnit.dozen) {
-            // Producto por docena: precio se calcula por unidad
             unitPrice = sel.product.price / 12.0;
           } else if (sel.product.unit == ProductUnit.unit) {
-            // Producto por unidad
             unitPrice = sel.product.price;
           }
-
           calculatedSubItemsCost += unitPrice * sel.quantity;
         }
-
-        // Si el Box Personalizado NO tiene torta base (calculatedTotalBasePrice=0), el total es solo la suma de los sub-ítems.
-        // Si SÍ tiene torta base, la base es esa torta, y se suman los sub-ítems.
         calculatedTotalBasePrice += calculatedSubItemsCost;
+      }
 
-        // 3. Sumar extras de Rellenos/Decoración (Si se seleccionó una torta base)
-        if (selectedBaseCake != null) {
-          calculatedExtrasCost += selectedExtraFillings.fold(
-            0.0,
-            (sum, f) => sum + f.extraCostPerKg,
-          );
-          calculatedExtrasCost += selectedExtrasKg.fold(
-            0.0,
-            (sum, ex) => sum + ex.costPerKg,
-          );
-          calculatedExtrasCost += selectedExtrasUnit.fold(
-            0.0,
-            (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
-          );
-          calculatedTotalBasePrice += calculatedExtrasCost;
-        }
-      } else {
-        // CÁLCULO PARA BOX PREDEFINIDO
-        // El precio base ya está en 'basePrice'. Solo sumamos los extras de la Mini Torta predefinida.
-
-        // 1. El precio base es fijo.
-        calculatedTotalBasePrice = basePrice;
-
-        // 2. Sumar extras de Rellenos/Decoración (Asumiendo que aplica a la Mini Torta que incluye el Box)
+      if (selectedBaseCake != null || !isPersonalizedBox) {
+        // Suma Extras (rellenos, kg, unit)
         calculatedExtrasCost += selectedExtraFillings.fold(
           0.0,
           (sum, f) => sum + f.extraCostPerKg,
@@ -1013,17 +1048,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           0.0,
           (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
         );
-
         calculatedTotalBasePrice += calculatedExtrasCost;
       }
+      // [FIN RE-CÁLCULO DENTRO DE calculatePrice]
 
-      // Cálculo final
       if (qty > 0) {
         final finalUnitPrice = calculatedTotalBasePrice + currentAdjustments;
         finalPriceController.text = (finalUnitPrice * qty).toStringAsFixed(0);
       } else {
         finalPriceController.text = 'N/A';
       }
+
+      // 🚨 CRÍTICO: Actualizar la variable de alcance superior 'adjustments' para el onPressed
       adjustments = currentAdjustments;
     }
     // ------------------------------------------------
@@ -1697,14 +1733,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                     final allImageUrls = existingImageUrls;
 
-                    // El ajuste total es la diferencia entre el precio calculado (incluyendo extras/sub-ítems)
-                    // y el precio base ORIGINAL del Box, MÁS el ajuste manual.
-                    final totalAdjustment =
-                        (calculatedTotalBasePrice - basePrice) + adjustments;
+                    // 1. Calcular el Costo de los Extras (Costo calculado total - Precio Base original del Box).
+                    final costOfExtras = calculatedTotalBasePrice - basePrice;
+
+                    // 2. El totalAdjustment debe ser la SUMA de los extras (costOfExtras) + el ajuste manual (variable 'adjustments').
+                    // 🚨 CORRECCIÓN DEL CÁLCULO DE TOTAL ADJUSTMENT:
+                    final totalAdjustment = costOfExtras + adjustments;
+                    // ⬆️ 'adjustments' es la variable del scope superior que fue actualizada en calculatePrice() con el valor del controlador.
 
                     final customization = {
                       'product_category': ProductCategory.box.name,
                       'box_type': selectedProduct!.name,
+                      'manual_adjustment_value': adjustments,
 
                       // Personalización para Box Predefinido
                       if (!isCurrentPersonalizedBox) ...{

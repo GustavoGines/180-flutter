@@ -105,6 +105,12 @@ const List<CakeExtra> cakeExtras = [
     costPerKg: 1500.0,
   ), // Considerar disponibilidad/precio variable
   CakeExtra(name: 'Mani Tostado', costPerKg: 1000.0),
+  // 🍫 NUEVO: BON O BON (Extra por Unidad)
+  CakeExtra(
+    name: 'Bon o Bon', // Nombre del extra
+    isPerUnit: true, // Se cobra por unidad
+    costPerUnit: 600.0, // Precio por unidad: $600
+  ),
   CakeExtra(
     name: 'Alfajor Tatín triple (blanco)',
     isPerUnit: true,
