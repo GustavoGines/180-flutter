@@ -7,6 +7,7 @@ import '../../auth/auth_state.dart';
 import '../data/users_repository.dart';
 import 'create_user_page.dart'; // Para navegar a la pág de creación
 import 'edit_user_page.dart'; // Para navegar a la pág de edición
+import 'users_trashed_page.dart'; // Para navegar a la pág de papelera
 
 // Provider para manejar el texto de búsqueda
 final userSearchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
@@ -97,7 +98,24 @@ class _UsersListPageState extends ConsumerState<UsersListPage> {
     final usersAsync = ref.watch(usersListProvider(searchQuery));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Gestionar Usuarios')),
+      appBar: AppBar(
+        title: const Text('Gestionar Usuarios'),
+        // 🎯 NUEVO: Botón de Papelera en las acciones del AppBar
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.archive_outlined), // Ícono de archivo/papelera
+            tooltip: 'Ver Papelera',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const UsersTrashedPage(), // Navega a la Papelera
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8), // Espacio extra a la derecha
+        ],
+      ),
       // --- Botón para Crear Usuario ---
       floatingActionButton: FloatingActionButton(
         onPressed: () {

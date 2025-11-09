@@ -1,10 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-// Asumimos que auth_state.dart está en lib/features/auth/
-// (Ajusta la ruta si es necesario)
+import 'package:pasteleria_180_flutter/core/network/validation_exception.dart';
+import '../../../core/models/user.dart';
 import '../../auth/auth_state.dart';
-// Ruta actualizada según la nueva estructura
 import '../data/users_repository.dart';
 
 class CreateUserPage extends ConsumerStatefulWidget {
@@ -19,9 +18,12 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _pass = TextEditingController();
-  String _role = 'staff'; // Valor por defecto
+
+  String _role = 'staff';
   bool _loading = false;
-  // bool _obscurePass = true; // Opcional: para un botón de ver/ocultar pass
+
+  // 🎯 NUEVO: Controla si el texto debe estar oculto
+  bool _obscurePass = true;
 
   @override
   void dispose() {
@@ -31,14 +33,66 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    // 1. Validar el formulario
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+  // 🎯 Diálogo de restauración para manejo de error 409
+  Future<void> _showRestoreUserDialog(AppUser userToRestore) async {
+    if (mounted) setState(() => _loading = false);
+
+    final didConfirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Usuario Encontrado en Papelera'),
+        content: Text(
+          'El usuario "${userToRestore.name}" ya existe pero fue eliminado (soft delete). ¿Deseas restaurarlo?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Sí, Restaurar'),
+          ),
+        ],
+      ),
+    );
+
+    if (didConfirm != true || !mounted) return;
 
     setState(() => _loading = true);
 
     try {
-      // 2. Llamar al repositorio para crear el usuario
+      await ref.read(usersRepoProvider).restoreUser(userToRestore.id);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Usuario ${userToRestore.name} restaurado con éxito.'),
+          backgroundColor: Colors.green[600],
+        ),
+      );
+
+      ref.invalidate(usersListProvider);
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al restaurar: ${e.toString()}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _loading = true);
+
+    try {
       final newUser = await ref
           .read(usersRepoProvider)
           .createUser(
@@ -48,10 +102,8 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
             role: _role,
           );
 
-      // 3. Verificar si el widget sigue "montado" antes de actualizar UI
       if (!mounted) return;
 
-      // 4. Mostrar feedback de éxito
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Usuario "${newUser.name}" creado con éxito.'),
@@ -59,33 +111,51 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
         ),
       );
 
-      // 5. ¡Clave! Invalidar el provider de la lista
-      // Esto fuerza a que la pantalla que muestra la lista se actualice
       ref.invalidate(usersListProvider);
-
-      // 6. Cerrar esta pantalla
       Navigator.of(context).pop();
-    } catch (e) {
-      // 7. Manejar error
+    } on ValidationException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error al crear usuario: ${e.toString()}'),
+          content: Text(e.toString()),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } on DioException catch (e) {
+      if (!mounted) return;
+
+      if (e.response?.statusCode == 409 && e.response?.data?['user'] != null) {
+        final userData = e.response?.data?['user'];
+        final userToRestore = AppUser.fromJson(
+          Map<String, dynamic>.from(userData),
+        );
+        _showRestoreUserDialog(userToRestore);
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${e.message}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error desconocido: ${e.toString()}'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     } finally {
-      // 8. Detener el loading (solo si sigue montado)
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // --- Verificación de Admin ---
-    // (Usamos 'watch' para que reaccione si el auth cambia)
     final auth = ref.watch(authStateProvider);
     if (auth.user?.role != 'admin') {
       return const Scaffold(
@@ -94,18 +164,16 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
         ),
       );
     }
-    // --- Fin Verificación ---
 
     return Scaffold(
       appBar: AppBar(title: const Text('Crear Nuevo Usuario')),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          // Usamos SingleChildScrollView para evitar overflow del teclado
           return SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: Padding(
-                padding: const EdgeInsets.all(20.0), // Más padding
+                padding: const EdgeInsets.all(20.0),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -117,7 +185,7 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
                       ),
                       const SizedBox(height: 24),
 
-                      // --- Campo Nombre ---
+                      // Nombre
                       TextFormField(
                         controller: _name,
                         enabled: !_loading,
@@ -132,7 +200,7 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // --- Campo Email ---
+                      // Email
                       TextFormField(
                         controller: _email,
                         enabled: !_loading,
@@ -152,16 +220,34 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // --- Campo Contraseña ---
+                      // Contraseña
                       TextFormField(
                         controller: _pass,
                         enabled: !_loading,
-                        obscureText: true, // Ocultar contraseña
-                        decoration: const InputDecoration(
+                        // 🎯 Usar el estado para controlar la visibilidad
+                        obscureText: _obscurePass,
+                        decoration: InputDecoration(
+                          // Quita el `const` para poder usar el IconButton
                           labelText: 'Contraseña (temporal)',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.lock_outline),
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.lock_outline),
                           helperText: 'El usuario podrá cambiarla luego.',
+                          // 🎯 NUEVO: Icono de visibilidad (el "ojito")
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              // Cambia el ícono según el estado de _obscurePass
+                              _obscurePass
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            onPressed: () {
+                              // Al presionar, cambia el estado y redibuja
+                              setState(() {
+                                _obscurePass = !_obscurePass;
+                              });
+                            },
+                          ),
                         ),
                         validator: (v) => (v == null || v.length < 8)
                             ? 'Mínimo 8 caracteres'
@@ -169,10 +255,9 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // --- Campo Rol ---
+                      // Rol
                       DropdownButtonFormField<String>(
                         initialValue: _role,
-                        // enabled: !_loading, // 'enabled' no es un parámetro de DropdownButtonFormField
                         decoration: const InputDecoration(
                           labelText: 'Rol de Usuario',
                           border: OutlineInputBorder(),
@@ -190,14 +275,13 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
                         ],
                         onChanged: (v) => setState(() => _role = v ?? 'staff'),
                       ),
+                      const SizedBox(height: 32),
 
-                      const SizedBox(height: 32), // Más espacio antes del botón
-                      // --- Botón de Enviar ---
+                      // Botón
                       FilledButton(
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                        // Deshabilitar el botón si está cargando
                         onPressed: _loading ? null : _submit,
                         child: _loading
                             ? const SizedBox(
