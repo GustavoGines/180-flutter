@@ -1086,7 +1086,9 @@ class OrderDetailPage extends ConsumerWidget {
                   final name = e['name'];
                   final qty = e['quantity'];
                   final size = e['selected_size'];
-                  return size != null ? '$name ($size) x$qty' : '$name x$qty';
+                  return size != null
+                      ? '$name (${size.replaceAll('size', '')}) x$qty'
+                      : '$name x$qty';
                 })
                 .join(', ');
             details.add(

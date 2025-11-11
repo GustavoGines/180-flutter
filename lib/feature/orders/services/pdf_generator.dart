@@ -70,12 +70,15 @@ class PdfGenerator {
           ],
         ),
         build: (pw.Context context) => [
-          pw.SizedBox(height: 5),
           _buildClientSection(order),
           pw.SizedBox(height: 20),
           _buildEventDateSection(order),
           pw.SizedBox(height: 20),
-          _buildItemsTable(order),
+          // Ponemos el título y el espaciado aquí,
+          // antes de llamar a la tabla.
+          _buildSectionTitle('Productos Incluidos'),
+          pw.SizedBox(height: 8),
+          _buildItemsTable(order), // Ahora esto es solo la tabla
           pw.SizedBox(height: 20),
           _buildNotesSection(order),
           pw.SizedBox(height: 20),
@@ -322,43 +325,34 @@ class PdfGenerator {
       'Total Item',
     ];
 
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('Productos Incluidos'),
-        pw.SizedBox(height: 8),
-        pw.Table.fromTextArray(
-          cellAlignment: pw.Alignment.centerLeft,
-          headerStyle: pw.TextStyle(
-            fontWeight: pw.FontWeight.bold,
-            fontSize: 11,
-            color: _darkBrown,
-          ),
-          cellStyle: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
-          headerDecoration: pw.BoxDecoration(color: _primaryPink),
-          headers: tableHeaders,
-          columnWidths: {
-            0: const pw.FlexColumnWidth(2),
-            1: const pw.FlexColumnWidth(3.5),
-            2: const pw.FlexColumnWidth(1),
-            3: const pw.FlexColumnWidth(1.5),
-            4: const pw.FlexColumnWidth(1.5),
-          },
-          data: order.items.map((item) {
-            final itemTotal = item.finalUnitPrice * item.qty;
-            final details = _getItemDetailsText(item);
-            return [
-              item.name,
-              details,
-              item.qty.toString(),
-              // --- 👇 CORRECCIÓN 2: Añadir '$' manualmente ---
-              '\$${currencyFormat.format(item.finalUnitPrice)}',
-              '\$${currencyFormat.format(itemTotal)}',
-              // ---
-            ];
-          }).toList(),
-        ),
-      ],
+    return pw.Table.fromTextArray(
+      cellAlignment: pw.Alignment.centerLeft,
+      headerStyle: pw.TextStyle(
+        fontWeight: pw.FontWeight.bold,
+        fontSize: 11,
+        color: _darkBrown,
+      ),
+      cellStyle: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
+      headerDecoration: pw.BoxDecoration(color: _primaryPink),
+      headers: tableHeaders,
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2),
+        1: const pw.FlexColumnWidth(3.5),
+        2: const pw.FlexColumnWidth(1),
+        3: const pw.FlexColumnWidth(1.5),
+        4: const pw.FlexColumnWidth(1.5),
+      },
+      data: order.items.map((item) {
+        final itemTotal = item.finalUnitPrice * item.qty;
+        final details = _getItemDetailsText(item);
+        return [
+          item.name,
+          details,
+          item.qty.toString(),
+          '\$${currencyFormat.format(item.finalUnitPrice)}',
+          '\$${currencyFormat.format(itemTotal)}',
+        ];
+      }).toList(),
     );
   }
 
@@ -446,7 +440,9 @@ class PdfGenerator {
                 final name = e['name'];
                 final qty = e['quantity'];
                 final size = e['selected_size'];
-                return size != null ? '$name ($size) x$qty' : '$name x$qty';
+                return size != null
+                    ? '$name (${size.replaceAll('size', '')}) x$qty'
+                    : '$name x$qty';
               })
               .join(', ');
           parts.add('Mesa Dulce: $text');
@@ -689,15 +685,6 @@ class PdfGenerator {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(
-            'AVISO: Este documento es un detalle de pedido/proforma y no tiene validez como Factura A, B o C.',
-            style: pw.TextStyle(
-              fontSize: 9,
-              color: PdfColors.red700,
-              fontStyle: pw.FontStyle.italic,
-            ),
-          ),
-          pw.SizedBox(height: 5),
           pw.Text(
             'Términos y Condiciones Breves:',
             style: pw.TextStyle(
