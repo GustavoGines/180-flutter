@@ -67,7 +67,12 @@ class OrderDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final orderAsyncValue = ref.watch(orderByIdProvider(orderId));
-    final currencyFormat = NumberFormat.currency(locale: 'es_AR', symbol: '\$');
+    final currencyFormat = NumberFormat.currency(
+      locale: 'es_AR',
+      symbol: '\$',
+      decimalDigits: 0,
+      customPattern: '\u00a4#,##0', // <-- Pega el $ al número
+    );
     final cs = Theme.of(context).colorScheme;
 
     return orderAsyncValue.when(
@@ -777,7 +782,6 @@ class OrderDetailPage extends ConsumerWidget {
   }
 
   // --- Helper para construir los detalles del Item ---
-  // (En order_detail_page.dart)
 
   List<Widget> _buildItemDetails(
     OrderItem item,
@@ -788,20 +792,14 @@ class OrderDetailPage extends ConsumerWidget {
     final List<Widget> details = [];
     final custom = item.customizationJson ?? {};
 
-    // ---
-    // --- "Notas de Ajuste" (ELIMINADO DE AQUÍ) ---
-    // ---
-
     switch (category) {
       // =======================================================
-      // === CASO TORTA (Lógica de desglose REORDENADA)
+      // === CASO TORTA (Se mantiene como estaba)
       // =======================================================
       case ProductCategory.torta:
-        // --- 1. Calcular Costo Extras ---
         final bool isCurrentMiniCake =
             item.name == 'Mini Torta Personalizada (Base)';
         final double weight = (custom['weight_kg'] as num?)?.toDouble() ?? 1.0;
-
         final double extraMultiplier = isCurrentMiniCake ? 0.0 : weight;
 
         final List<dynamic> extraFillingsRaw =
@@ -835,32 +833,24 @@ class OrderDetailPage extends ConsumerWidget {
 
         final double costoExtrasTotal =
             extraFillingsPrice + extrasKgPrice + extrasUnitPrice;
-
-        // item.basePrice (guardado en _addCakeDialog) es (Base+AjusteMultiplicador+Extras)
-        // El "Precio Base" que querés es (Base+AjusteMultiplicador)
         final double precioCalculadoConAjusteKg =
             item.basePrice - costoExtrasTotal;
 
-        // --- 2. Construir los widgets en el orden solicitado ---
-
-        // "Precio Base" (AHORA AL PRINCIPIO)
         details.add(
           _buildDetailRow(
             context,
-            'Precio Base:', // <-- NOMBRE CORREGIDO
+            'Precio Base:',
             currencyFormat.format(precioCalculadoConAjusteKg),
-            isSubTotal: true, // Para que se vea en negrita
+            isSubTotal: true,
           ),
         );
 
-        // Peso
         if (custom['weight_kg'] != null) {
           details.add(
             _buildDetailRow(context, 'Peso:', '${custom['weight_kg']} kg'),
           );
         }
 
-        // Rellenos (List<String>)
         final List<String> fillings = List<String>.from(
           custom['selected_fillings'] ?? [],
         );
@@ -875,7 +865,6 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
 
-        // Rellenos extra (List<Map>)
         final List<Map> extraFillingsData = extraFillingsRaw
             .whereType<Map>()
             .toList();
@@ -900,7 +889,6 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
 
-        // Extras por kg (List<Map>)
         final List<Map> extrasKgData = extrasKgRaw.whereType<Map>().toList();
         if (extrasKgData.isNotEmpty) {
           final extrasKgText = extrasKgData
@@ -923,7 +911,6 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
 
-        // Extras por unidad (List<Map>)
         final List<Map> extrasUnitData = extrasUnitRaw
             .whereType<Map>()
             .toList();
@@ -950,7 +937,6 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
 
-        // Ajuste Manual Adicional (el sumatorio)
         if (item.adjustments != 0) {
           details.add(
             _buildDetailRow(
@@ -967,99 +953,253 @@ class OrderDetailPage extends ConsumerWidget {
         break; // Fin del 'case Torta'
 
       // =======================================================
-      // === CASO BOX (Corregido: Sin Precio ni Tipo)
+      // === CASO BOX (NUEVA LÓGICA)
       // =======================================================
       case ProductCategory.box:
-        // Rellenos (si hay torta base en el box)
+        final String boxType = custom['box_type'] ?? '';
+        final bool isPersonalizado =
+            boxType == 'BOX DULCE Personalizado (Armar)';
+
+        // --- LEER TODOS LOS EXTRAS (para solucionar el error _TypeError) ---
         final List<String> fillings = List<String>.from(
           custom['selected_fillings'] ?? [],
         );
+        final List<dynamic> extraFillingsRaw =
+            custom['selected_extra_fillings'] ?? [];
+        final List<Map> extraFillingsData = extraFillingsRaw
+            .whereType<Map>()
+            .toList();
 
-        final List<String> extraFillings = List<String>.from(
-          custom['selected_extra_fillings'] ?? [],
-        );
+        final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
+        final List<Map> extrasKgData = extrasKgRaw.whereType<Map>().toList();
 
-        if (fillings.isNotEmpty) {
-          details.add(
-            _buildDetailRow(
-              context,
-              'Rellenos:',
-              fillings.join(', '),
-              isList: true,
-            ),
-          );
-        }
-        if (extraFillings.isNotEmpty) {
-          details.add(
-            _buildDetailRow(
-              context,
-              'Rellenos Extra:',
-              extraFillings.join(', '),
-              isList: true,
-            ),
-          );
-        }
-
-        // Extras (por kg o unidad)
-        final List<String> extrasKg = List<String>.from(
-          custom['selected_extras_kg'] ?? [],
-        );
-        final List<Map<String, dynamic>> extrasUnit =
+        final List<Map<String, dynamic>> extrasUnitData =
             (custom['selected_extras_unit'] as List?)
                 ?.whereType<Map<String, dynamic>>()
                 .toList() ??
             [];
 
-        if (extrasKg.isNotEmpty) {
-          details.add(
-            _buildDetailRow(
-              context,
-              'Extras (x kg):',
-              extrasKg.join(', '),
-              isList: true,
-            ),
-          );
-        }
-
-        if (extrasUnit.isNotEmpty) {
-          final unitExtrasText = extrasUnit
-              .map((e) => '${e['name']} (x${e['quantity']})')
-              .join(', ');
-          details.add(
-            _buildDetailRow(
-              context,
-              'Extras (x unidad):',
-              unitExtrasText,
-              isList: true,
-            ),
-          );
-        }
-
-        // 🍰 Mesa dulce
         final List<Map<String, dynamic>> mesaDulceItems =
             (custom['selected_mesa_dulce_items'] as List?)
                 ?.whereType<Map<String, dynamic>>()
                 .toList() ??
             [];
-        if (mesaDulceItems.isNotEmpty) {
-          final mesaItemsText = mesaDulceItems
-              .map((e) {
-                final name = e['name'];
-                final qty = e['quantity'];
-                final size = e['selected_size'];
-                return size != null ? '$name ($size) x$qty' : '$name x$qty';
-              })
-              .join(', ');
-          details.add(
-            _buildDetailRow(
-              context,
-              'Mesa Dulce:',
-              mesaItemsText,
-              isList: true,
-            ),
-          );
+
+        final bool hasExtras =
+            extraFillingsData.isNotEmpty ||
+            extrasKgData.isNotEmpty ||
+            extrasUnitData.isNotEmpty;
+
+        // --- LÓGICA PARA BOX PERSONALIZADO ---
+        if (isPersonalizado) {
+          // 1. "Precio Box" (ELIMINADO)
+          /*
+        details.add(
+          _buildDetailRow(
+            context,
+            'Precio Box:',
+            currencyFormat.format(item.finalUnitPrice),
+            isSubTotal: true,
+          ),
+        );
+        */
+
+          // 2. Rellenos (base) de la torta (si hay)
+          if (fillings.isNotEmpty) {
+            details.add(
+              _buildDetailRow(
+                context,
+                'Rellenos Torta:',
+                fillings.join(', '),
+                isList: true,
+              ),
+            );
+          }
+
+          // 3. Rellenos Extra (con precio)
+          if (extraFillingsData.isNotEmpty) {
+            final text = extraFillingsData
+                .map((e) {
+                  final name = e['name'] ?? 'Extra';
+                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+                  final priceText = (price > 0)
+                      ? ' (${currencyFormat.format(price)})'
+                      : '';
+                  return '$name$priceText';
+                })
+                .join(', ');
+            details.add(
+              _buildDetailRow(context, 'Extras Torta:', text, isList: true),
+            );
+          }
+
+          // 4. Extras (x kg) (con precio)
+          if (extrasKgData.isNotEmpty) {
+            final text = extrasKgData
+                .map((e) {
+                  final name = e['name'] ?? 'Extra';
+                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+                  final priceText = (price > 0)
+                      ? ' (${currencyFormat.format(price)})'
+                      : '';
+                  return '$name$priceText';
+                })
+                .join(', ');
+            details.add(
+              _buildDetailRow(
+                context,
+                'Extras Torta (x kg):',
+                text,
+                isList: true,
+              ),
+            );
+          }
+
+          // 5. Extras (x unidad) (con precio)
+          if (extrasUnitData.isNotEmpty) {
+            final text = extrasUnitData
+                .map((e) {
+                  final name = e['name'] ?? 'Extra';
+                  final qty = (e['quantity'] as num?) ?? 1;
+                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+                  final totalCost = price * (qty > 0 ? qty : 1);
+                  final priceText = (totalCost > 0)
+                      ? ' (${currencyFormat.format(totalCost)})'
+                      : '';
+                  return '$name (x$qty)$priceText';
+                })
+                .join(', ');
+            details.add(
+              _buildDetailRow(
+                context,
+                'Extras Torta (x ud):',
+                text,
+                isList: true,
+              ),
+            );
+          }
+
+          // 6. Mesa Dulce
+          if (mesaDulceItems.isNotEmpty) {
+            final text = mesaDulceItems
+                .map((e) {
+                  final name = e['name'];
+                  final qty = e['quantity'];
+                  final size = e['selected_size'];
+                  return size != null ? '$name ($size) x$qty' : '$name x$qty';
+                })
+                .join(', ');
+            details.add(
+              _buildDetailRow(context, 'Mesa Dulce:', text, isList: true),
+            );
+          }
+
+          // 7. Ajuste Adicional -> NO SE MUESTRA (va incluido en el Precio Box)
         }
-        break;
+        // --- LÓGICA PARA BOX PREDEFINIDO ---
+        else {
+          // 1. Mostrar "Precio Box" (solo si hay extras)
+          if (hasExtras) {
+            details.add(
+              _buildDetailRow(
+                context,
+                'Precio Box:',
+                currencyFormat.format(
+                  item.basePrice,
+                ), // <-- Precio base del box
+                isSubTotal: true,
+              ),
+            );
+          }
+
+          // 2. Rellenos (base) de la mini torta
+          if (fillings.isNotEmpty) {
+            details.add(
+              _buildDetailRow(
+                context,
+                'Rellenos:',
+                fillings.join(', '),
+                isList: true,
+              ),
+            );
+          }
+
+          // 3. Rellenos Extra (con precio)
+          if (extraFillingsData.isNotEmpty) {
+            final text = extraFillingsData
+                .map((e) {
+                  final name = e['name'] ?? 'Extra';
+                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+                  final priceText = (price > 0)
+                      ? ' (${currencyFormat.format(price)})'
+                      : '';
+                  return '$name$priceText';
+                })
+                .join(', ');
+            details.add(
+              _buildDetailRow(context, 'Rellenos Extra:', text, isList: true),
+            );
+          }
+
+          // 4. Extras (x kg) (con precio)
+          if (extrasKgData.isNotEmpty) {
+            final text = extrasKgData
+                .map((e) {
+                  final name = e['name'] ?? 'Extra';
+                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+                  final priceText = (price > 0)
+                      ? ' (${currencyFormat.format(price)})'
+                      : '';
+                  return '$name$priceText';
+                })
+                .join(', ');
+            details.add(
+              _buildDetailRow(context, 'Extras (x kg):', text, isList: true),
+            );
+          }
+
+          // 5. Extras (x unidad) (con precio)
+          if (extrasUnitData.isNotEmpty) {
+            final text = extrasUnitData
+                .map((e) {
+                  final name = e['name'] ?? 'Extra';
+                  final qty = (e['quantity'] as num?) ?? 1;
+                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+                  final totalCost = price * (qty > 0 ? qty : 1);
+                  final priceText = (totalCost > 0)
+                      ? ' (${currencyFormat.format(totalCost)})'
+                      : '';
+                  return '$name (x$qty)$priceText';
+                })
+                .join(', ');
+            details.add(
+              _buildDetailRow(
+                context,
+                'Extras (x unidad):',
+                text,
+                isList: true,
+              ),
+            );
+          }
+
+          // 6. Ajuste Adicional (fijo)
+          // (Leemos el 'manual_adjustment_value' que guardaste en el dialog)
+          final double manualAdjustment =
+              (custom['manual_adjustment_value'] as num?)?.toDouble() ?? 0.0;
+          if (manualAdjustment != 0) {
+            details.add(
+              _buildDetailRow(
+                context,
+                'Ajuste Adicional (fijo):',
+                currencyFormat.format(manualAdjustment),
+                highlight: manualAdjustment > 0
+                    ? const Color(0xFF1E8E3E)
+                    : accentRed,
+              ),
+            );
+          }
+        }
+        break; // Fin del 'case Box'
 
       // =======================================================
       // === OTROS CASOS (Mesa Dulce, etc.)
@@ -1108,9 +1248,7 @@ class OrderDetailPage extends ConsumerWidget {
         break;
     }
 
-    // ---
-    // --- "Notas de Ajuste" (MOVIDAS AQUÍ) ---
-    // ---
+    // --- "Notas de Ajuste" (MOVIDAS AL FINAL) ---
     if (item.customizationNotes != null &&
         item.customizationNotes!.isNotEmpty) {
       details.add(
@@ -1123,25 +1261,20 @@ class OrderDetailPage extends ConsumerWidget {
       );
     }
 
-    // --- Mantenemos las Notas del Ítem (al final) ---
+    // --- Notas del Ítem (al final) ---
     final itemNotes = custom['item_notes'] as String?;
     if (itemNotes != null && itemNotes.isNotEmpty) {
-      // Evita duplicar notas si ya se mostraron como "Notas del Box"
-      if (category != ProductCategory.box) {
-        details.add(const SizedBox(height: 4));
-        details.add(
-          _buildDetailRow(context, 'Notas Item:', itemNotes, isNote: true),
-        );
-      }
+      details.add(const SizedBox(height: 4));
+      details.add(
+        _buildDetailRow(context, 'Notas Item:', itemNotes, isNote: true),
+      );
     }
 
     return details;
   }
 
   // --- Helper para la fila de detalle de item ---
-  // (En order_detail_page.dart)
 
-  // --- Helper para la fila de detalle de item (CORREGIDO) ---
   Widget _buildDetailRow(
     BuildContext context,
     String label,

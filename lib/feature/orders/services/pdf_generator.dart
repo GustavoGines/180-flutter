@@ -225,7 +225,6 @@ class PdfGenerator {
                 children: [
                   _buildInfoRow('Cliente:', order.client?.name ?? 'N/A'),
                   _buildInfoRow('Teléfono:', order.client?.phone ?? 'N/A'),
-                  _buildInfoRow('Email:', order.client?.email ?? 'N/A'),
                 ],
               ),
             ),
@@ -240,7 +239,7 @@ class PdfGenerator {
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         _buildInfoRow('Tipo:', 'Envío a Domicilio'),
-                        _buildInfoRow('Etiqueta:', address.label ?? 'N/A'),
+                        _buildInfoRow('Ubicación:', address.label ?? 'N/A'),
                         _buildInfoRow(
                           'Dirección:',
                           address.addressLine1 ?? 'N/A',

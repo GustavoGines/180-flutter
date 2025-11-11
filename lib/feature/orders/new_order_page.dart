@@ -904,20 +904,44 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             .toList();
     List<Filling> selectedExtraFillings =
         (customData['selected_extra_fillings'] as List<dynamic>? ?? [])
-            .map(
-              (name) => extraCostFillings.firstWhereOrNull(
-                (f) => f.name == name?.toString(),
-              ),
-            )
+            .map((data) {
+              // --- INICIO CORRECCIÓN LECTURA ---
+              if (data is Map) {
+                final name = data['name']?.toString();
+                return extraCostFillings.firstWhereOrNull(
+                  (f) => f.name == name,
+                );
+              }
+              if (data is String) {
+                // Compatibilidad con datos viejos
+                return extraCostFillings.firstWhereOrNull(
+                  (f) => f.name == data,
+                );
+              }
+              return null;
+              // --- FIN CORRECCIÓN LECTURA ---
+            })
             .whereType<Filling>()
             .toList();
     List<CakeExtra> selectedExtrasKg =
         (customData['selected_extras_kg'] as List<dynamic>? ?? [])
-            .map(
-              (name) => cakeExtras.firstWhereOrNull(
-                (ex) => ex.name == name?.toString() && !ex.isPerUnit,
-              ),
-            )
+            .map((data) {
+              // --- INICIO CORRECCIÓN LECTURA ---
+              if (data is Map) {
+                final name = data['name']?.toString();
+                return cakeExtras.firstWhereOrNull(
+                  (ex) => ex.name == name && !ex.isPerUnit,
+                );
+              }
+              if (data is String) {
+                // Compatibilidad con datos viejos
+                return cakeExtras.firstWhereOrNull(
+                  (ex) => ex.name == data && !ex.isPerUnit,
+                );
+              }
+              return null;
+              // --- FIN CORRECCIÓN LECTURA ---
+            })
             .whereType<CakeExtra>()
             .toList();
     List<UnitExtraSelection> selectedExtrasUnit =
@@ -1754,20 +1778,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         // ya que el precio ya lo incluye, pero se mantiene la info de rellenos/extras
                         // si el Box tiene una mini torta.
                         // Solo guardamos los extras de la Mini Torta:
-                        'selected_fillings': selectedFillings
-                            .map((f) => f.name)
-                            .toList(),
                         'selected_extra_fillings': selectedExtraFillings
-                            .map((f) => f.name)
+                            .map(
+                              (f) => {
+                                'name': f.name,
+                                'price': f.extraCostPerKg,
+                              },
+                            )
                             .toList(),
                         'selected_extras_kg': selectedExtrasKg
-                            .map((ex) => ex.name)
+                            .map(
+                              (ex) => {'name': ex.name, 'price': ex.costPerKg},
+                            )
                             .toList(),
                         'selected_extras_unit': selectedExtrasUnit
                             .map(
                               (sel) => {
                                 'name': sel.extra.name,
                                 'quantity': sel.quantity,
+                                'price':
+                                    sel.extra.costPerUnit, // <-- Agregar precio
                               },
                             )
                             .toList(),
@@ -1783,16 +1813,29 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               .map((f) => f.name)
                               .toList(),
                           'selected_extra_fillings': selectedExtraFillings
-                              .map((f) => f.name)
+                              .map(
+                                (f) => {
+                                  'name': f.name,
+                                  'price': f.extraCostPerKg,
+                                },
+                              )
                               .toList(),
                           'selected_extras_kg': selectedExtrasKg
-                              .map((ex) => ex.name)
+                              .map(
+                                (ex) => {
+                                  'name': ex.name,
+                                  'price': ex.costPerKg,
+                                },
+                              )
                               .toList(),
                           'selected_extras_unit': selectedExtrasUnit
                               .map(
                                 (sel) => {
                                   'name': sel.extra.name,
                                   'quantity': sel.quantity,
+                                  'price': sel
+                                      .extra
+                                      .costPerUnit, // <-- Agregar precio
                                 },
                               )
                               .toList(),
