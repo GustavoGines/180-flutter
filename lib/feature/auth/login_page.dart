@@ -69,17 +69,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 50.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Image.asset(
               'assets/images/logo_180.png',
-              height: 350,
+              height: 250,
               fit: BoxFit.contain,
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 50),
             Text(
               'Bienvenido a 180° Pastelería',
               style: TextStyle(

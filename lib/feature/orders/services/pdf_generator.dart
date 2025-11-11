@@ -40,32 +40,41 @@ class PdfGenerator {
     final pw.ImageProvider? logoImage = await _loadLogoImage();
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
+        // 👈 CAMBIO CLAVE: MultiPage en lugar de Page
         pageFormat: PdfPageFormat.a4,
-        theme: pw.ThemeData.withFont(
-          base: customFont,
-        ), // Aplica la fuente globalmente
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              _buildHeader(order, logoImage),
-              pw.SizedBox(height: 20),
-              _buildClientSection(order),
-              pw.SizedBox(height: 20),
-              // Incluimos la sección de fecha destacada
-              _buildEventDateSection(order),
-              pw.SizedBox(height: 20),
-              _buildItemsTable(order),
-              pw.SizedBox(height: 20),
-              _buildNotesSection(order),
-              pw.Spacer(),
-              _buildFooterInfo(),
-              pw.SizedBox(height: 10),
-              _buildSummarySection(order),
-            ],
-          );
-        },
+        theme: pw.ThemeData.withFont(base: customFont),
+        header: (context) => _buildHeader(order, logoImage),
+        footer: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _buildFooterInfo(),
+            pw.Divider(color: PdfColors.grey),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text(
+                'Página ${context.pageNumber} de ${context.pagesCount}',
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey700,
+                  fontStyle: pw.FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+        ),
+        build: (pw.Context context) => [
+          pw.SizedBox(height: 5),
+          _buildClientSection(order),
+          pw.SizedBox(height: 20),
+          _buildEventDateSection(order),
+          pw.SizedBox(height: 20),
+          _buildItemsTable(order),
+          pw.SizedBox(height: 20),
+          _buildNotesSection(order),
+          pw.SizedBox(height: 20),
+          _buildSummarySection(order),
+        ],
       ),
     );
 
@@ -76,7 +85,6 @@ class PdfGenerator {
   // --- Lógica de Carga de Assets y Fuentes ----------------------------------
   // --------------------------------------------------------------------------
 
-  /// Helper para cargar la imagen del logo como asset de forma segura.
   Future<pw.ImageProvider?> _loadLogoImage() async {
     try {
       final byteData = await rootBundle.load('assets/images/logo_180.png');
@@ -87,7 +95,6 @@ class PdfGenerator {
     }
   }
 
-  /// Carga la fuente TTF para soporte Unicode amplio (necesita el asset).
   Future<pw.Font?> _loadCustomFont() async {
     try {
       final fontData = await rootBundle.load(
@@ -109,60 +116,82 @@ class PdfGenerator {
   // --------------------------------------------------------------------------
 
   pw.Widget _buildHeader(Order order, pw.ImageProvider? logo) {
-    return pw.Container(
-      decoration: pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _primaryPink, width: 2)),
-      ),
-      padding: const pw.EdgeInsets.only(bottom: 10),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: pw.CrossAxisAlignment.center,
-        children: [
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(
-                'Detalle del Pedido',
-                style: pw.TextStyle(
-                  fontSize: 24,
-                  fontWeight: pw.FontWeight.bold,
-                  color: _darkBrown,
-                ),
-              ),
-              // Aviso de No Factura (Prominente)
-              pw.SizedBox(height: 5),
-              pw.Text(
-                'Documento No Válido Como Factura ni Comprobante Fiscal',
-                style: pw.TextStyle(
-                  fontSize: 10,
-                  color: PdfColors.red700,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(height: 8),
+    // Define el tamaño deseado para el logo y el padding necesario
+    const double logoHeight = 100.0; // Grande y visible
+    const double logoWidth = 100.0;
 
-              _buildInfoRow('Pedido N°:', '${order.id}', fontSize: 12),
-              _buildInfoRow(
-                'Fecha de Emisión:',
-                DateFormat('dd/MM/yyyy').format(DateTime.now()),
-                fontSize: 12,
+    // Altura total necesaria para el Container exterior (Logo + Margen)
+    const double headerHeight = logoHeight + 1;
+
+    return pw.Container(
+      height: headerHeight,
+      child: pw.Stack(
+        children: [
+          // === 1. Contenedor principal de texto con línea inferior ===
+          pw.Container(
+            padding: pw.EdgeInsets.only(right: logoWidth + 20),
+            decoration: pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(
+                  color: _primaryPink,
+                  width: 2,
+                ), // 👈 LÍNEA DIVISORIA
               ),
-            ],
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'Detalle del Pedido',
+                  style: pw.TextStyle(
+                    fontSize: 24,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _darkBrown,
+                  ),
+                ),
+                pw.SizedBox(height: 5),
+                pw.Text(
+                  'Documento No Válido Como Factura ni Comprobante Fiscal',
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: PdfColors.red700,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 8),
+                _buildInfoRow('Pedido N°:', '${order.id}', fontSize: 12),
+                _buildInfoRow(
+                  'Fecha de Emisión:',
+                  DateFormat('dd/MM/yyyy').format(DateTime.now()),
+                  fontSize: 12,
+                ),
+                pw.SizedBox(height: 10),
+              ],
+            ),
           ),
+
+          // === 2. Logo a la derecha ===
           if (logo != null)
-            pw.Container(
-              width:
-                  200, // Reducido el tamaño para que quepa mejor en A4 con el texto
-              height: 20300,
-              child: pw.Image(logo, fit: pw.BoxFit.contain),
+            pw.Positioned(
+              right: 0,
+              top: 0,
+              child: pw.Container(
+                width: logoWidth,
+                height: logoHeight,
+                child: pw.Image(logo, fit: pw.BoxFit.contain),
+              ),
             )
           else
-            pw.Text(
-              '180°',
-              style: pw.TextStyle(
-                fontSize: 36,
-                fontWeight: pw.FontWeight.bold,
-                color: _primaryPink,
+            pw.Positioned(
+              right: 0,
+              top: 0,
+              child: pw.Text(
+                '180°',
+                style: pw.TextStyle(
+                  fontSize: 36,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _primaryPink,
+                ),
               ),
             ),
         ],
@@ -172,7 +201,6 @@ class PdfGenerator {
 
   pw.Widget _buildClientSection(Order order) {
     final address = order.clientAddress;
-    // Se mantiene la lógica para determinar si es envío
     final isDelivery =
         (order.deliveryCost ?? 0) > 0 ||
         (address?.addressLine1?.isNotEmpty ?? false);
@@ -229,7 +257,6 @@ class PdfGenerator {
     );
   }
 
-  /// Sección destacada de fecha y hora del evento.
   pw.Widget _buildEventDateSection(Order order) {
     final String eventDateFormatted = DateFormat(
       'EEEE d \'de\' MMMM, yyyy',
@@ -328,55 +355,143 @@ class PdfGenerator {
     );
   }
 
-  /// ✅ Lógica COMPLETA y CORRECTA para los detalles del ítem (incluye la parte de 'Box').
   String _getItemDetailsText(OrderItem item) {
     final custom = item.customizationJson ?? {};
     final parts = <String>[];
 
-    // 1. Notas de ajuste manual (lo más importante)
+    final category = custom['product_category']?.toString() ?? '';
+
+    // 🧁 --- CASO 1: BOX ---
+    if (category == 'box') {
+      parts.add(
+        'Precio Box: ${currencyFormat.format(item.finalUnitPrice * item.qty)}',
+      );
+
+      final selectedBaseCake = custom['selected_base_cake'] as String?;
+      final selectedMesaDulceItems =
+          custom['selected_mesa_dulce_items'] as List?;
+      if (selectedBaseCake != null ||
+          (selectedMesaDulceItems != null &&
+              selectedMesaDulceItems.isNotEmpty)) {
+        final cakeText = selectedBaseCake != null ? 'Torta Base' : '';
+        final itemsCount = selectedMesaDulceItems?.length ?? 0;
+        final itemsText = itemsCount > 0
+            ? '+ $itemsCount ítems de Mesa Dulce'
+            : '';
+        parts.add('Contenido del Box: $cakeText $itemsText'.trim());
+      }
+
+      return parts.join(' | ');
+    }
+
+    // 🎂 --- CASO 2: TORTA ---
+    final double basePrice = (item.basePrice - item.adjustments).clamp(
+      0,
+      double.infinity,
+    );
+    parts.add('Precio Base: ${currencyFormat.format(basePrice)}');
+
+    // Rellenos
+    final List<dynamic> fillingsRaw = custom['selected_fillings'] ?? [];
+    if (fillingsRaw.isNotEmpty) {
+      final formattedFillings = fillingsRaw
+          .map((e) {
+            if (e is Map && e['name'] != null) {
+              final name = e['name'];
+              final price = (e['price'] != null && e['price'] != 0)
+                  ? ' (${currencyFormat.format(e['price'])})'
+                  : '';
+              return '$name$price';
+            } else {
+              return e.toString();
+            }
+          })
+          .join(', ');
+      parts.add('Rellenos: $formattedFillings');
+    }
+
+    // Rellenos extra
+    final List<dynamic> extraFillingsRaw =
+        custom['selected_extra_fillings'] ?? [];
+    if (extraFillingsRaw.isNotEmpty) {
+      final formattedExtra = extraFillingsRaw
+          .map((e) {
+            if (e is Map && e['name'] != null) {
+              final name = e['name'];
+              final price = (e['price'] != null && e['price'] != 0)
+                  ? ' (${currencyFormat.format(e['price'])})'
+                  : '';
+              return '$name$price';
+            } else {
+              return e.toString();
+            }
+          })
+          .join(', ');
+      parts.add('Rellenos Extra: $formattedExtra');
+    }
+
+    // Extras por kg
+    final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
+    if (extrasKgRaw.isNotEmpty) {
+      final formattedExtrasKg = extrasKgRaw
+          .map((e) {
+            if (e is Map && e['name'] != null) {
+              final name = e['name'];
+              final price = (e['price'] != null && e['price'] != 0)
+                  ? ' (${currencyFormat.format(e['price'])})'
+                  : '';
+              return '$name$price';
+            } else {
+              return e.toString();
+            }
+          })
+          .join(', ');
+      parts.add('Extras (x kg): $formattedExtrasKg');
+    }
+
+    // Extras por unidad
+    final List<dynamic> extrasUnitRaw = custom['selected_extras_unit'] ?? [];
+    if (extrasUnitRaw.isNotEmpty) {
+      final formattedExtrasUnit = extrasUnitRaw
+          .map((e) {
+            if (e is Map && e['name'] != null) {
+              final qty = e['quantity'] ?? 1;
+              final name = e['name'];
+              final price = (e['price'] != null && e['price'] != 0)
+                  ? ' (${currencyFormat.format(e['price'])})'
+                  : '';
+              return '$name x$qty$price';
+            } else {
+              return e.toString();
+            }
+          })
+          .join(', ');
+      parts.add('Extras (x ud): $formattedExtrasUnit');
+    }
+
+    // Ajuste total (manual o multiplicador)
+    final double adjustment = item.adjustments;
+    if (adjustment != 0) {
+      parts.add('Ajuste adicional: ${currencyFormat.format(adjustment)}');
+    }
+
+    // Multiplicador por kg (si aplica)
+    final multiplierAdjustment = custom['multiplier_adjustment_per_kg'] as num?;
+    if (multiplierAdjustment != null && multiplierAdjustment != 0) {
+      parts.add(
+        'Ajuste por kg: ${currencyFormat.format(multiplierAdjustment)}',
+      );
+    }
+
+    // Notas
     if (item.customizationNotes != null &&
         item.customizationNotes!.isNotEmpty) {
-      parts.add('Ajuste: ${item.customizationNotes}');
+      parts.add('Notas: ${item.customizationNotes}');
     }
 
-    // 2. Precio base con ajuste manual (si aplica)
-    if (item.adjustments != 0) {
-      parts.add(
-        'Base: ${currencyFormat.format(item.basePrice)} Ajuste: ${currencyFormat.format(item.adjustments)}',
-      );
-    }
-
-    // 3. Notas generales del item (sabor/temática)
-    final itemNotes = custom['item_notes'] as String?;
-    if (itemNotes != null && itemNotes.isNotEmpty) {
-      parts.add('Notas Item: $itemNotes');
-    }
-
-    // 4. Detalles específicos de la Torta
+    // Peso
     if (custom['weight_kg'] != null) {
       parts.add('Peso: ${custom['weight_kg']} kg');
-    }
-
-    if (custom['selected_fillings'] is List &&
-        (custom['selected_fillings'] as List).isNotEmpty) {
-      parts.add(
-        'Rellenos: ${(custom['selected_fillings'] as List).join(', ')}',
-      );
-    }
-
-    // 5. Lógica para Box (combinación de base y ítems de mesa dulce)
-    final selectedBaseCake = custom['selected_base_cake'] as String?;
-    final selectedMesaDulceItems = custom['selected_mesa_dulce_items'] as List?;
-
-    if (selectedBaseCake != null ||
-        (selectedMesaDulceItems != null && selectedMesaDulceItems.isNotEmpty)) {
-      final cakeText = selectedBaseCake != null ? 'Torta Base' : '';
-      final itemsCount = selectedMesaDulceItems?.length ?? 0;
-      final itemsText = itemsCount > 0
-          ? '+ $itemsCount ítems de Mesa Dulce'
-          : '';
-      // Agrega el nombre del box si existe, de lo contrario solo los contenidos
-      parts.add('Contenido del Box: $cakeText $itemsText'.trim());
     }
 
     return parts.join(' | ');
@@ -389,7 +504,7 @@ class PdfGenerator {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('Notas Generales del Pedido '), // Emoji aquí
+        _buildSectionTitle('Notas Generales del Pedido'),
         pw.SizedBox(height: 5),
         pw.Container(
           padding: const pw.EdgeInsets.all(8),
@@ -427,10 +542,7 @@ class PdfGenerator {
         children: [
           _buildSummaryRow('Subtotal Productos:', itemsSubtotal),
           if (deliveryCost > 0) _buildSummaryRow('Costo Envío:', deliveryCost),
-          pw.Divider(
-            color: _darkBrown,
-            thickness: 1.5,
-          ), // Separador profesional
+          pw.Divider(color: _darkBrown, thickness: 1.5),
           _buildSummaryRow('TOTAL PEDIDO:', total, isTotal: true),
           if (deposit > 0)
             _buildSummaryRow('Seña Recibida:', deposit, isDeposit: true),
@@ -453,7 +565,6 @@ class PdfGenerator {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          // Aviso de no factura en el pie (refuerzo)
           pw.Text(
             'AVISO: Este documento es un detalle de pedido/proforma y no tiene validez como Factura A, B o C.',
             style: pw.TextStyle(
@@ -463,7 +574,6 @@ class PdfGenerator {
             ),
           ),
           pw.SizedBox(height: 5),
-
           pw.Text(
             'Términos y Condiciones Breves:',
             style: pw.TextStyle(
@@ -483,10 +593,9 @@ class PdfGenerator {
   }
 
   // --------------------------------------------------------------------------
-  // --- Funciones Auxiliares (Añadidas para la compilación y estilo) ---------
+  // --- Auxiliares ------------------------------------------------------------
   // --------------------------------------------------------------------------
 
-  /// 🛠️ Construye una fila para los totales.
   pw.Widget _buildSummaryRow(
     String label,
     double amount, {
@@ -520,7 +629,6 @@ class PdfGenerator {
     );
   }
 
-  /// 🛠️ Construye el título de una sección.
   pw.Widget _buildSectionTitle(String title) {
     return pw.Text(
       title,
@@ -532,7 +640,6 @@ class PdfGenerator {
     );
   }
 
-  /// 🛠️ Construye el título de una sub-sección.
   pw.Widget _buildSubSectionTitle(String title) {
     return pw.Text(
       title,
@@ -544,7 +651,6 @@ class PdfGenerator {
     );
   }
 
-  /// 🛠️ Construye una fila simple de información (Label: Value).
   pw.Widget _buildInfoRow(
     String label,
     String value, {

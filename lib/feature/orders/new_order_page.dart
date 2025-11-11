@@ -828,7 +828,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         : selectedProduct?.price ?? 0.0;
     // 🎯 Paso 1: Leer el Ajuste Manual Puro del JSON si existe
     double manualAdjustmentValue = isEditing
-        ? (customData['manual_adjustment_value'] as double? ?? 0.0)
+        ? (customData['manual_adjustment_value'] is num
+              ? (customData['manual_adjustment_value'] as num).toDouble()
+              : 0.0)
         : 0.0;
 
     // La variable 'adjustments' DEBE reflejar el valor inicial del controlador (el ajuste manual puro)
@@ -3087,7 +3089,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       'status': isEditMode ? widget.order!.status : 'confirmed',
       'deposit': _depositAmount,
       'delivery_cost': _deliveryCost > 0 ? _deliveryCost : null,
-      'delivery_address_id': _selectedAddressId,
       'notes': _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
@@ -3316,8 +3317,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                         // ⬅️ NUEVO: Muestra el ajuste multiplicador por kg
                         final multiplierAdj =
-                            custom['multiplier_adjustment_per_kg'] as double? ??
-                            0.0;
+                            (custom['multiplier_adjustment_per_kg'] is num)
+                            ? (custom['multiplier_adjustment_per_kg'] as num)
+                                  .toDouble()
+                            : 0.0;
                         if (multiplierAdj != 0.0) {
                           details +=
                               ' | Ajuste/kg: ${_currencyFormat.format(multiplierAdj)}';

@@ -235,8 +235,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       appBar: AppBar(
         title: Row(
           children: [
-            Image.asset('assets/images/logo_180.png', height: 80.0),
-            const SizedBox(width: 0),
+            Image.asset('assets/images/logo_180.png', height: 50.0),
+            const SizedBox(width: 15),
             const Text('Pedidos'),
           ],
         ),
