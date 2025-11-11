@@ -402,9 +402,7 @@ class OrderDetailPage extends ConsumerWidget {
                                   color: primaryTextColor,
                                 ),
                               ),
-                              subtitle:
-                                  (category == ProductCategory.torta ||
-                                      category == ProductCategory.mesaDulce)
+                              subtitle: (category == ProductCategory.mesaDulce)
                                   ? Text(
                                       'Precio Base: ${currencyFormat.format(item.finalUnitPrice)}',
                                       style: TextStyle(
@@ -779,74 +777,92 @@ class OrderDetailPage extends ConsumerWidget {
   }
 
   // --- Helper para construir los detalles del Item ---
+  // (En order_detail_page.dart)
+
   List<Widget> _buildItemDetails(
     OrderItem item,
     ProductCategory? category,
     NumberFormat currencyFormat,
     BuildContext context,
   ) {
-    // (Tu lógica de _buildItemDetails se mantiene intacta,
-    // solo se asegura de pasar 'context' a _buildDetailRow)
     final List<Widget> details = [];
     final custom = item.customizationJson ?? {};
 
-    // 🔧 Mostrar precio solo si no es Box y queremos detallar los ajustes
-    if (category != ProductCategory.box &&
-        category != ProductCategory.mesaDulce &&
-        category != ProductCategory.torta) {
-      if (item.adjustments != 0) {
+    // ---
+    // --- "Notas de Ajuste" (ELIMINADO DE AQUÍ) ---
+    // ---
+
+    switch (category) {
+      // =======================================================
+      // === CASO TORTA (Lógica de desglose REORDENADA)
+      // =======================================================
+      case ProductCategory.torta:
+        // --- 1. Calcular Costo Extras ---
+        final bool isCurrentMiniCake =
+            item.name == 'Mini Torta Personalizada (Base)';
+        final double weight = (custom['weight_kg'] as num?)?.toDouble() ?? 1.0;
+
+        final double extraMultiplier = isCurrentMiniCake ? 0.0 : weight;
+
+        final List<dynamic> extraFillingsRaw =
+            custom['selected_extra_fillings'] ?? [];
+        final double extraFillingsPrice = extraFillingsRaw.fold(0.0, (
+          sum,
+          data,
+        ) {
+          final price =
+              (data is Map ? (data['price'] as num?)?.toDouble() : null) ?? 0.0;
+          return sum + (price * extraMultiplier);
+        });
+
+        final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
+        final double extrasKgPrice = extrasKgRaw.fold(0.0, (sum, data) {
+          final price =
+              (data is Map ? (data['price'] as num?)?.toDouble() : null) ?? 0.0;
+          return sum + (price * extraMultiplier);
+        });
+
+        final List<dynamic> extrasUnitRaw =
+            custom['selected_extras_unit'] ?? [];
+        final double extrasUnitPrice = extrasUnitRaw.fold(0.0, (sum, data) {
+          final price =
+              (data is Map ? (data['price'] as num?)?.toDouble() : null) ?? 0.0;
+          final qty =
+              (data is Map ? (data['quantity'] as num?)?.toDouble() : null) ??
+              1.0;
+          return sum + (price * qty);
+        });
+
+        final double costoExtrasTotal =
+            extraFillingsPrice + extrasKgPrice + extrasUnitPrice;
+
+        // item.basePrice (guardado en _addCakeDialog) es (Base+AjusteMultiplicador+Extras)
+        // El "Precio Base" que querés es (Base+AjusteMultiplicador)
+        final double precioCalculadoConAjusteKg =
+            item.basePrice - costoExtrasTotal;
+
+        // --- 2. Construir los widgets en el orden solicitado ---
+
+        // "Precio Base" (AHORA AL PRINCIPIO)
         details.add(
           _buildDetailRow(
             context,
-            'Ajuste:',
-            currencyFormat.format(item.adjustments),
-            highlight: item.adjustments > 0
-                ? const Color(0xFF1E8E3E)
-                : accentRed,
+            'Precio Base:', // <-- NOMBRE CORREGIDO
+            currencyFormat.format(precioCalculadoConAjusteKg),
+            isSubTotal: true, // Para que se vea en negrita
           ),
         );
-      }
 
-      // Precio final unitario (solo si no es box)
-      details.add(
-        _buildDetailRow(
-          context,
-          'Precio Unitario:',
-          currencyFormat.format(item.finalUnitPrice),
-          isSubTotal: true,
-        ),
-      );
-    }
-
-    if (item.customizationNotes != null &&
-        item.customizationNotes!.isNotEmpty) {
-      details.add(
-        _buildDetailRow(
-          context,
-          'Notas de Ajuste:',
-          item.customizationNotes!,
-          isNote: true,
-        ),
-      );
-    }
-
-    switch (category) {
-      case ProductCategory.torta:
+        // Peso
         if (custom['weight_kg'] != null) {
           details.add(
             _buildDetailRow(context, 'Peso:', '${custom['weight_kg']} kg'),
           );
         }
-        if (custom['cake_type'] != null && custom['cake_type'] != item.name) {
-          details.add(
-            _buildDetailRow(context, 'Tipo:', '${custom['cake_type']}'),
-          );
-        }
+
+        // Rellenos (List<String>)
         final List<String> fillings = List<String>.from(
           custom['selected_fillings'] ?? [],
-        );
-        final List<String> extraFillings = List<String>.from(
-          custom['selected_extra_fillings'] ?? [],
         );
         if (fillings.isNotEmpty) {
           details.add(
@@ -858,37 +874,71 @@ class OrderDetailPage extends ConsumerWidget {
             ),
           );
         }
-        if (extraFillings.isNotEmpty) {
+
+        // Rellenos extra (List<Map>)
+        final List<Map> extraFillingsData = extraFillingsRaw
+            .whereType<Map>()
+            .toList();
+        if (extraFillingsData.isNotEmpty) {
+          final extraFillingsText = extraFillingsData
+              .map((e) {
+                final name = e['name'] ?? 'Extra';
+                final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+                final priceText = (price > 0)
+                    ? ' (${currencyFormat.format(price)})'
+                    : '';
+                return '$name$priceText';
+              })
+              .join(', ');
           details.add(
             _buildDetailRow(
               context,
               'Rellenos Extra:',
-              extraFillings.join(', '),
+              extraFillingsText,
               isList: true,
             ),
           );
         }
-        final List<String> extrasKg = List<String>.from(
-          custom['selected_extras_kg'] ?? [],
-        );
-        final List<dynamic> extrasUnitRaw =
-            custom['selected_extras_unit'] ?? [];
-        final List<Map> extrasUnitData = extrasUnitRaw
-            .whereType<Map>()
-            .toList();
-        if (extrasKg.isNotEmpty) {
+
+        // Extras por kg (List<Map>)
+        final List<Map> extrasKgData = extrasKgRaw.whereType<Map>().toList();
+        if (extrasKgData.isNotEmpty) {
+          final extrasKgText = extrasKgData
+              .map((e) {
+                final name = e['name'] ?? 'Extra';
+                final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+                final priceText = (price > 0)
+                    ? ' (${currencyFormat.format(price)})'
+                    : '';
+                return '$name$priceText';
+              })
+              .join(', ');
           details.add(
             _buildDetailRow(
               context,
               'Extras (x kg):',
-              extrasKg.join(', '),
+              extrasKgText,
               isList: true,
             ),
           );
         }
+
+        // Extras por unidad (List<Map>)
+        final List<Map> extrasUnitData = extrasUnitRaw
+            .whereType<Map>()
+            .toList();
         if (extrasUnitData.isNotEmpty) {
           final unitExtrasText = extrasUnitData
-              .map((e) => '${e['name']} (x${e['quantity']})')
+              .map((e) {
+                final name = e['name'] ?? 'Extra';
+                final qty = (e['quantity'] as num?) ?? 1;
+                final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+                final totalCost = price * (qty > 0 ? qty : 1);
+                final priceText = (totalCost > 0)
+                    ? ' (${currencyFormat.format(totalCost)})'
+                    : '';
+                return '$name (x$qty)$priceText';
+              })
               .join(', ');
           details.add(
             _buildDetailRow(
@@ -899,45 +949,32 @@ class OrderDetailPage extends ConsumerWidget {
             ),
           );
         }
-        break;
-      case ProductCategory.mesaDulce:
-        if (custom['selected_size'] != null) {
+
+        // Ajuste Manual Adicional (el sumatorio)
+        if (item.adjustments != 0) {
           details.add(
             _buildDetailRow(
               context,
-              'Tamaño:',
-              getUnitText(ProductUnit.values.byName(custom['selected_size'])),
+              'Ajuste Adicional (fijo):',
+              currencyFormat.format(item.adjustments),
+              highlight: item.adjustments > 0
+                  ? const Color(0xFF1E8E3E)
+                  : accentRed,
             ),
           );
         }
-        if (custom['is_half_dozen'] == true) {
-          details.add(
-            _buildDetailRow(context, 'Presentación:', 'Media Docena'),
-          );
-        }
-        break;
+
+        break; // Fin del 'case Torta'
+
+      // =======================================================
+      // === CASO BOX (Corregido: Sin Precio ni Tipo)
+      // =======================================================
       case ProductCategory.box:
-        final String? boxType = custom['box_type'];
-
-        // 💰 Mostrar solo el precio total del Box (unitario × cantidad)
-        details.add(
-          _buildDetailRow(
-            context,
-            'Precio Box:',
-            currencyFormat.format(item.finalUnitPrice * item.qty),
-            isSubTotal: true,
-          ),
-        );
-
-        // 🏷️ Tipo de Box
-        if (boxType != null) {
-          details.add(_buildDetailRow(context, 'Tipo de Box:', boxType));
-        }
-
-        // 🎂 Rellenos (si hay torta base en el box)
+        // Rellenos (si hay torta base en el box)
         final List<String> fillings = List<String>.from(
           custom['selected_fillings'] ?? [],
         );
+
         final List<String> extraFillings = List<String>.from(
           custom['selected_extra_fillings'] ?? [],
         );
@@ -963,7 +1000,7 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
 
-        // 🍓 Extras (por kg o unidad)
+        // Extras (por kg o unidad)
         final List<String> extrasKg = List<String>.from(
           custom['selected_extras_kg'] ?? [],
         );
@@ -1022,33 +1059,89 @@ class OrderDetailPage extends ConsumerWidget {
             ),
           );
         }
+        break;
 
-        // 📝 Notas del Box
-        final itemNotes = custom['item_notes'] as String?;
-        if (itemNotes != null && itemNotes.isNotEmpty) {
+      // =======================================================
+      // === OTROS CASOS (Mesa Dulce, etc.)
+      // =======================================================
+      case ProductCategory.mesaDulce:
+        if (custom['selected_size'] != null) {
           details.add(
-            _buildDetailRow(context, 'Notas del Box:', itemNotes, isNote: true),
+            _buildDetailRow(
+              context,
+              'Tamaño:',
+              getUnitText(ProductUnit.values.byName(custom['selected_size'])),
+            ),
           );
         }
-
+        if (custom['is_half_dozen'] == true) {
+          details.add(
+            _buildDetailRow(context, 'Presentación:', 'Media Docena'),
+          );
+        }
         break;
 
       default:
+        // Lógica para ítems simples (sin categoría o "otros")
+        if (item.adjustments != 0) {
+          details.add(
+            _buildDetailRow(
+              context,
+              'Ajuste:',
+              currencyFormat.format(item.adjustments),
+              highlight: item.adjustments > 0
+                  ? const Color(0xFF1E8E3E)
+                  : accentRed,
+            ),
+          );
+        }
+
+        // Precio final unitario (solo si no es box, torta o mesa dulce)
+        details.add(
+          _buildDetailRow(
+            context,
+            'Precio Unitario:',
+            currencyFormat.format(item.finalUnitPrice),
+            isSubTotal: true,
+          ),
+        );
         break;
     }
 
+    // ---
+    // --- "Notas de Ajuste" (MOVIDAS AQUÍ) ---
+    // ---
+    if (item.customizationNotes != null &&
+        item.customizationNotes!.isNotEmpty) {
+      details.add(
+        _buildDetailRow(
+          context,
+          'Notas de Ajuste:',
+          item.customizationNotes!,
+          isNote: true,
+        ),
+      );
+    }
+
+    // --- Mantenemos las Notas del Ítem (al final) ---
     final itemNotes = custom['item_notes'] as String?;
     if (itemNotes != null && itemNotes.isNotEmpty) {
-      details.add(const SizedBox(height: 4));
-      details.add(
-        _buildDetailRow(context, 'Notas Item:', itemNotes, isNote: true),
-      );
+      // Evita duplicar notas si ya se mostraron como "Notas del Box"
+      if (category != ProductCategory.box) {
+        details.add(const SizedBox(height: 4));
+        details.add(
+          _buildDetailRow(context, 'Notas Item:', itemNotes, isNote: true),
+        );
+      }
     }
 
     return details;
   }
 
   // --- Helper para la fila de detalle de item ---
+  // (En order_detail_page.dart)
+
+  // --- Helper para la fila de detalle de item (CORREGIDO) ---
   Widget _buildDetailRow(
     BuildContext context,
     String label,
@@ -1060,15 +1153,10 @@ class OrderDetailPage extends ConsumerWidget {
   }) {
     // --- ADAPTADO AL TEMA ---
     final cs = Theme.of(context).colorScheme;
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    // final isDarkMode = Theme.of(context).brightness == Brightness.dark; // No se usa aquí
 
     final labelColor = cs.onSurfaceVariant;
     final valueColor = isSubTotal ? cs.onSurface : cs.onSurfaceVariant;
-
-    // Chip
-    final chipBg = isDarkMode ? cs.secondaryContainer : darkBrown.withAlpha(26);
-    final chipFg = isDarkMode ? cs.onSecondaryContainer : cs.onSurface;
-    final chipBorder = isDarkMode ? cs.outlineVariant : darkBrown.withAlpha(51);
     // --- FIN ---
 
     return Padding(
@@ -1083,42 +1171,20 @@ class OrderDetailPage extends ConsumerWidget {
             style: TextStyle(color: labelColor, fontWeight: FontWeight.normal),
           ),
           Expanded(
-            child: isList
-                ? Wrap(
-                    spacing: 6.0,
-                    runSpacing: 4.0,
-                    children: value
-                        .split(',')
-                        .where((s) => s.trim().isNotEmpty)
-                        .map(
-                          (e) => Chip(
-                            label: Text(e.trim()),
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 0,
-                            ),
-                            backgroundColor: chipBg,
-                            labelStyle: TextStyle(fontSize: 12, color: chipFg),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              side: BorderSide(color: chipBorder),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  )
-                : Text(
-                    value,
-                    style: TextStyle(
-                      color:
-                          highlight ?? (isSubTotal ? cs.onSurface : valueColor),
-                      fontStyle: isNote ? FontStyle.italic : FontStyle.normal,
-                      fontWeight: isSubTotal
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
+            // ---
+            // --- CORRECCIÓN CLAVE ---
+            // Eliminamos la lógica de 'isList ? Wrap(...)'
+            // Ahora, si es una lista (isList: true) o texto normal,
+            // SIEMPRE usará un widget Text que puede hacer wrap (ajuste de línea).
+            // ---
+            child: Text(
+              value,
+              style: TextStyle(
+                color: highlight ?? (isSubTotal ? cs.onSurface : valueColor),
+                fontStyle: isNote ? FontStyle.italic : FontStyle.normal,
+                fontWeight: isSubTotal ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
           ),
         ],
       ),
