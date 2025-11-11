@@ -783,6 +783,8 @@ class OrderDetailPage extends ConsumerWidget {
 
   // --- Helper para construir los detalles del Item ---
 
+  // (En order_detail_page.dart)
+
   List<Widget> _buildItemDetails(
     OrderItem item,
     ProductCategory? category,
@@ -794,40 +796,56 @@ class OrderDetailPage extends ConsumerWidget {
 
     switch (category) {
       // =======================================================
-      // === CASO TORTA (Se mantiene como estaba)
+      // === CASO TORTA (CORREGIDO CON LÓGICA 0.5)
       // =======================================================
       case ProductCategory.torta:
-        final bool isCurrentMiniCake =
-            item.name == 'Mini Torta Personalizada (Base)';
-        final double weight = (custom['weight_kg'] as num?)?.toDouble() ?? 1.0;
-        final double extraMultiplier = isCurrentMiniCake ? 0.0 : weight;
+        // --- 1. Definir si es Torta Chica ---
+        const miniCakeName = 'Mini Torta Personalizada (Base)';
+        const microCakeName = 'Micro Torta (Base)'; // <-- Revisa este nombre
 
+        final bool isMiniCake = item.name == miniCakeName;
+        final bool isMicroCake = item.name == microCakeName;
+        final bool isSmallCake = isMiniCake || isMicroCake;
+
+        final double weight = (custom['weight_kg'] as num?)?.toDouble() ?? 1.0;
+
+        // --- 2. Definir el multiplicador de extras ---
+        // Si es torta chica, el multiplicador es 0.5 (mitad de precio)
+        // Si es torta normal, el multiplicador es el peso en KG
+        final double extraMultiplier = isSmallCake ? 0.5 : weight;
+
+        // --- 3. Leer datos (ya corrigiendo el TypeError) ---
         final List<dynamic> extraFillingsRaw =
             custom['selected_extra_fillings'] ?? [];
-        final double extraFillingsPrice = extraFillingsRaw.fold(0.0, (
-          sum,
-          data,
-        ) {
-          final price =
-              (data is Map ? (data['price'] as num?)?.toDouble() : null) ?? 0.0;
-          return sum + (price * extraMultiplier);
-        });
+        final List<Map> extraFillingsData = extraFillingsRaw
+            .whereType<Map>()
+            .toList();
 
         final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
-        final double extrasKgPrice = extrasKgRaw.fold(0.0, (sum, data) {
-          final price =
-              (data is Map ? (data['price'] as num?)?.toDouble() : null) ?? 0.0;
-          return sum + (price * extraMultiplier);
-        });
+        final List<Map> extrasKgData = extrasKgRaw.whereType<Map>().toList();
 
         final List<dynamic> extrasUnitRaw =
             custom['selected_extras_unit'] ?? [];
-        final double extrasUnitPrice = extrasUnitRaw.fold(0.0, (sum, data) {
-          final price =
-              (data is Map ? (data['price'] as num?)?.toDouble() : null) ?? 0.0;
-          final qty =
-              (data is Map ? (data['quantity'] as num?)?.toDouble() : null) ??
-              1.0;
+        final List<Map> extrasUnitData = extrasUnitRaw
+            .whereType<Map>()
+            .toList();
+
+        // --- 4. Calcular el Precio Base (despejando) ---
+        // (Esta lógica usa el multiplicador para calcular el costo real de los extras)
+        final double extraFillingsPrice = extraFillingsData.fold(0.0, (
+          sum,
+          data,
+        ) {
+          final price = (data['price'] as num?)?.toDouble() ?? 0.0;
+          return sum + (price * extraMultiplier);
+        });
+        final double extrasKgPrice = extrasKgData.fold(0.0, (sum, data) {
+          final price = (data['price'] as num?)?.toDouble() ?? 0.0;
+          return sum + (price * extraMultiplier);
+        });
+        final double extrasUnitPrice = extrasUnitData.fold(0.0, (sum, data) {
+          final price = (data['price'] as num?)?.toDouble() ?? 0.0;
+          final qty = (data['quantity'] as num?)?.toDouble() ?? 1.0;
           return sum + (price * qty);
         });
 
@@ -835,6 +853,8 @@ class OrderDetailPage extends ConsumerWidget {
             extraFillingsPrice + extrasKgPrice + extrasUnitPrice;
         final double precioCalculadoConAjusteKg =
             item.basePrice - costoExtrasTotal;
+
+        // --- 5. Construir los widgets en el orden solicitado ---
 
         details.add(
           _buildDetailRow(
@@ -865,16 +885,17 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
 
-        final List<Map> extraFillingsData = extraFillingsRaw
-            .whereType<Map>()
-            .toList();
+        // Rellenos extra (con precio * 0.5 si es Torta Chica)
         if (extraFillingsData.isNotEmpty) {
           final extraFillingsText = extraFillingsData
               .map((e) {
                 final name = e['name'] ?? 'Extra';
                 final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                final priceText = (price > 0)
-                    ? ' (${currencyFormat.format(price)})'
+                // --- CORRECCIÓN AQUÍ ---
+                final displayedPrice =
+                    price * extraMultiplier; // Aplicar multiplicador
+                final priceText = (displayedPrice > 0)
+                    ? ' (${currencyFormat.format(displayedPrice)})'
                     : '';
                 return '$name$priceText';
               })
@@ -889,14 +910,17 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
 
-        final List<Map> extrasKgData = extrasKgRaw.whereType<Map>().toList();
+        // Extras por kg (con precio * 0.5 si es Torta Chica)
         if (extrasKgData.isNotEmpty) {
           final extrasKgText = extrasKgData
               .map((e) {
                 final name = e['name'] ?? 'Extra';
                 final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                final priceText = (price > 0)
-                    ? ' (${currencyFormat.format(price)})'
+                // --- CORRECCIÓN AQUÍ ---
+                final displayedPrice =
+                    price * extraMultiplier; // Aplicar multiplicador
+                final priceText = (displayedPrice > 0)
+                    ? ' (${currencyFormat.format(displayedPrice)})'
                     : '';
                 return '$name$priceText';
               })
@@ -911,9 +935,7 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
 
-        final List<Map> extrasUnitData = extrasUnitRaw
-            .whereType<Map>()
-            .toList();
+        // Extras por unidad (El precio de estos no se multiplica)
         if (extrasUnitData.isNotEmpty) {
           final unitExtrasText = extrasUnitData
               .map((e) {
@@ -937,6 +959,7 @@ class OrderDetailPage extends ConsumerWidget {
           );
         }
 
+        // Ajuste Manual Adicional (el sumatorio)
         if (item.adjustments != 0) {
           details.add(
             _buildDetailRow(
@@ -953,14 +976,33 @@ class OrderDetailPage extends ConsumerWidget {
         break; // Fin del 'case Torta'
 
       // =======================================================
-      // === CASO BOX (NUEVA LÓGICA)
+      // === CASO BOX (CORREGIDO CON LÓGICA 0.5)
       // =======================================================
       case ProductCategory.box:
+        // --- 1. Definir si es Torta Chica ---
+        const miniCakeName = 'Mini Torta Personalizada (Base)';
+        const microCakeName = 'Micro Torta (Base)'; // <-- Revisa este nombre
         final String boxType = custom['box_type'] ?? '';
         final bool isPersonalizado =
             boxType == 'BOX DULCE Personalizado (Armar)';
 
-        // --- LEER TODOS LOS EXTRAS (para solucionar el error _TypeError) ---
+        final String? baseCakeName = custom['selected_base_cake'] as String?;
+
+        bool isSmallCake;
+        if (isPersonalizado) {
+          // Si es personalizado, chequea la torta base seleccionada
+          isSmallCake =
+              baseCakeName == miniCakeName || baseCakeName == microCakeName;
+        } else {
+          // Si es predefinido, asumimos que SIEMPRE usa la lógica de mini torta
+          isSmallCake = true;
+        }
+
+        // Define el multiplicador de costo (0.5 para chicas, 1.0 para tortas de 1kg si las agregaras)
+        final double costMultiplier = isSmallCake ? 0.5 : 1.0;
+        // ---
+
+        // --- 2. Leer datos (Corrigiendo TypeError) ---
         final List<String> fillings = List<String>.from(
           custom['selected_fillings'] ?? [],
         );
@@ -990,21 +1032,10 @@ class OrderDetailPage extends ConsumerWidget {
             extrasKgData.isNotEmpty ||
             extrasUnitData.isNotEmpty;
 
-        // --- LÓGICA PARA BOX PERSONALIZADO ---
+        // --- 3. Construir widgets según el tipo de Box ---
         if (isPersonalizado) {
-          // 1. "Precio Box" (ELIMINADO)
-          /*
-        details.add(
-          _buildDetailRow(
-            context,
-            'Precio Box:',
-            currencyFormat.format(item.finalUnitPrice),
-            isSubTotal: true,
-          ),
-        );
-        */
+          // --- BOX PERSONALIZADO ---
 
-          // 2. Rellenos (base) de la torta (si hay)
           if (fillings.isNotEmpty) {
             details.add(
               _buildDetailRow(
@@ -1016,14 +1047,15 @@ class OrderDetailPage extends ConsumerWidget {
             );
           }
 
-          // 3. Rellenos Extra (con precio)
           if (extraFillingsData.isNotEmpty) {
             final text = extraFillingsData
                 .map((e) {
                   final name = e['name'] ?? 'Extra';
                   final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  final priceText = (price > 0)
-                      ? ' (${currencyFormat.format(price)})'
+                  // --- CORRECCIÓN AQUÍ ---
+                  final displayedPrice = price * costMultiplier;
+                  final priceText = (displayedPrice > 0)
+                      ? ' (${currencyFormat.format(displayedPrice)})'
                       : '';
                   return '$name$priceText';
                 })
@@ -1033,14 +1065,15 @@ class OrderDetailPage extends ConsumerWidget {
             );
           }
 
-          // 4. Extras (x kg) (con precio)
           if (extrasKgData.isNotEmpty) {
             final text = extrasKgData
                 .map((e) {
                   final name = e['name'] ?? 'Extra';
                   final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  final priceText = (price > 0)
-                      ? ' (${currencyFormat.format(price)})'
+                  // --- CORRECCIÓN AQUÍ ---
+                  final displayedPrice = price * costMultiplier;
+                  final priceText = (displayedPrice > 0)
+                      ? ' (${currencyFormat.format(displayedPrice)})'
                       : '';
                   return '$name$priceText';
                 })
@@ -1055,7 +1088,6 @@ class OrderDetailPage extends ConsumerWidget {
             );
           }
 
-          // 5. Extras (x unidad) (con precio)
           if (extrasUnitData.isNotEmpty) {
             final text = extrasUnitData
                 .map((e) {
@@ -1079,7 +1111,6 @@ class OrderDetailPage extends ConsumerWidget {
             );
           }
 
-          // 6. Mesa Dulce
           if (mesaDulceItems.isNotEmpty) {
             final text = mesaDulceItems
                 .map((e) {
@@ -1095,26 +1126,20 @@ class OrderDetailPage extends ConsumerWidget {
               _buildDetailRow(context, 'Mesa Dulce:', text, isList: true),
             );
           }
+        } else {
+          // --- BOX PREDEFINIDO ---
 
-          // 7. Ajuste Adicional -> NO SE MUESTRA (va incluido en el Precio Box)
-        }
-        // --- LÓGICA PARA BOX PREDEFINIDO ---
-        else {
-          // 1. Mostrar "Precio Box" (solo si hay extras)
           if (hasExtras) {
             details.add(
               _buildDetailRow(
                 context,
                 'Precio Box:',
-                currencyFormat.format(
-                  item.basePrice,
-                ), // <-- Precio base del box
+                currencyFormat.format(item.basePrice),
                 isSubTotal: true,
               ),
             );
           }
 
-          // 2. Rellenos (base) de la mini torta
           if (fillings.isNotEmpty) {
             details.add(
               _buildDetailRow(
@@ -1126,14 +1151,16 @@ class OrderDetailPage extends ConsumerWidget {
             );
           }
 
-          // 3. Rellenos Extra (con precio)
           if (extraFillingsData.isNotEmpty) {
             final text = extraFillingsData
                 .map((e) {
                   final name = e['name'] ?? 'Extra';
                   final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  final priceText = (price > 0)
-                      ? ' (${currencyFormat.format(price)})'
+                  // --- CORRECCIÓN AQUÍ ---
+                  final displayedPrice =
+                      price * costMultiplier; // Siempre es 0.5 para predefinido
+                  final priceText = (displayedPrice > 0)
+                      ? ' (${currencyFormat.format(displayedPrice)})'
                       : '';
                   return '$name$priceText';
                 })
@@ -1143,14 +1170,16 @@ class OrderDetailPage extends ConsumerWidget {
             );
           }
 
-          // 4. Extras (x kg) (con precio)
           if (extrasKgData.isNotEmpty) {
             final text = extrasKgData
                 .map((e) {
                   final name = e['name'] ?? 'Extra';
                   final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  final priceText = (price > 0)
-                      ? ' (${currencyFormat.format(price)})'
+                  // --- CORRECCIÓN AQUÍ ---
+                  final displayedPrice =
+                      price * costMultiplier; // Siempre es 0.5 para predefinido
+                  final priceText = (displayedPrice > 0)
+                      ? ' (${currencyFormat.format(displayedPrice)})'
                       : '';
                   return '$name$priceText';
                 })
@@ -1160,7 +1189,6 @@ class OrderDetailPage extends ConsumerWidget {
             );
           }
 
-          // 5. Extras (x unidad) (con precio)
           if (extrasUnitData.isNotEmpty) {
             final text = extrasUnitData
                 .map((e) {
@@ -1184,8 +1212,6 @@ class OrderDetailPage extends ConsumerWidget {
             );
           }
 
-          // 6. Ajuste Adicional (fijo)
-          // (Leemos el 'manual_adjustment_value' que guardaste en el dialog)
           final double manualAdjustment =
               (custom['manual_adjustment_value'] as num?)?.toDouble() ?? 0.0;
           if (manualAdjustment != 0) {
@@ -1224,7 +1250,6 @@ class OrderDetailPage extends ConsumerWidget {
         break;
 
       default:
-        // Lógica para ítems simples (sin categoría o "otros")
         if (item.adjustments != 0) {
           details.add(
             _buildDetailRow(
@@ -1237,8 +1262,6 @@ class OrderDetailPage extends ConsumerWidget {
             ),
           );
         }
-
-        // Precio final unitario (solo si no es box, torta o mesa dulce)
         details.add(
           _buildDetailRow(
             context,

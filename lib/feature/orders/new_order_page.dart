@@ -1003,19 +1003,35 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     // Sumar extras de Torta (rellenos/extras por unidad/kg)
     if (selectedBaseCake != null || !isPersonalizedBox) {
+      const miniCakeName = 'Mini Torta Personalizada (Base)';
+      const microCakeName = 'Micro Torta'; // <-- CONFIRMA ESTE NOMBRE
+
+      bool isSmallCake = false;
+      if (isPersonalizedBox) {
+        // Si es personalizado, chequea la torta base seleccionada
+        isSmallCake =
+            selectedBaseCake?.name == miniCakeName ||
+            selectedBaseCake?.name == microCakeName;
+      } else {
+        // Si es predefinido, asumimos que SIEMPRE usa la lógica de mini torta
+        isSmallCake = true;
+      }
+
+      // Define el multiplicador de costo (0.5 para chicas, 1.0 para tortas de 1kg si las agregaras)
+      final double costMultiplier = isSmallCake ? 0.5 : 1.0;
+      // Suma Extras (rellenos, kg, unit)
       calculatedExtrasCost += selectedExtraFillings.fold(
         0.0,
-        (sum, f) => sum + f.extraCostPerKg,
+        (sum, f) => sum + (f.extraCostPerKg * costMultiplier), // <-- CORREGIDO
       );
       calculatedExtrasCost += selectedExtrasKg.fold(
         0.0,
-        (sum, ex) => sum + ex.costPerKg,
+        (sum, ex) => sum + (ex.costPerKg * costMultiplier), // <-- CORREGIDO
       );
       calculatedExtrasCost += selectedExtrasUnit.fold(
         0.0,
         (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
       );
-
       calculatedTotalBasePrice += calculatedExtrasCost;
     }
     // -------------------------------------------------------------
@@ -2019,38 +2035,55 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         return;
       }
 
-      final isCurrentMiniCake = selectedCakeType?.name == miniCakeName;
+      // --- 1. DEFINIR CONSTANTES PRIMERO ---
+      // (Si ya tenés estas constantes definidas AFUERA de la función, podés borrar estas 2 líneas)
+      const miniCakeName = 'Mini Torta Personalizada (Base)';
+      const microCakeName = 'Micro Torta (Base)'; // <-- CONFIRMA ESTE NOMBRE
 
-      // --- Lógica de Peso y Multiplicador ---
-      double weight = isCurrentMiniCake
-          ? 1.0 // Fuerza el peso a 1.0 si es Mini Torta
+      // --- 2. USAR LAS CONSTANTES PARA TODO ---
+      final bool isMiniCake = selectedCakeType?.name == miniCakeName;
+      final bool isMicroCake = selectedCakeType?.name == microCakeName;
+      final bool isSmallCake =
+          isMiniCake ||
+          isMicroCake; // <-- Esta es la única variable que importa
+
+      // --- Lógica de Peso y Multiplicador (AHORA USA isSmallCake) ---
+      double weight =
+          isSmallCake // <-- Corregido
+          ? 1.0 // Fuerza el peso a 1.0 si es Torta Chica
           : double.tryParse(weightController.text.replaceAll(',', '.')) ?? 0.0;
 
       manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
 
-      multiplierAdjustment = isCurrentMiniCake
-          ? 0.0 // Fuerza el multiplicador a 0 si es Mini Torta
+      multiplierAdjustment =
+          isSmallCake // <-- Corregido
+          ? 0.0 // Fuerza el multiplicador a 0 si es Torta Chica
           : double.tryParse(multiplierAdjustmentController.text) ?? 0.0;
 
-      if (weight <= 0 && !isCurrentMiniCake) {
-        // Solo valida peso > 0 si NO es Mini Torta
+      if (weight <= 0 && !isSmallCake) {
+        // <-- Corregido
+        // Solo valida peso > 0 si NO es Torta Chica
         calculatedBasePriceController.text = 'N/A';
         finalPriceController.text = 'N/A';
         return;
       }
 
-      // Si es Mini Torta, el precio base es el precio listado (no multiplicado por el peso de 1.0)
-      // Para simplificar, usamos weight=1.0 y multiplierAdjustment=0.0, lo que hace la fórmula funcionar.
-
+      // El 'base' ya está bien porque 'weight' y 'multiplierAdjustment' son correctos
       double base = (selectedCakeType!.price + multiplierAdjustment) * weight;
 
-      // Multiplicador para Extras y Rellenos por KG (0 si es Mini Torta, sino el peso)
-      double multiplier = isCurrentMiniCake ? 0.0 : weight;
+      // Multiplicador para Extras y Rellenos por KG
+      double multiplier;
+      if (isSmallCake) {
+        // Si es Torta Chica, el multiplicador es 0.5 (mitad de precio)
+        multiplier = 0.5;
+      } else {
+        // Si es Torta normal, el multiplicador es el peso en KG
+        multiplier = weight;
+      }
 
+      // (El resto de tu lógica de cálculo de precios ya estaba perfecta)
       double extraFillingsPrice = selectedExtraFillings.fold(
         0.0,
-        // Para Mini Torta, el costo extra se suma una vez, asumiendo que el costo base ya está por unidad/mini torta
-        // Si el costo del relleno por kg se debe sumar 1 vez (costo fijo), usamos 1.0 en lugar del peso real
         (sum, f) => sum + (f.extraCostPerKg * multiplier),
       );
       double extrasKgPrice = selectedExtrasKg.fold(
