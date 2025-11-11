@@ -370,32 +370,146 @@ class PdfGenerator {
 
     final category = custom['product_category']?.toString() ?? '';
 
-    // 🧁 --- CASO 1: BOX (Correcto, sin precio ni tipo) ---
+    // =======================================================
+    // === CASO BOX (NUEVA LÓGICA)
+    // =======================================================
     if (category == 'box') {
-      final selectedBaseCake = custom['selected_base_cake'] as String?;
-      final selectedMesaDulceItems =
-          custom['selected_mesa_dulce_items'] as List?;
-      if (selectedBaseCake != null ||
-          (selectedMesaDulceItems != null &&
-              selectedMesaDulceItems.isNotEmpty)) {
-        final cakeText = selectedBaseCake != null ? 'Torta Base' : '';
-        final itemsCount = selectedMesaDulceItems?.length ?? 0;
-        final itemsText = itemsCount > 0
-            ? '+ $itemsCount ítems de Mesa Dulce'
-            : '';
-        parts.add('Contenido del Box: $cakeText $itemsText'.trim());
+      final String boxType = custom['box_type'] ?? '';
+      final bool isPersonalizado = boxType == 'BOX DULCE Personalizado (Armar)';
+
+      // --- CORRECCIÓN AQUÍ ---
+      // 'fillingsRaw' debe ser List<dynamic> para ser compatible con _formatCustomizationList
+      final List<dynamic> fillingsRaw = custom['selected_fillings'] ?? [];
+      // --- FIN CORRECCIÓN ---
+
+      final List<dynamic> extraFillingsRaw =
+          custom['selected_extra_fillings'] ?? [];
+      final List<Map> extraFillingsData = extraFillingsRaw
+          .whereType<Map>()
+          .toList();
+
+      final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
+      final List<Map> extrasKgData = extrasKgRaw.whereType<Map>().toList();
+
+      final List<Map<String, dynamic>> extrasUnitData =
+          (custom['selected_extras_unit'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          [];
+
+      final List<Map<String, dynamic>> mesaDulceItems =
+          (custom['selected_mesa_dulce_items'] as List?)
+              ?.whereType<Map<String, dynamic>>()
+              .toList() ??
+          [];
+
+      final bool hasExtras =
+          extraFillingsData.isNotEmpty ||
+          extrasKgData.isNotEmpty ||
+          extrasUnitData.isNotEmpty;
+
+      // --- LÓGICA PARA BOX PERSONALIZADO ---
+      if (isPersonalizado) {
+        // 2. Rellenos (base) de la torta (si hay)
+        // --- CORRECCIÓN AQUÍ ---
+        if (fillingsRaw.isNotEmpty) {
+          // Usa fillingsRaw
+          parts.add(
+            'Rellenos Torta: ${_formatCustomizationList(fillingsRaw)}',
+          ); // Usa fillingsRaw
+        }
+        // --- FIN CORRECCIÓN ---
+
+        // 3. Rellenos Extra (con precio)
+        if (extraFillingsData.isNotEmpty) {
+          parts.add(
+            'Extras Torta: ${_formatCustomizationList(extraFillingsRaw)}',
+          );
+        }
+
+        // 4. Extras (x kg) (con precio)
+        if (extrasKgData.isNotEmpty) {
+          parts.add('Extras (x kg): ${_formatCustomizationList(extrasKgRaw)}');
+        }
+
+        // 5. Extras (x unidad) (con precio)
+        if (extrasUnitData.isNotEmpty) {
+          parts.add(
+            'Extras (x ud): ${_formatCustomizationList(extrasUnitData)}',
+          );
+        }
+
+        // 6. Mesa Dulce
+        if (mesaDulceItems.isNotEmpty) {
+          final text = mesaDulceItems
+              .map((e) {
+                final name = e['name'];
+                final qty = e['quantity'];
+                final size = e['selected_size'];
+                return size != null ? '$name ($size) x$qty' : '$name x$qty';
+              })
+              .join(', ');
+          parts.add('Mesa Dulce: $text');
+        }
+      }
+      // --- LÓGICA PARA BOX PREDEFINIDO ---
+      else {
+        // 1. Mostrar "Precio Box" (solo si hay extras)
+        if (hasExtras) {
+          parts.add('Precio Box: \$${currencyFormat.format(item.basePrice)}');
+        }
+
+        // 2. Rellenos (base) de la mini torta
+        // --- CORRECCIÓN AQUÍ ---
+        if (fillingsRaw.isNotEmpty) {
+          // Usa fillingsRaw
+          parts.add(
+            'Rellenos: ${_formatCustomizationList(fillingsRaw)}',
+          ); // Usa fillingsRaw
+        }
+        // --- FIN CORRECCIÓN ---
+
+        // 3. Rellenos Extra (con precio)
+        if (extraFillingsData.isNotEmpty) {
+          parts.add(
+            'Rellenos Extra: ${_formatCustomizationList(extraFillingsRaw)}',
+          );
+        }
+
+        // 4. Extras (x kg) (con precio)
+        if (extrasKgData.isNotEmpty) {
+          parts.add('Extras (x kg): ${_formatCustomizationList(extrasKgRaw)}');
+        }
+
+        // 5. Extras (x unidad) (con precio)
+        if (extrasUnitData.isNotEmpty) {
+          parts.add(
+            'Extras (x unidad): ${_formatCustomizationList(extrasUnitData)}',
+          );
+        }
+
+        // 6. Ajuste Adicional (fijo)
+        final double manualAdjustment =
+            (custom['manual_adjustment_value'] as num?)?.toDouble() ?? 0.0;
+        if (manualAdjustment != 0) {
+          parts.add(
+            'Ajuste Adicional (fijo): \$${currencyFormat.format(manualAdjustment)}',
+          );
+        }
       }
 
-      // Notas de Box
+      // Notas (generales del Box)
       if (item.customizationNotes != null &&
           item.customizationNotes!.isNotEmpty) {
         parts.add('Notas: ${item.customizationNotes}');
       }
 
-      return parts.join('\n');
+      return parts.join('\n'); // <-- Salto de línea
     }
 
-    // 🎂 --- CASO 2: TORTA (Reordenado, "Precio Calculado" y sin Total Unitario) ---
+    // =======================================================
+    // === CASO TORTA (Se mantiene como estaba)
+    // =======================================================
     if (category == 'torta') {
       // --- 1. Calcular componentes de ajuste/extras ---
       final double customizationCost = _calculateItemCustomizationCost(custom);
@@ -414,15 +528,16 @@ class PdfGenerator {
 
       // --- 2. Crear las partes del desglose ---
 
-      // PRECIO CALCULADO (Nuevo nombre y posición)
-      // --- 👇 CORRECCIÓN 3: Añadir '$' manualmente ---
       parts.add('Precio Base: \$${currencyFormat.format(calculatedBasePrice)}');
 
       // Rellenos Base (asumimos costo 0)
-      final List<dynamic> fillingsRaw = custom['selected_fillings'] ?? [];
+      // --- CORRECCIÓN AQUÍ ---
+      final List<dynamic> fillingsRaw =
+          custom['selected_fillings'] ?? []; // <-- Definir como List<dynamic>
       if (fillingsRaw.isNotEmpty) {
         parts.add('Rellenos: ${_formatCustomizationList(fillingsRaw)}');
       }
+      // --- FIN CORRECCIÓN ---
 
       // Extras/Rellenos con costo (Rellenos Extra, Extras x Kg, Extras x Ud)
       final List<dynamic> extraFillingsRaw =
@@ -444,7 +559,6 @@ class PdfGenerator {
 
       // Ajuste Multiplicador
       if (multiplierFactor != 1.0) {
-        // --- 👇 CORRECCIÓN 4: Añadir '$' manualmente ---
         parts.add(
           'Ajuste Multiplicador (${((multiplierFactor - 1.0) * 100).toStringAsFixed(1)}%): \$${currencyFormat.format(multiplierAdjustmentAmount)}',
         );
@@ -452,7 +566,6 @@ class PdfGenerator {
 
       // Ajuste Adicional Sumatorio (Fijo)
       if (sumAdjustment != 0) {
-        // --- 👇 CORRECCIÓN 5: Añadir '$' manualmente ---
         parts.add(
           'Ajuste Adicional (fijo): \$${currencyFormat.format(sumAdjustment)}',
         );
@@ -472,25 +585,28 @@ class PdfGenerator {
       return parts.join('\n');
     }
 
-    // --- CASO 3: OTROS ITEMS (Se mantiene igual) ---
+    // =======================================================
+    // === CASO 3: OTROS ITEMS (Se mantiene igual)
+    // =======================================================
 
     // Rellenos (Si aplica a otros productos)
-    final List<dynamic> fillingsRaw = custom['selected_fillings'] ?? [];
+    // --- CORRECCIÓN AQUÍ ---
+    final List<dynamic> fillingsRaw =
+        custom['selected_fillings'] ?? []; // <-- Definir como List<dynamic>
     if (fillingsRaw.isNotEmpty) {
       parts.add('Rellenos: ${_formatCustomizationList(fillingsRaw)}');
     }
+    // --- FIN CORRECCIÓN ---
 
     // Ajuste total (manual o multiplicador)
     final double adjustment = item.adjustments;
     if (adjustment != 0) {
-      // --- 👇 CORRECCIÓN 6: Añadir '$' manualmente ---
       parts.add('Ajuste adicional: \$${currencyFormat.format(adjustment)}');
     }
 
     // Multiplicador por kg (si aplica)
     final multiplierAdjustment = custom['multiplier_adjustment_per_kg'] as num?;
     if (multiplierAdjustment != null && multiplierAdjustment != 0) {
-      // --- 👇 CORRECCIÓN 7: Añadir '$' manualmente ---
       parts.add(
         'Ajuste por kg: \$${currencyFormat.format(multiplierAdjustment)}',
       );
