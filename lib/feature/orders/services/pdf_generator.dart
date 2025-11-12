@@ -371,69 +371,70 @@ class PdfGenerator {
       final String boxType = custom['box_type'] ?? '';
       final bool isPersonalizado = boxType == 'BOX DULCE Personalizado (Armar)';
 
-      // --- CORRECCIÓN AQUÍ ---
-      // 'fillingsRaw' debe ser List<dynamic> para ser compatible con _formatCustomizationList
-      final List<dynamic> fillingsRaw = custom['selected_fillings'] ?? [];
-      // --- FIN CORRECCIÓN ---
+      // --- 1. Definir si es Torta Chica ---
+      const miniCakeName = 'Mini Torta Personalizada (Base)';
+      const microCakeName = 'Micro Torta (Base)'; // <-- Revisa este nombre
+      final String? baseCakeName = custom['selected_base_cake'] as String?;
 
+      bool isSmallCake;
+      if (isPersonalizado) {
+        // Si es personalizado, chequea la torta base seleccionada
+        isSmallCake =
+            baseCakeName == miniCakeName || baseCakeName == microCakeName;
+      } else {
+        // Si es predefinido, asumimos que SIEMPRE usa la lógica de mini torta
+        isSmallCake = true;
+      }
+
+      // Define el multiplicador de costo (0.5 para chicas, 1.0 para tortas de 1kg)
+      final double costMultiplier = isSmallCake ? 0.5 : 1.0;
+      // ---
+
+      // --- 2. Leer datos ---
+      final List<dynamic> fillingsRaw = custom['selected_fillings'] ?? [];
       final List<dynamic> extraFillingsRaw =
           custom['selected_extra_fillings'] ?? [];
       final List<Map> extraFillingsData = extraFillingsRaw
           .whereType<Map>()
           .toList();
-
       final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
       final List<Map> extrasKgData = extrasKgRaw.whereType<Map>().toList();
-
       final List<Map<String, dynamic>> extrasUnitData =
           (custom['selected_extras_unit'] as List?)
               ?.whereType<Map<String, dynamic>>()
               .toList() ??
           [];
-
       final List<Map<String, dynamic>> mesaDulceItems =
           (custom['selected_mesa_dulce_items'] as List?)
               ?.whereType<Map<String, dynamic>>()
               .toList() ??
           [];
-
       final bool hasExtras =
           extraFillingsData.isNotEmpty ||
           extrasKgData.isNotEmpty ||
           extrasUnitData.isNotEmpty;
 
-      // --- LÓGICA PARA BOX PERSONALIZADO ---
+      // --- 3. Construir desglose ---
       if (isPersonalizado) {
-        // 2. Rellenos (base) de la torta (si hay)
-        // --- CORRECCIÓN AQUÍ ---
+        // --- BOX PERSONALIZADO ---
         if (fillingsRaw.isNotEmpty) {
-          // Usa fillingsRaw
-          parts.add(
-            'Rellenos Torta: ${_formatCustomizationList(fillingsRaw)}',
-          ); // Usa fillingsRaw
+          parts.add('Rellenos Torta: ${_formatCustomizationList(fillingsRaw)}');
         }
-        // --- FIN CORRECCIÓN ---
-
-        // 3. Rellenos Extra (con precio)
         if (extraFillingsData.isNotEmpty) {
           parts.add(
-            'Extras Torta: ${_formatCustomizationList(extraFillingsRaw)}',
+            'Extras Torta: ${_formatCustomizationList(extraFillingsRaw, multiplier: costMultiplier)}',
           );
         }
-
-        // 4. Extras (x kg) (con precio)
         if (extrasKgData.isNotEmpty) {
-          parts.add('Extras (x kg): ${_formatCustomizationList(extrasKgRaw)}');
+          parts.add(
+            'Extras Torta (x kg): ${_formatCustomizationList(extrasKgRaw, multiplier: costMultiplier)}',
+          );
         }
-
-        // 5. Extras (x unidad) (con precio)
         if (extrasUnitData.isNotEmpty) {
           parts.add(
-            'Extras (x ud): ${_formatCustomizationList(extrasUnitData)}',
+            'Extras Torta (x ud): ${_formatCustomizationList(extrasUnitData, useQuantity: true)}',
           );
         }
-
-        // 6. Mesa Dulce
         if (mesaDulceItems.isNotEmpty) {
           final text = mesaDulceItems
               .map((e) {
@@ -447,44 +448,29 @@ class PdfGenerator {
               .join(', ');
           parts.add('Mesa Dulce: $text');
         }
-      }
-      // --- LÓGICA PARA BOX PREDEFINIDO ---
-      else {
-        // 1. Mostrar "Precio Box" (solo si hay extras)
+      } else {
+        // --- BOX PREDEFINIDO ---
         if (hasExtras) {
           parts.add('Precio Box: \$${currencyFormat.format(item.basePrice)}');
         }
-
-        // 2. Rellenos (base) de la mini torta
-        // --- CORRECCIÓN AQUÍ ---
         if (fillingsRaw.isNotEmpty) {
-          // Usa fillingsRaw
-          parts.add(
-            'Rellenos: ${_formatCustomizationList(fillingsRaw)}',
-          ); // Usa fillingsRaw
+          parts.add('Rellenos: ${_formatCustomizationList(fillingsRaw)}');
         }
-        // --- FIN CORRECCIÓN ---
-
-        // 3. Rellenos Extra (con precio)
         if (extraFillingsData.isNotEmpty) {
           parts.add(
-            'Rellenos Extra: ${_formatCustomizationList(extraFillingsRaw)}',
+            'Rellenos Extra: ${_formatCustomizationList(extraFillingsRaw, multiplier: costMultiplier)}',
           );
         }
-
-        // 4. Extras (x kg) (con precio)
         if (extrasKgData.isNotEmpty) {
-          parts.add('Extras (x kg): ${_formatCustomizationList(extrasKgRaw)}');
+          parts.add(
+            'Extras (x kg): ${_formatCustomizationList(extrasKgRaw, multiplier: costMultiplier)}',
+          );
         }
-
-        // 5. Extras (x unidad) (con precio)
         if (extrasUnitData.isNotEmpty) {
           parts.add(
-            'Extras (x unidad): ${_formatCustomizationList(extrasUnitData)}',
+            'Extras (x unidad): ${_formatCustomizationList(extrasUnitData, useQuantity: true)}',
           );
         }
-
-        // 6. Ajuste Adicional (fijo)
         final double manualAdjustment =
             (custom['manual_adjustment_value'] as num?)?.toDouble() ?? 0.0;
         if (manualAdjustment != 0) {
@@ -500,81 +486,107 @@ class PdfGenerator {
         parts.add('Notas: ${item.customizationNotes}');
       }
 
-      return parts.join('\n'); // <-- Salto de línea
+      return parts.join('\n');
     }
 
     // =======================================================
     // === CASO TORTA (Se mantiene como estaba)
     // =======================================================
     if (category == 'torta') {
-      // --- 1. Calcular componentes de ajuste/extras ---
-      final double customizationCost = _calculateItemCustomizationCost(custom);
+      // --- 1. Definir si es Torta Chica ---
+      const miniCakeName = 'Mini Torta Personalizada (Base)';
+      const microCakeName = 'Micro Torta (Base)'; // <-- Revisa este nombre
+
+      final bool isMiniCake = item.name == miniCakeName;
+      final bool isMicroCake = item.name == microCakeName;
+      final bool isSmallCake = isMiniCake || isMicroCake;
+
+      final double weight = (custom['weight_kg'] as num?)?.toDouble() ?? 1.0;
+
+      // --- 2. Definir el multiplicador de extras ---
+      // Si es torta chica, el multiplicador es 0.5 (mitad de precio)
+      // Si es torta normal, el multiplicador es el peso en KG
+      final double extraMultiplier = isSmallCake ? 0.5 : weight;
+
+      // --- 3. Calcular Precio Base (despejando) ---
       final double sumAdjustment = item.adjustments;
-      final double multiplierFactor =
-          (custom['multiplier_adjustment'] as num? ?? 1.0).toDouble();
 
-      final double priceBeforeMultiplier =
-          item.finalUnitPrice / multiplierFactor;
+      // (Tu lógica de cálculo de precio base aquí estaba mal,
+      // la lógica del dialog de tortas era mejor. Usamos la del dialog)
 
-      final double calculatedBasePrice =
-          priceBeforeMultiplier - sumAdjustment - customizationCost;
+      final List<dynamic> extraFillingsRaw =
+          custom['selected_extra_fillings'] ?? [];
+      final double extraFillingsPrice = extraFillingsRaw.fold(0.0, (sum, data) {
+        final price =
+            (data is Map ? (data['price'] as num?)?.toDouble() : null) ?? 0.0;
+        return sum + (price * extraMultiplier);
+      });
+      final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
+      final double extrasKgPrice = extrasKgRaw.fold(0.0, (sum, data) {
+        final price =
+            (data is Map ? (data['price'] as num?)?.toDouble() : null) ?? 0.0;
+        return sum + (price * extraMultiplier);
+      });
+      final List<dynamic> extrasUnitRaw = custom['selected_extras_unit'] ?? [];
+      final double extrasUnitPrice = extrasUnitRaw.fold(0.0, (sum, data) {
+        final price =
+            (data is Map ? (data['price'] as num?)?.toDouble() : null) ?? 0.0;
+        final qty =
+            (data is Map ? (data['quantity'] as num?)?.toDouble() : null) ??
+            1.0;
+        return sum + (price * qty);
+      });
 
-      final double multiplierAdjustmentAmount =
-          item.finalUnitPrice - priceBeforeMultiplier;
+      final double costoExtrasTotal =
+          extraFillingsPrice + extrasKgPrice + extrasUnitPrice;
 
-      // --- 2. Crear las partes del desglose ---
+      // item.basePrice (del dialog) = (Base+AjusteMultiplicador+Extras)
+      // Precio Base (con ajuste/kg) = item.basePrice - costoExtrasTotal
+      final double precioCalculadoConAjusteKg =
+          item.basePrice - costoExtrasTotal;
 
-      parts.add('Precio Base: \$${currencyFormat.format(calculatedBasePrice)}');
+      // --- 4. Crear las partes del desglose ---
 
-      // Rellenos Base (asumimos costo 0)
-      // --- CORRECCIÓN AQUÍ ---
-      final List<dynamic> fillingsRaw =
-          custom['selected_fillings'] ?? []; // <-- Definir como List<dynamic>
+      parts.add(
+        'Precio Base: \$${currencyFormat.format(precioCalculadoConAjusteKg)}',
+      );
+
+      final List<dynamic> fillingsRaw = custom['selected_fillings'] ?? [];
       if (fillingsRaw.isNotEmpty) {
         parts.add('Rellenos: ${_formatCustomizationList(fillingsRaw)}');
       }
-      // --- FIN CORRECCIÓN ---
-
-      // Extras/Rellenos con costo (Rellenos Extra, Extras x Kg, Extras x Ud)
-      final List<dynamic> extraFillingsRaw =
-          custom['selected_extra_fillings'] ?? [];
-      final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
-      final List<dynamic> extrasUnitRaw = custom['selected_extras_unit'] ?? [];
 
       if (extraFillingsRaw.isNotEmpty) {
         parts.add(
-          'Rellenos Extra: ${_formatCustomizationList(extraFillingsRaw)}',
+          'Rellenos Extra: ${_formatCustomizationList(extraFillingsRaw, multiplier: extraMultiplier)}',
         );
       }
       if (extrasKgRaw.isNotEmpty) {
-        parts.add('Extras (x kg): ${_formatCustomizationList(extrasKgRaw)}');
+        parts.add(
+          'Extras (x kg): ${_formatCustomizationList(extrasKgRaw, multiplier: extraMultiplier)}',
+        );
       }
       if (extrasUnitRaw.isNotEmpty) {
-        parts.add('Extras (x ud): ${_formatCustomizationList(extrasUnitRaw)}');
-      }
-
-      // Ajuste Multiplicador
-      if (multiplierFactor != 1.0) {
         parts.add(
-          'Ajuste Multiplicador (${((multiplierFactor - 1.0) * 100).toStringAsFixed(1)}%): \$${currencyFormat.format(multiplierAdjustmentAmount)}',
+          'Extras (x ud): ${_formatCustomizationList(extrasUnitRaw, useQuantity: true)}',
         );
       }
 
-      // Ajuste Adicional Sumatorio (Fijo)
+      // (Ajuste Multiplicador ya no se muestra por separado, va en el Precio Base)
+
       if (sumAdjustment != 0) {
         parts.add(
           'Ajuste Adicional (fijo): \$${currencyFormat.format(sumAdjustment)}',
         );
       }
 
-      // Notas
       if (item.customizationNotes != null &&
           item.customizationNotes!.isNotEmpty) {
         parts.add('Notas: ${item.customizationNotes}');
       }
 
-      // Peso
-      if (custom['weight_kg'] != null) {
+      if (custom['weight_kg'] != null && !isSmallCake) {
+        // <-- Ocultar si es torta chica
         parts.add('Peso: ${custom['weight_kg']} kg');
       }
 
@@ -784,46 +796,39 @@ class PdfGenerator {
     );
   }
 
-  double _calculateItemCustomizationCost(Map<String, dynamic> custom) {
-    double totalExtraCost = 0.0;
-
-    // Listas que contienen objetos {name, price, quantity, etc.}
-    final List<List<dynamic>> listsToProcess = [
-      custom['selected_extra_fillings'] ?? [],
-      custom['selected_extras_kg'] ?? [],
-      custom['selected_extras_unit'] ?? [],
-    ];
-
-    for (final list in listsToProcess) {
-      for (final item in list) {
-        if (item is Map) {
-          final price = (item['price'] as num?)?.toDouble() ?? 0.0;
-          final qty = (item['quantity'] as num?)?.toDouble() ?? 1.0;
-          totalExtraCost += price * qty;
-        }
-      }
-    }
-    return totalExtraCost;
-  }
-
   // Helper para formatear listas de customización (rellenos, extras)
-  String _formatCustomizationList(List<dynamic> rawList) {
+  String _formatCustomizationList(
+    List<dynamic> rawList, {
+    double multiplier = 1.0, // <-- Acepta un multiplicador (default 1.0)
+    bool useQuantity = false, // <-- Flag para saber si es "por unidad"
+  }) {
     return rawList
         .map((e) {
           if (e is Map && e['name'] != null) {
             final name = e['name'];
             final qty = (e['quantity'] as num?) ?? 1;
-            final price = (e['price'] as num?);
+            final price = (e['price'] as num?)?.toDouble() ?? 0.0;
 
             String priceText = '';
-            if (price != null && price != 0) {
-              final totalCost = price * (qty > 0 ? qty : 1);
-              // --- 👇 CORRECCIÓN 9: Añadir '$' manualmente ---
+            if (price != 0) {
+              // --- LÓGICA DE PRECIO CORREGIDA ---
+              double totalCost;
+              if (useQuantity) {
+                // Es "Extra por Unidad" (ej: Flores x3) -> Multiplica por cantidad
+                totalCost = price * (qty > 0 ? qty : 1);
+              } else {
+                // Es "Relleno Extra" o "Extra x Kg" -> Multiplica por el multiplicador (0.5 o peso)
+                totalCost = price * multiplier;
+              }
+              // --- FIN LÓGICA ---
               priceText = ' (\$${currencyFormat.format(totalCost)})';
             }
 
-            return (qty > 1) ? '$name x$qty$priceText' : '$name$priceText';
+            return (useQuantity && qty > 1)
+                ? '$name x$qty$priceText'
+                : '$name$priceText';
           } else {
+            // Para Rellenos Base (que son List<String>)
             return e.toString();
           }
         })

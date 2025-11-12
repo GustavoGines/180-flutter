@@ -142,6 +142,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   final NumberFormat _currencyFormat = NumberFormat.currency(
     locale: 'es_AR',
     symbol: '\$',
+    decimalDigits: 0,
+    customPattern: '\u00a4#,##0',
   );
 
   bool get isEditMode => widget.order != null;
@@ -1077,14 +1079,35 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
 
       if (selectedBaseCake != null || !isPersonalizedBox) {
+        // --- INICIO CORRECCIÓN ---
+        // (Copiar la misma lógica de cálculo de multiplicador de arriba)
+        const miniCakeName = 'Mini Torta Personalizada (Base)';
+        const microCakeName = 'Micro Torta'; // <-- CONFIRMA ESTE NOMBRE
+
+        bool isSmallCake = false;
+        if (isPersonalizedBox) {
+          // Si es personalizado, chequea la torta base seleccionada
+          isSmallCake =
+              selectedBaseCake?.name == miniCakeName ||
+              selectedBaseCake?.name == microCakeName;
+        } else {
+          // Si es predefinido, asumimos que SIEMPRE usa la lógica de mini torta
+          isSmallCake = true;
+        }
+
+        // Define el multiplicador de costo (0.5 para chicas, 1.0 para tortas de 1kg si las agregaras)
+        final double costMultiplier = isSmallCake ? 0.5 : 1.0;
+        // --- FIN CORRECCIÓN ---
+
         // Suma Extras (rellenos, kg, unit)
         calculatedExtrasCost += selectedExtraFillings.fold(
           0.0,
-          (sum, f) => sum + f.extraCostPerKg,
+          (sum, f) =>
+              sum + (f.extraCostPerKg * costMultiplier), // <-- CORREGIDO
         );
         calculatedExtrasCost += selectedExtrasKg.fold(
           0.0,
-          (sum, ex) => sum + ex.costPerKg,
+          (sum, ex) => sum + (ex.costPerKg * costMultiplier), // <-- CORREGIDO
         );
         calculatedExtrasCost += selectedExtrasUnit.fold(
           0.0,
@@ -2113,8 +2136,21 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
+          // --- CORRECCIÓN AQUÍ ---
           builder: (context, setDialogState) {
-            final isCurrentMiniCake = selectedCakeType?.name == miniCakeName;
+            // 1. Definir las constantes y la variable de estado AQUÍ
+            // (Si ya las tenés definidas afuera, podés borrarlas de calculateCakePrice)
+            const miniCakeName = 'Mini Torta Personalizada (Base)';
+            const microCakeName =
+                'Micro Torta (Base)'; // <-- Revisa este nombre
+
+            final bool isMiniCake = selectedCakeType?.name == miniCakeName;
+            final bool isMicroCake = selectedCakeType?.name == microCakeName;
+            // ESTA ES LA VARIABLE CORRECTA que se actualiza en cada setDialogState
+            final bool isSmallCake = isMiniCake || isMicroCake;
+
+            // --- Re-definimos los helpers DENTRO del builder ---
+            // (para que tengan acceso al 'setDialogState' y a 'isSmallCake')
 
             Widget buildFillingCheckbox(Filling filling, bool isExtraCost) {
               bool isSelected = isExtraCost
@@ -2123,8 +2159,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               return CheckboxListTile(
                 title: Text(filling.name),
                 subtitle: Text(
-                  // Ajuste de texto para Mini Torta
-                  isCurrentMiniCake
+                  // --- CORREGIDO: Usar isSmallCake ---
+                  isSmallCake
                       ? (filling.extraCostPerKg > 0
                             ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)})'
                             : '(Gratis)')
@@ -2161,9 +2197,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               bool isSelected = selectedExtrasKg.contains(extra);
               return CheckboxListTile(
                 title: Text(extra.name),
-                // Ajuste de texto para Mini Torta
+                // --- CORREGIDO: Usar isSmallCake ---
                 subtitle: Text(
-                  isCurrentMiniCake
+                  isSmallCake
                       ? '(+\$${extra.costPerKg.toStringAsFixed(0)})'
                       : '(+\$${extra.costPerKg.toStringAsFixed(0)}/kg)',
                 ),
@@ -2229,8 +2265,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             if (qty < 1) {
                               qty = 1;
                             }
-                            selection.quantity =
-                                qty; // Usar selection! ya que isSelected es true
+                            selection.quantity = qty;
                             calculateCakePrice();
                           },
                         ),
@@ -2240,6 +2275,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 contentPadding: EdgeInsets.zero,
               );
             }
+            // --- Fin de re-definición de helpers ---
 
             return AlertDialog(
               title: Text(isEditing ? 'Editar Torta' : 'Añadir Torta'),
@@ -2251,12 +2287,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     DropdownButtonFormField<Product>(
                       initialValue: selectedCakeType,
                       items: cakeProducts.map((Product product) {
+                        // --- CORREGIDO: Usar las constantes locales ---
                         final isCurrentProductMiniCake =
-                            product.name == miniCakeName;
+                            product.name == miniCakeName ||
+                            product.name == microCakeName;
                         return DropdownMenuItem<Product>(
                           value: product,
                           child: Text(
-                            // Muestra el precio base y la unidad correcta
                             '${product.name} (\$${product.price.toStringAsFixed(0)}${isCurrentProductMiniCake ? '/u' : '/kg'})',
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2264,16 +2301,22 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       }).toList(),
                       onChanged: (Product? newValue) {
                         setDialogState(() {
-                          selectedCakeType = newValue;
-                          final isNewValueMiniCake =
-                              newValue?.name == miniCakeName;
+                          // Guardar el estado ANTES de cambiarlo
+                          final bool eraTortaChica = isSmallCake;
 
-                          if (isNewValueMiniCake) {
-                            // Si es Mini Torta, forzar valores y texto
+                          selectedCakeType = newValue;
+
+                          // Calcular el NUEVO estado (esto no es necesario si 'isSmallCake' está arriba)
+                          final bool esTortaChicaNueva =
+                              newValue?.name == miniCakeName ||
+                              newValue?.name == microCakeName;
+
+                          if (esTortaChicaNueva) {
+                            // Si es Mini Torta, forzar valores
                             weightController.text = '1.0';
                             multiplierAdjustmentController.text = '0';
-                          } else if (isCurrentMiniCake) {
-                            // Si veníamos de Mini Torta y cambiamos a Torta KG, inicializar campos
+                          } else if (eraTortaChica) {
+                            // Si veníamos de Mini Torta y cambiamos a Torta KG
                             weightController.text = '1.0';
                             multiplierAdjustmentController.text = '0';
                           }
@@ -2288,8 +2331,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     ),
                     const SizedBox(height: 16),
 
-                    // --- PESO ESTIMADO (OCULTAR PARA MINI TORTA) ---
-                    if (!isCurrentMiniCake)
+                    // --- PESO ESTIMADO (CORREGIDO: Usar isSmallCake) ---
+                    if (!isSmallCake)
                       Column(
                         children: [
                           TextFormField(
@@ -2313,8 +2356,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         ],
                       ),
 
-                    // --- AJUSTE MULTIPLICADOR (OCULTAR PARA MINI TORTA) ---
-                    if (!isCurrentMiniCake)
+                    // --- AJUSTE MULTIPLICADOR (CORREGIDO: Usar isSmallCake) ---
+                    if (!isSmallCake)
                       Column(
                         children: [
                           TextFormField(
@@ -2342,7 +2385,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         ],
                       ),
 
-                    // Rellenos y Extras
+                    // ... (El resto del contenido: Rellenos, Extras, Notas, Fotos, Precios) ...
                     Text(
                       'Rellenos Incluidos (Seleccionar)',
                       style: Theme.of(context).textTheme.titleSmall,
@@ -2492,26 +2535,27 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   onPressed: () {
                     if (selectedCakeType == null) return;
 
-                    // Obtener peso final (1.0 si es Mini Torta, sino el valor del campo)
-                    final weight = isCurrentMiniCake
+                    // --- CORRECCIÓN: Usar la variable 'isSmallCake' del builder ---
+                    final weight = isSmallCake
                         ? 1.0
                         : double.tryParse(
                                 weightController.text.replaceAll(',', '.'),
                               ) ??
                               0.0;
 
-                    // Obtener ajuste multiplicador (0.0 si es Mini Torta, sino el valor del campo)
-                    final multiplierAdjustmentValue = isCurrentMiniCake
+                    final multiplierAdjustmentValue = isSmallCake
                         ? 0.0
                         : double.tryParse(
                                 multiplierAdjustmentController.text,
                               ) ??
                               0.0;
+                    // --- FIN CORRECCIÓN ---
 
                     final adjustmentNotes = adjustmentNotesController.text
                         .trim();
 
-                    if (weight <= 0 && !isCurrentMiniCake) {
+                    if (weight <= 0 && !isSmallCake) {
+                      // <-- CORREGIDO
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('El peso debe ser mayor a 0.'),
@@ -2526,8 +2570,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       'product_category': selectedCakeType!.category.name,
                       'cake_type': selectedCakeType!.name,
                       'weight_kg': weight,
-                      // Solo guardar el ajuste multiplicador si NO es Mini Torta
-                      if (!isCurrentMiniCake)
+                      if (!isSmallCake) // <-- CORREGIDO
                         'multiplier_adjustment_per_kg':
                             multiplierAdjustmentValue,
                       'selected_fillings': selectedFillings
@@ -2535,19 +2578,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           .toList(),
                       'selected_extra_fillings': selectedExtraFillings
                           .map(
-                            (f) => {
-                              'name': f.name,
-                              'price': f.extraCostPerKg, // <-- AÑADIR ESTO
-                            },
+                            (f) => {'name': f.name, 'price': f.extraCostPerKg},
                           )
                           .toList(),
                       'selected_extras_kg': selectedExtrasKg
-                          .map(
-                            (ex) => {
-                              'name': ex.name,
-                              'price': ex.costPerKg, // <-- AÑADIR ESTO
-                            },
-                          )
+                          .map((ex) => {'name': ex.name, 'price': ex.costPerKg})
                           .toList(),
                       'selected_extras_unit': selectedExtrasUnit
                           .map(
@@ -2569,7 +2604,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     final newItem = OrderItem(
                       id: isEditing ? existingItem.id : null,
                       name: selectedCakeType!.name,
-                      qty: 1, // La cantidad es 1 para la torta/mini torta
+                      qty: 1,
                       basePrice: calculatedBasePrice,
                       adjustments: manualAdjustments,
                       customizationNotes: adjustmentNotes.isEmpty
@@ -3276,6 +3311,38 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
+  /// Formatea una lista de extras (que puede ser List<Map> o List<String>)
+  /// para mostrar en el resumen del pedido.
+  String _formatDetailsForList(List<dynamic>? rawList, double multiplier) {
+    if (rawList == null || rawList.isEmpty) {
+      return '';
+    }
+
+    final parts = <String>[];
+
+    for (final e in rawList) {
+      if (e is Map) {
+        // Formato Nuevo (con precio)
+        final name = e['name'] ?? 'Extra';
+        final qty = (e['quantity'] as num?) ?? 1;
+        final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+
+        // Aplicamos el multiplicador (0.5 o 1.0/peso)
+        final totalCost = (price * qty) * multiplier;
+
+        final priceText = (totalCost > 0)
+            ? ' (${_currencyFormat.format(totalCost)})' // Usa _currencyFormat
+            : '';
+
+        parts.add(qty > 1 ? '$name (x$qty)$priceText' : '$name$priceText');
+      } else if (e is String) {
+        // Formato Viejo (solo nombre)
+        parts.add(e);
+      }
+    }
+    return parts.join(', ');
+  }
+
   // --- BUILD WIDGET (MODIFICADO PARA DIRECCIONES) ---
   @override
   Widget build(BuildContext context) {
@@ -3412,47 +3479,243 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: _items.length,
                     itemBuilder: (context, index) {
+                      // (Reemplazo para el bloque anterior - Aprox. línea 894)
                       final item = _items[index];
-                      String details = '';
                       final custom = item.customizationJson ?? {};
                       final category = ProductCategory.values.firstWhereOrNull(
                         (e) => e.name == custom['product_category'],
                       );
 
-                      if (category == ProductCategory.torta) {
-                        details += '${custom['weight_kg']}kg';
+                      // --- INICIO DE LA LÓGICA DE DETALLES ---
+                      final parts = <String>[];
 
-                        // ⬅️ NUEVO: Muestra el ajuste multiplicador por kg
-                        final multiplierAdj =
-                            (custom['multiplier_adjustment_per_kg'] is num)
-                            ? (custom['multiplier_adjustment_per_kg'] as num)
-                                  .toDouble()
-                            : 0.0;
-                        if (multiplierAdj != 0.0) {
-                          details +=
-                              ' | Ajuste/kg: ${_currencyFormat.format(multiplierAdj)}';
+                      if (category == ProductCategory.torta) {
+                        // --- 1. Definir si es Torta Chica ---
+                        const miniCakeName = 'Mini Torta Personalizada (Base)';
+                        const microCakeName =
+                            'Micro Torta (Base)'; // <-- Revisa este nombre
+
+                        final bool isSmallCake =
+                            item.name == miniCakeName ||
+                            item.name == microCakeName;
+
+                        final double weight =
+                            (custom['weight_kg'] as num?)?.toDouble() ?? 1.0;
+
+                        // --- 2. Definir el multiplicador de extras ---
+                        // Usa 0.5 si es torta chica, si no, el peso
+                        final double extraMultiplier = isSmallCake
+                            ? 0.5
+                            : weight;
+
+                        // --- 3. Calcular Precio Base (despejando) ---
+                        final List<dynamic> extraFillingsRaw =
+                            custom['selected_extra_fillings'] ?? [];
+                        final List<dynamic> extrasKgRaw =
+                            custom['selected_extras_kg'] ?? [];
+                        final List<dynamic> extrasUnitRaw =
+                            custom['selected_extras_unit'] ?? [];
+
+                        final double extraFillingsPrice = extraFillingsRaw.fold(
+                          0.0,
+                          (sum, data) {
+                            final price =
+                                (data is Map
+                                    ? (data['price'] as num?)?.toDouble()
+                                    : null) ??
+                                0.0;
+                            return sum + (price * extraMultiplier);
+                          },
+                        );
+                        final double extrasKgPrice = extrasKgRaw.fold(0.0, (
+                          sum,
+                          data,
+                        ) {
+                          final price =
+                              (data is Map
+                                  ? (data['price'] as num?)?.toDouble()
+                                  : null) ??
+                              0.0;
+                          return sum + (price * extraMultiplier);
+                        });
+                        final double extrasUnitPrice = extrasUnitRaw.fold(0.0, (
+                          sum,
+                          data,
+                        ) {
+                          final price =
+                              (data is Map
+                                  ? (data['price'] as num?)?.toDouble()
+                                  : null) ??
+                              0.0;
+                          final qty =
+                              (data is Map
+                                  ? (data['quantity'] as num?)?.toDouble()
+                                  : null) ??
+                              1.0;
+                          return sum + (price * qty);
+                        });
+
+                        final double costoExtrasTotal =
+                            extraFillingsPrice +
+                            extrasKgPrice +
+                            extrasUnitPrice;
+                        final double precioCalculadoConAjusteKg =
+                            item.basePrice - costoExtrasTotal;
+
+                        // --- 4. Construir 'parts' ---
+                        parts.add(
+                          'Precio Base: ${_currencyFormat.format(precioCalculadoConAjusteKg)}',
+                        );
+
+                        // Muestra el peso solo si NO es una torta chica
+                        if (!isSmallCake && custom['weight_kg'] != null) {
+                          parts.add('Peso: ${custom['weight_kg']} kg');
                         }
 
-                        if (custom['selected_fillings'] != null &&
-                            (custom['selected_fillings'] as List).isNotEmpty) {
-                          details +=
-                              ' | Rellenos: ${(custom['selected_fillings'] as List).join(", ")}';
+                        final List<String> fillings = List<String>.from(
+                          custom['selected_fillings'] ?? [],
+                        );
+                        if (fillings.isNotEmpty) {
+                          parts.add('Rellenos: ${fillings.join(', ')}');
+                        }
+
+                        final extraFillings = _formatDetailsForList(
+                          custom['selected_extra_fillings'],
+                          extraMultiplier,
+                        );
+                        if (extraFillings.isNotEmpty) {
+                          parts.add('Rellenos Extra: $extraFillings');
+                        }
+
+                        final extrasKg = _formatDetailsForList(
+                          custom['selected_extras_kg'],
+                          extraMultiplier,
+                        );
+                        if (extrasKg.isNotEmpty) {
+                          parts.add('Extras (x kg): $extrasKg');
+                        }
+
+                        final extrasUnit = _formatDetailsForList(
+                          custom['selected_extras_unit'],
+                          1.0,
+                        );
+                        if (extrasUnit.isNotEmpty) {
+                          parts.add('Extras (x ud): $extrasUnit');
                         }
                       } else if (category == ProductCategory.mesaDulce) {
                         if (custom['selected_size'] != null) {
-                          details += getUnitText(
-                            ProductUnit.values.byName(custom['selected_size']),
+                          parts.add(
+                            getUnitText(
+                              ProductUnit.values.byName(
+                                custom['selected_size'],
+                              ),
+                            ),
                           );
                         } else if (custom['is_half_dozen'] == true) {
-                          details += ' (Media Docena)';
+                          parts.add('Media Docena');
                         }
                       } else if (category == ProductCategory.box) {
-                        // ⬅️ NUEVO: Mostrar el detalle del Box
-                        details = 'Categoría: Box';
+                        // Lógica de Box (replicando la de order_detail_page)
+                        const miniCakeName = 'Mini Torta Personalizada (Base)';
+                        const microCakeName = 'Micro Torta (Base)';
+                        final String boxType = custom['box_type'] ?? '';
+                        final bool isPersonalizado =
+                            boxType == 'BOX DULCE Personalizado (Armar)';
+                        final String? baseCakeName =
+                            custom['selected_base_cake'] as String?;
+
+                        bool isSmallCake = isPersonalizado
+                            ? (baseCakeName == miniCakeName ||
+                                  baseCakeName == microCakeName)
+                            : true; // Predefinido siempre es torta chica
+
+                        final double costMultiplier = isSmallCake ? 0.5 : 1.0;
+
+                        final List<String> fillings = List<String>.from(
+                          custom['selected_fillings'] ?? [],
+                        );
+                        if (fillings.isNotEmpty) {
+                          parts.add('Rellenos: ${fillings.join(', ')}');
+                        }
+
+                        final extraFillings = _formatDetailsForList(
+                          custom['selected_extra_fillings'],
+                          costMultiplier,
+                        );
+                        if (extraFillings.isNotEmpty) {
+                          parts.add('Rellenos Extra: $extraFillings');
+                        }
+
+                        final extrasKg = _formatDetailsForList(
+                          custom['selected_extras_kg'],
+                          costMultiplier,
+                        );
+                        if (extrasKg.isNotEmpty) {
+                          parts.add('Extras (x kg): $extrasKg');
+                        }
+
+                        final extrasUnit = _formatDetailsForList(
+                          custom['selected_extras_unit'],
+                          1.0,
+                        );
+                        if (extrasUnit.isNotEmpty) {
+                          parts.add('Extras (x ud): $extrasUnit');
+                        }
+
+                        final List<Map<String, dynamic>> mesaDulceItems =
+                            (custom['selected_mesa_dulce_items'] as List?)
+                                ?.whereType<Map<String, dynamic>>()
+                                .toList() ??
+                            [];
+                        if (mesaDulceItems.isNotEmpty) {
+                          final mesaItemsText = mesaDulceItems
+                              .map((e) {
+                                final name = e['name'];
+                                final qty = e['quantity'];
+                                final size = e['selected_size'];
+                                return size != null
+                                    ? '$name (${size.replaceAll('size', '')}) x$qty'
+                                    : '$name x$qty';
+                              })
+                              .join(', ');
+                          parts.add('Mesa Dulce: $mesaItemsText');
+                        }
                       }
-                      if (item.customizationNotes != null) {
-                        details += ' | Notas: ${item.customizationNotes}';
+
+                      double manualAdjustment = 0.0;
+
+                      if (category == ProductCategory.box) {
+                        // En los Boxes, el ajuste manual PURO se guarda en el JSON
+                        manualAdjustment =
+                            (custom['manual_adjustment_value'] as num?)
+                                ?.toDouble() ??
+                            0.0;
+                      } else {
+                        // En Tortas y Mesa Dulce, el 'adjustments' del item es el ajuste manual
+                        manualAdjustment = item.adjustments;
                       }
+
+                      // Añadir la línea al desglose SOLAMENTE si es diferente de cero
+                      if (manualAdjustment != 0) {
+                        final sign = manualAdjustment > 0
+                            ? '+'
+                            : ''; // Añade un '+' si es positivo
+                        parts.add(
+                          'Ajuste Manual: $sign${_currencyFormat.format(manualAdjustment)}',
+                        );
+                      }
+
+                      if (item.customizationNotes != null &&
+                          item.customizationNotes!.isNotEmpty) {
+                        parts.add('Notas Ajuste: ${item.customizationNotes}');
+                      }
+
+                      final itemNotes = custom['item_notes'] as String?;
+                      if (itemNotes != null && itemNotes.isNotEmpty) {
+                        parts.add('Notas Item: $itemNotes');
+                      }
+
+                      final String details = parts.join('\n');
 
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 4),

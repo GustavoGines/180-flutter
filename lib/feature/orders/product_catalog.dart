@@ -52,8 +52,8 @@ const List<Filling> freeFillings = [
 ];
 
 const List<Filling> extraCostFillings = [
-  Filling(name: 'Mouse de chocolate', extraCostPerKg: 2000.0),
-  Filling(name: 'Mouse de frutilla', extraCostPerKg: 2000.0),
+  Filling(name: 'Mousse de chocolate', extraCostPerKg: 2000.0),
+  Filling(name: 'Mousse de frutilla', extraCostPerKg: 2000.0),
 ];
 
 // Lista combinada para facilitar la selección

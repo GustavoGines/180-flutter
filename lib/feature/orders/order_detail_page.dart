@@ -865,7 +865,7 @@ class OrderDetailPage extends ConsumerWidget {
           ),
         );
 
-        if (custom['weight_kg'] != null) {
+        if (custom['weight_kg'] != null && !isSmallCake) {
           details.add(
             _buildDetailRow(context, 'Peso:', '${custom['weight_kg']} kg'),
           );
