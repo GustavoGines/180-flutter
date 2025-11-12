@@ -1,3 +1,5 @@
+// address_form_dialog.dart (CON CAMBIOS)
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pasteleria_180_flutter/core/models/client_address.dart';
@@ -63,7 +65,6 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
     super.dispose();
   }
 
-  // --- MODIFICADO PARA EL TEMA ---
   void _showSnackbar(String message, {bool isError = false}) {
     if (!mounted) return;
     final cs = Theme.of(context).colorScheme;
@@ -72,16 +73,12 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
       SnackBar(
         content: Text(
           message,
-          // Aplicamos el color de texto 'onError' solo si es un error
           style: isError ? TextStyle(color: cs.onError) : null,
         ),
-        // Aplicamos el color de fondo 'error' solo si es un error
-        // Si es éxito, usamos el 'null' para que el SnackBarTheme decida
         backgroundColor: isError ? cs.error : null,
       ),
     );
   }
-  // --- FIN DE MODIFICACIÓN ---
 
   Future<void> _getUserLocation() async {
     setState(() => _isGettingLocation = true);
@@ -119,9 +116,7 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
     }
   }
 
-  // --- NUEVA FUNCIÓN PARA ABRIR EL MAPA ---
   Future<void> _openMapPicker() async {
-    // Obtenemos las coordenadas actuales, si existen y son válidas
     final double? currentLat = double.tryParse(_latController.text);
     final double? currentLng = double.tryParse(_lngController.text);
     LatLng? initialCoords;
@@ -130,22 +125,19 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
       initialCoords = LatLng(currentLat, currentLng);
     }
 
-    // Navegamos a la nueva pantalla y esperamos el resultado (un LatLng)
     final LatLng? selectedLocation = await Navigator.of(context).push(
       MaterialPageRoute(
-        fullscreenDialog: true, // Se abre como un modal
+        fullscreenDialog: true,
         builder: (ctx) => MapPickerPage(initialCoordinates: initialCoords),
       ),
     );
 
-    // Si el usuario seleccionó una ubicación y volvió
     if (selectedLocation != null && mounted) {
       _latController.text = selectedLocation.latitude.toStringAsFixed(7);
       _lngController.text = selectedLocation.longitude.toStringAsFixed(7);
       _showSnackbar('Ubicación seleccionada desde el mapa.');
     }
   }
-  // --- FIN DE NUEVA FUNCIÓN ---
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -199,173 +191,161 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Container(
-      // Padding para el teclado
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Form(
-        key: _formKey,
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text(
-              isEditMode ? 'Editar Dirección' : 'Nueva Dirección',
-              // Usamos el estilo del tema
-              style: textTheme.headlineSmall?.copyWith(
-                color: colorScheme.onSurface, // Color de texto principal
-              ),
+    // --- ❗️ CAMBIO AQUÍ: Se eliminó el Container con padding de viewInsets ---
+    // El padding para el teclado se maneja en 'client_detail_page.dart'
+    // al llamar a este modal.
+    return Form(
+      key: _formKey,
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text(
+            isEditMode ? 'Editar Dirección' : 'Nueva Dirección',
+            style: textTheme.headlineSmall?.copyWith(
+              color: colorScheme.onSurface,
             ),
-            const SizedBox(height: 24),
-            TextFormField(
-              controller: _labelController,
-              decoration: const InputDecoration(
-                labelText: 'Etiqueta * (Ej: Casa, Oficina)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.label_outline),
-              ),
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'La etiqueta es requerida'
-                  : null,
-              textCapitalization: TextCapitalization.words,
+          ),
+          const SizedBox(height: 24),
+          TextFormField(
+            controller: _labelController,
+            decoration: const InputDecoration(
+              labelText: 'Etiqueta * (Ej: Casa, Oficina)',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.label_outline),
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _addressController,
-              decoration: const InputDecoration(
-                labelText: 'Dirección (Calle y Número)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.location_on_outlined),
-              ),
-              textCapitalization: TextCapitalization.sentences,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'La etiqueta es requerida'
+                : null,
+            textCapitalization: TextCapitalization.words,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _addressController,
+            decoration: const InputDecoration(
+              labelText: 'Dirección (Calle y Número)',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.location_on_outlined),
             ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notas (Ej: Portón rojo, Apto 3B)',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.notes_outlined),
-              ),
-              textCapitalization: TextCapitalization.sentences,
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _notesController,
+            decoration: const InputDecoration(
+              labelText: 'Notas (Ej: Portón rojo, Apto 3B)',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.notes_outlined),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Coordenadas (Opcional)',
-              style: textTheme.titleSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant, // Color de subtítulo
-              ),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Coordenadas (Opcional)',
+            style: textTheme.titleSmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 8),
-
-            // --- INICIO DE BOTONES DE UBICACIÓN ---
-            // (Este Row ya usaba colorScheme, no necesita cambios)
-            Row(
-              children: [
-                // Botón GPS
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: isButtonDisabled ? null : _getUserLocation,
-                    icon: _isGettingLocation
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.my_location, size: 18),
-                    label: const Text('Mi Ubicación'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colorScheme.primary,
-                      side: BorderSide(
-                        color: colorScheme.primary.withOpacity(0.5),
-                      ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Botón GPS
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: isButtonDisabled ? null : _getUserLocation,
+                  icon: _isGettingLocation
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location, size: 18),
+                  label: const Text('Mi Ubicación'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colorScheme.primary,
+                    side: BorderSide(
+                      color: colorScheme.primary.withOpacity(0.5),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                // Botón MAPA
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: isButtonDisabled ? null : _openMapPicker,
-                    icon: const Icon(Icons.map_outlined, size: 18),
-                    label: const Text('Ver Mapa'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colorScheme.secondary,
-                      side: BorderSide(
-                        color: colorScheme.secondary.withOpacity(0.5),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            // --- FIN DE BOTONES DE UBICACIÓN ---
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _latController,
-                    decoration: const InputDecoration(
-                      labelText: 'Latitud',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    controller: _lngController,
-                    decoration: const InputDecoration(
-                      labelText: 'Longitud',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _gmapsController,
-              decoration: const InputDecoration(
-                labelText: 'URL Google Maps (Opcional)',
-                border: OutlineInputBorder(),
               ),
-              keyboardType: TextInputType.url,
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: isButtonDisabled ? null : _submit,
-              icon: _isLoading
-                  ? SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        // --- MODIFICADO PARA EL TEMA ---
-                        // Usamos el color 'onPrimary' del tema,
-                        // que contrasta con el fondo 'primary' del botón.
-                        color: colorScheme.onPrimary,
-                        // --- FIN DE MODIFICACIÓN ---
-                      ),
-                    )
-                  : const Icon(Icons.save),
-              label: Text(isEditMode ? 'Guardar Cambios' : 'Añadir Dirección'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+              const SizedBox(width: 8),
+              // Botón MAPA
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: isButtonDisabled ? null : _openMapPicker,
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text('Ver Mapa'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colorScheme.secondary,
+                    side: BorderSide(
+                      color: colorScheme.secondary.withOpacity(0.5),
+                    ),
+                  ),
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _latController,
+                  decoration: const InputDecoration(
+                    labelText: 'Latitud',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  controller: _lngController,
+                  decoration: const InputDecoration(
+                    labelText: 'Longitud',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _gmapsController,
+            decoration: const InputDecoration(
+              labelText: 'URL Google Maps (Opcional)',
+              border: OutlineInputBorder(),
             ),
-          ],
-        ),
+            keyboardType: TextInputType.url,
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: isButtonDisabled ? null : _submit,
+            icon: _isLoading
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: colorScheme.onPrimary,
+                    ),
+                  )
+                : const Icon(Icons.save),
+            label: Text(isEditMode ? 'Guardar Cambios' : 'Añadir Dirección'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+        ],
       ),
     );
+    // --- FIN DE CAMBIO ---
   }
 }

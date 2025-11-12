@@ -1,9 +1,13 @@
+// client_form_page.dart (CON CAMBIOS)
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 import 'package:dio/dio.dart';
 import 'package:pasteleria_180_flutter/core/models/client.dart';
+// --- IMPORTAMOS EL DIÁLOGO DE DIRECCIÓN ---
+import 'package:pasteleria_180_flutter/feature/clients/address_form_dialog.dart';
 
 class ClientFormPage extends ConsumerWidget {
   final int? clientId; // Si es null, es "Crear". Si tiene ID, es "Editar".
@@ -17,10 +21,8 @@ class ClientFormPage extends ConsumerWidget {
 
     if (isEditMode) {
       // Modo Edición: Cargar datos primero
-      // USAMOS EL PROVIDER DEL REPO
       final asyncClient = ref.watch(clientDetailsProvider(clientId!));
       return Scaffold(
-        // --- ADAPTADO AL TEMA ---
         appBar: AppBar(
           title: const Text('Editar Cliente'),
           backgroundColor: cs.surface,
@@ -31,7 +33,6 @@ class ClientFormPage extends ConsumerWidget {
             color: cs.onSurface,
           ),
         ),
-        // --- FIN ADAPTACIÓN ---
         body: asyncClient.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, stack) => Center(child: Text('Error: $err')),
@@ -39,7 +40,6 @@ class ClientFormPage extends ConsumerWidget {
             if (client == null) {
               return const Center(child: Text('Cliente no encontrado.'));
             }
-            // Cuando carga, muestra el formulario con los datos
             return _ClientForm(client: client);
           },
         ),
@@ -47,7 +47,6 @@ class ClientFormPage extends ConsumerWidget {
     } else {
       // Modo Creación: Mostrar formulario vacío
       return Scaffold(
-        // --- ADAPTADO AL TEMA ---
         appBar: AppBar(
           title: const Text('Nuevo Cliente'),
           backgroundColor: cs.surface,
@@ -58,7 +57,6 @@ class ClientFormPage extends ConsumerWidget {
             color: cs.onSurface,
           ),
         ),
-        // --- FIN ADAPTACIÓN ---
         body: const _ClientForm(), // Pasa null
       );
     }
@@ -79,20 +77,24 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
-  final _notesController = TextEditingController(); // AÑADIDO PARA NOTAS
+  final _notesController = TextEditingController();
   bool _isLoading = false;
+
+  // --- ❗️ NUEVOS ESTADOS ---
+  bool _addAddressOnSave = false;
+  Client? _clientJustCreated; // Para guardar el cliente recién creado
+  // --- FIN NUEVOS ESTADOS ---
 
   bool get isEditMode => widget.client != null;
 
   @override
   void initState() {
     super.initState();
-    // Si estamos editando, llenar los campos
     if (isEditMode) {
       _nameController.text = widget.client!.name;
       _phoneController.text = widget.client!.phone ?? '';
       _emailController.text = widget.client!.email ?? '';
-      _notesController.text = widget.client!.notes ?? ''; // AÑADIDO
+      _notesController.text = widget.client!.notes ?? '';
     }
   }
 
@@ -101,11 +103,10 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
-    _notesController.dispose(); // AÑADIDO
+    _notesController.dispose();
     super.dispose();
   }
 
-  // --- Helper de SnackBar adaptado al tema ---
   void _showSnackbar(String message, {bool isError = false}) {
     if (!mounted) return;
     final cs = Theme.of(context).colorScheme;
@@ -119,14 +120,15 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       ),
     );
   }
-  // --- Fin Helper ---
 
+  // --- ❗️ FUNCIÓN _submit MODIFICADA ---
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return; // Validación falló
     }
 
     setState(() => _isLoading = true);
+    _clientJustCreated = null; // Reseteamos por si acaso
 
     final payload = {
       'name': _nameController.text.trim(),
@@ -138,7 +140,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
           : _emailController.text.trim(),
       'notes': _notesController.text.trim().isEmpty
           ? null
-          : _notesController.text.trim(), // AÑADIDO
+          : _notesController.text.trim(),
     };
 
     try {
@@ -149,11 +151,11 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
         // --- Lógica de Actualización ---
         await repo.updateClient(widget.client!.id, payload);
         successMessage = 'Cliente actualizado con éxito';
-        // Invalidar el caché del cliente editado
         ref.invalidate(clientDetailsProvider(widget.client!.id));
       } else {
         // --- Lógica de Creación ---
-        await repo.createClient(payload);
+        // 1. Guardamos el cliente recién creado
+        _clientJustCreated = await repo.createClient(payload);
         successMessage = 'Cliente creado con éxito';
       }
 
@@ -161,52 +163,76 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       ref.invalidate(clientsListProvider);
 
       if (mounted) {
-        // --- USA EL HELPER ADAPTADO ---
-        _showSnackbar(successMessage);
-        context.pop(); // Volver a la página anterior
+        // 2. Si NO estamos en modo edición Y SÍ se marcó el checkbox...
+        if (!isEditMode && _addAddressOnSave) {
+          // No hacemos pop y no mostramos snackbar aquí.
+          // _clientJustCreated ya está asignado.
+        } else {
+          // Si es modo edición o no se quiso añadir dirección:
+          _showSnackbar(successMessage);
+          context.pop(); // Volver a la página anterior
+        }
       }
     } catch (e) {
       if (mounted) {
         String errorMessage = 'Error: ${e.toString()}';
+        _clientJustCreated = null; // Anulamos la creación si hay error
 
-        // ¡AQUÍ ESTÁ LA LÓGICA DE RESTAURACIÓN!
         if (e is DioException && e.response?.statusCode == 409) {
           try {
-            // Laravel nos envió el cliente en el cuerpo del error
             final clientData = e.response?.data['client'];
             final clientToRestore = Client.fromJson(
               (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
             );
-
-            // Oculta el loader y muestra el diálogo de restauración
             setState(() => _isLoading = false);
             _showRestoreDialog(clientToRestore);
-            return; // Sal del catch, ya estamos manejando esto
+            return;
           } catch (parseError) {
             errorMessage =
                 'Se encontró un cliente eliminado, pero no se pudo leer.';
           }
         }
-        // Si no fue un 409, muestra el error normal
-        setState(() => _isLoading = false);
-        // --- USA EL HELPER ADAPTADO ---
         _showSnackbar(errorMessage, isError: true);
       }
     } finally {
+      // 3. El loader se quita en CUALQUIER caso (éxito, error, o paso-al-modal)
       if (mounted) {
-        // Asegurarse de que el loading se quite si no fue el caso 409
-        if (_isLoading) {
-          setState(() => _isLoading = false);
-        }
+        setState(() => _isLoading = false);
+      }
+    }
+
+    // --- 4. ACCIÓN POST-GUARDADO ---
+    // Si el cliente se creó Y se marcó el checkbox
+    if (!isEditMode && _clientJustCreated != null && _addAddressOnSave) {
+      if (!mounted) return;
+
+      // 5. Mostramos el modal de dirección (reutilizado)
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          // Le pasamos el ID del cliente recién creado
+          child: AddressFormDialog(clientId: _clientJustCreated!.id),
+        ),
+      );
+
+      // 6. Cuando el modal se cierra (por guardar o cancelar),
+      // cerramos la página de creación de cliente.
+      if (mounted) {
+        context.pop();
       }
     }
   }
+  // --- FIN DE _submit MODIFICADA ---
 
   Future<void> _handleDelete() async {
-    // Obtenemos el ColorScheme ANTES del diálogo
     final cs = Theme.of(context).colorScheme;
-
-    // 1. Pedir confirmación
     final didConfirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -221,42 +247,31 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            // --- ADAPTADO AL TEMA ---
             style: FilledButton.styleFrom(
               backgroundColor: cs.error,
               foregroundColor: cs.onError,
             ),
-            // --- FIN ADAPTACIÓN ---
             child: const Text('Sí, Enviar a Papelera'),
           ),
         ],
       ),
     );
 
-    if (didConfirm != true) return; // Si el usuario cancela, no hagas nada
-
-    // 2. Si confirma, proceder a eliminar (soft delete)
+    if (didConfirm != true) return;
     setState(() => _isLoading = true);
 
     try {
       await ref.read(clientsRepoProvider).deleteClient(widget.client!.id);
-
-      // 3. Invalidar los providers para refrescar las listas
-      ref.invalidate(clientsListProvider); // Invalida la lista principal
-      ref.invalidate(trashedClientsProvider); // Invalida la papelera
-      ref.invalidate(
-        clientDetailsProvider(widget.client!.id),
-      ); // Invalida este cliente
+      ref.invalidate(clientsListProvider);
+      ref.invalidate(trashedClientsProvider);
+      ref.invalidate(clientDetailsProvider(widget.client!.id));
 
       if (mounted) {
-        // --- USA EL HELPER ADAPTADO ---
         _showSnackbar('Cliente enviado a la papelera');
-        // Salir de la página de edición
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        // --- USA EL HELPER ADAPTADO ---
         _showSnackbar('Error al eliminar: $e', isError: true);
       }
     } finally {
@@ -281,7 +296,6 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            // Este botón usa el estilo 'primary' por defecto, lo cual es correcto.
             child: const Text('Sí, Restaurar'),
           ),
         ],
@@ -289,24 +303,18 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     );
 
     if (didConfirm != true) return;
-
-    // Si confirma, llama al repositorio para restaurar
     setState(() => _isLoading = true);
     try {
       await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
-
-      // Invalidar listas para que se refresquen
       ref.invalidate(clientsListProvider);
-      ref.invalidate(trashedClientsProvider); // <-- USAR NOMBRE CORRECTO
+      ref.invalidate(trashedClientsProvider);
 
       if (mounted) {
-        // --- USA EL HELPER ADAPTADO ---
         _showSnackbar('Cliente restaurado con éxito');
-        context.pop(); // Cierra la página de creación
+        context.pop();
       }
     } catch (e) {
       if (mounted) {
-        // --- USA EL HELPER ADAPTADO ---
         _showSnackbar('Error al restaurar: $e', isError: true);
       }
     } finally {
@@ -318,22 +326,15 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
 
   @override
   Widget build(BuildContext context) {
-    // --- OBTENER COLORES DEL TEMA ---
     final cs = Theme.of(context).colorScheme;
-
-    // --- ESTILOS ADAPTADOS AL TEMA ---
     final inputStyle = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12.0),
-      borderSide: BorderSide(color: cs.outline), // Usa color de borde del tema
+      borderSide: BorderSide(color: cs.outline),
     );
     final focusedStyle = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12.0),
-      borderSide: BorderSide(
-        color: cs.primary,
-        width: 2.0,
-      ), // Usa color primario
+      borderSide: BorderSide(color: cs.primary, width: 2.0),
     );
-    // --- FIN ESTILOS ADAPTADOS ---
 
     return Form(
       key: _formKey,
@@ -346,7 +347,6 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               labelText: 'Nombre Completo *',
               border: inputStyle,
               focusedBorder: focusedStyle,
-              // --- ADAPTADO AL TEMA ---
               prefixIcon: Icon(Icons.person, color: cs.primary),
             ),
             validator: (value) => (value == null || value.trim().isEmpty)
@@ -361,7 +361,6 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               labelText: 'Teléfono',
               border: inputStyle,
               focusedBorder: focusedStyle,
-              // --- ADAPTADO AL TEMA ---
               prefixIcon: Icon(Icons.phone, color: cs.primary),
             ),
             keyboardType: TextInputType.phone,
@@ -373,25 +372,46 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               labelText: 'Email',
               border: inputStyle,
               focusedBorder: focusedStyle,
-              // --- ADAPTADO AL TEMA ---
               prefixIcon: Icon(Icons.email, color: cs.primary),
             ),
             keyboardType: TextInputType.emailAddress,
           ),
           const SizedBox(height: 16),
-          // CAMPO DE NOTAS AÑADIDO
           TextFormField(
             controller: _notesController,
             decoration: InputDecoration(
               labelText: 'Notas Adicionales',
               border: inputStyle,
               focusedBorder: focusedStyle,
-              // --- ADAPTADO AL TEMA ---
               prefixIcon: Icon(Icons.note_alt, color: cs.primary),
             ),
             maxLines: 3,
             textCapitalization: TextCapitalization.sentences,
           ),
+
+          // --- ❗️ CAMBIO AQUÍ: CHECKBOX CONDICIONAL ---
+          if (!isEditMode) ...[
+            const SizedBox(height: 16),
+            const Divider(),
+            CheckboxListTile(
+              title: const Text("Añadir dirección principal al guardar"),
+              subtitle: const Text(
+                "Se abrirá el formulario de dirección después de crear.",
+              ),
+              value: _addAddressOnSave,
+              onChanged: (value) {
+                setState(() {
+                  _addAddressOnSave = value ?? false;
+                });
+              },
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              activeColor: cs.primary,
+            ),
+            const Divider(),
+          ],
+
+          // --- FIN DE CAMBIO ---
           const SizedBox(height: 24),
           FilledButton.icon(
             onPressed: _isLoading ? null : _submit,
@@ -401,22 +421,17 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      // --- ADAPTADO AL TEMA ---
-                      color: cs.onPrimary, // Contraste con el botón
+                      color: cs.onPrimary,
                     ),
                   )
                 : const Icon(Icons.save),
             label: Text(isEditMode ? 'Guardar Cambios' : 'Crear Cliente'),
-            // --- ADAPTADO AL TEMA ---
             style: FilledButton.styleFrom(
-              // Se eliminan backgroundColor y foregroundColor
-              // para usar los defaults del tema (primary/onPrimary)
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            // --- FIN ADAPTACIÓN ---
           ),
           if (isEditMode) ...[
             const SizedBox(height: 16),
@@ -426,16 +441,14 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               onPressed: _isLoading ? null : _handleDelete,
               icon: const Icon(Icons.delete_outline),
               label: const Text('Enviar a Papelera'),
-              // --- ADAPTADO AL TEMA ---
               style: OutlinedButton.styleFrom(
-                foregroundColor: cs.error, // Texto y borde de error
+                foregroundColor: cs.error,
                 side: BorderSide(color: cs.error),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              // --- FIN ADAPTACIÓN ---
             ),
           ],
         ],

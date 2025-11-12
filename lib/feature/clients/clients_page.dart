@@ -1,11 +1,22 @@
+// clients_page.dart (CON CAMBIOS)
+
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart'; // Necesitarás flutter_hooks
+import 'package:flutter_hooks/flutter_hooks.dart';
 // ignore: legacy_Linter_file_Name
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:pasteleria_180_flutter/core/models/client.dart'; // <-- AÑADIDO
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async'; // Para el Debouncer
+
+// --- AÑADIDOS PARA SPEED DIAL ---
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:collection/collection.dart'; // Para .firstWhereOrNull
+import 'package:dio/dio.dart'; // Para manejo de errores
+// --- FIN DE AÑADIDOS ---
 
 // Un simple Debouncer para no buscar en cada tecleo
 class Debouncer {
@@ -25,10 +36,183 @@ class Debouncer {
 }
 
 // Provider para el query de búsqueda
-final clientSearchQueryProvider = StateProvider<String>((ref) => '');
+// --- ❗️ CAMBIO AQUÍ: Añadido .autoDispose ---
+final clientSearchQueryProvider = StateProvider.autoDispose<String>(
+  (ref) => '',
+);
+// -----------------------------------------
 
 class ClientsPage extends HookConsumerWidget {
   const ClientsPage({super.key});
+
+  // --- Helper de SnackBar (copiado de otros archivos) ---
+  void _showSnackbar(
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
+    if (!context.mounted) return;
+    final cs = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: isError ? TextStyle(color: cs.onError) : null,
+        ),
+        backgroundColor: isError ? cs.error : null,
+      ),
+    );
+  }
+
+  // --- LÓGICA DE "DESDE CONTACTOS" (Adaptada de new_order_page) ---
+
+  Future<void> _selectClientFromContacts(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    // 1. Pedir Permiso de Contactos
+    if (!await FlutterContacts.requestPermission(readonly: true)) {
+      _showSnackbar(context, 'Permiso de contactos denegado.', isError: true);
+      await openAppSettings(); // Sugerir abrir configuración
+      return;
+    }
+
+    // 2. Abrir Selector Nativo
+    final Contact? contact = await FlutterContacts.openExternalPick();
+
+    if (contact != null) {
+      // 3. Extraer datos y normalizar
+      final String name = contact.displayName;
+      final String? phone = contact.phones.isNotEmpty
+          ? contact.phones.first.number
+          : null;
+
+      if (phone == null) {
+        _showSnackbar(
+          context,
+          'El contacto seleccionado no tiene número de teléfono.',
+          isError: true,
+        );
+        return;
+      }
+
+      // 4. Intentar buscar si el cliente ya existe por teléfono
+      final existingClients = await ref
+          .read(clientsRepoProvider)
+          .searchClients(query: phone);
+      final existingClient = existingClients.firstWhereOrNull(
+        (c) => c.phone == phone,
+      );
+
+      if (existingClient != null) {
+        // 5. Cliente ya existe: navegar a su detalle
+        if (context.mounted) {
+          _showSnackbar(context, 'Cliente "${existingClient.name}" ya existe.');
+          context.push('/clients/${existingClient.id}');
+        }
+      } else {
+        // 6. Cliente no existe: crear el nuevo cliente
+        _createClientFromData(context, ref, name: name, phone: phone);
+      }
+    }
+  }
+
+  // --- Helper: Crear Cliente (Adaptado de new_order_page) ---
+  Future<void> _createClientFromData(
+    BuildContext context,
+    WidgetRef ref, {
+    required String name,
+    String? phone,
+  }) async {
+    if (name.trim().isEmpty) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    Client? newClient;
+    String? errorMessage;
+
+    try {
+      newClient = await ref.read(clientsRepoProvider).createClient({
+        'name': name.trim(),
+        'phone': phone?.trim(),
+      });
+    } on DioException catch (e) {
+      // Si es 409 (cliente borrado), manejamos con diálogo de restauración
+      if (e.response?.statusCode == 409 && e.response?.data['client'] != null) {
+        if (context.mounted) Navigator.pop(context); // Cierra el loader
+        final clientData = e.response?.data['client'];
+        final clientToRestore = Client.fromJson(
+          (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
+        );
+        _showRestoreDialog(context, ref, clientToRestore);
+        return; // Sale del try/catch
+      }
+      errorMessage =
+          e.response?.data['message'] as String? ?? 'Error al crear cliente.';
+    } catch (e) {
+      errorMessage = e.toString();
+    }
+
+    if (context.mounted) Navigator.pop(context); // Cerrar loader
+
+    if (newClient != null && context.mounted) {
+      _showSnackbar(context, 'Cliente creado con éxito');
+      ref.invalidate(clientsListProvider); // Refresca la lista
+      context.push(
+        '/clients/${newClient.id}',
+      ); // Navega al detalle del nuevo cliente
+    } else if (errorMessage != null && context.mounted) {
+      _showSnackbar(context, errorMessage, isError: true);
+    }
+  }
+
+  // --- Helper: Diálogo de Restauración (Copiado de client_form_page) ---
+  Future<void> _showRestoreDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Client clientToRestore,
+  ) async {
+    final didConfirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cliente Encontrado'),
+        content: Text(
+          'El cliente "${clientToRestore.name}" ya existe pero fue eliminado. ¿Deseas restaurarlo?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Sí, Restaurar'),
+          ),
+        ],
+      ),
+    );
+
+    if (didConfirm != true) return;
+
+    try {
+      await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
+      ref.invalidate(clientsListProvider);
+      ref.invalidate(trashedClientsProvider);
+
+      if (context.mounted) {
+        _showSnackbar(context, 'Cliente restaurado con éxito');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        _showSnackbar(context, 'Error al restaurar: $e', isError: true);
+      }
+    }
+  }
+  // --- FIN DE LÓGICA DE CONTACTOS ---
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,16 +225,21 @@ class ClientsPage extends HookConsumerWidget {
     // 4. Observamos el provider que trae los datos
     final asyncClients = ref.watch(clientsListProvider(searchQuery));
 
-    // 5. --- OBTENER COLORES DEL TEMA ---
+    // --- LÓGICA PARA RESETEAR EL CAMPO DE TEXTO ---
+    // Si el provider se resetea a '', limpiamos el controlador
+    ref.listen(clientSearchQueryProvider, (_, next) {
+      if (next.isEmpty) {
+        searchController.clear();
+      }
+    });
+    // --- FIN ---
+
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    // (Se eliminó 'darkBrown')
-    // --- FIN ---
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Clientes'),
-        // --- ADAPTADO AL TEMA ---
         backgroundColor: cs.surface,
         foregroundColor: cs.onSurface,
         elevation: 1,
@@ -59,7 +248,6 @@ class ClientsPage extends HookConsumerWidget {
           color: cs.onSurface,
         ),
         actionsIconTheme: IconThemeData(color: cs.onSurfaceVariant),
-        // --- FIN ADAPTACIÓN ---
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
@@ -81,7 +269,6 @@ class ClientsPage extends HookConsumerWidget {
               controller: searchController,
               decoration: InputDecoration(
                 labelText: 'Buscar por nombre o teléfono...',
-                // --- ADAPTADO AL TEMA ---
                 prefixIcon: Icon(Icons.search, color: cs.primary),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12.0),
@@ -91,25 +278,17 @@ class ClientsPage extends HookConsumerWidget {
                   borderRadius: BorderRadius.circular(12.0),
                   borderSide: BorderSide(color: cs.primary, width: 2.0),
                 ),
-                // --- FIN ADAPTACIÓN ---
               ),
               onChanged: (query) {
-                // Usamos el debouncer para actualizar el provider
                 debouncer.run(() {
                   ref.read(clientSearchQueryProvider.notifier).state = query;
                 });
               },
             ),
           ),
-          // 6. Lista de resultados reactiva
           Expanded(
             child: asyncClients.when(
-              loading: () => Center(
-                // --- ADAPTADO AL TEMA ---
-                // El color por defecto es cs.primary
-                child: CircularProgressIndicator(),
-                // --- FIN ADAPTACIÓN ---
-              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, stack) =>
                   Center(child: Text('Error al cargar clientes: $err')),
               data: (clients) {
@@ -138,19 +317,15 @@ class ClientsPage extends HookConsumerWidget {
                           '${c.phone ?? "Sin teléfono"} • ${c.email ?? "Sin email"}',
                         ),
                         leading: CircleAvatar(
-                          // --- ADAPTADO AL TEMA ---
                           backgroundColor: cs.primaryContainer,
                           foregroundColor: cs.onPrimaryContainer,
-                          // --- FIN ADAPTACIÓN ---
                           child: Text(
                             c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C',
                           ),
                         ),
                         trailing: Icon(
                           Icons.chevron_right,
-                          // --- ADAPTADO AL TEMA ---
-                          color: cs.onSurfaceVariant, // Color neutral
-                          // --- FIN ADAPTACIÓN ---
+                          color: cs.onSurfaceVariant,
                         ),
                         onTap: () => context.push('/clients/${c.id}'),
                       );
@@ -162,15 +337,26 @@ class ClientsPage extends HookConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/clients/new'),
-        // --- ADAPTADO AL TEMA ---
-        // (Estilo "branded" FAB)
+      // --- ❗️ CAMBIO AQUÍ: Reemplazado FAB por SpeedDial ---
+      floatingActionButton: SpeedDial(
+        icon: Icons.add,
+        activeIcon: Icons.close,
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
-        child: const Icon(Icons.add),
-        // --- FIN ADAPTACIÓN ---
+        children: [
+          SpeedDialChild(
+            child: const Icon(Icons.contact_phone_outlined),
+            label: 'Desde Contactos',
+            onTap: () => _selectClientFromContacts(context, ref),
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.person_add_alt_1),
+            label: 'Nuevo Manualmente',
+            onTap: () => context.push('/clients/new'),
+          ),
+        ],
       ),
+      // --- FIN DE CAMBIO ---
     );
   }
 }
