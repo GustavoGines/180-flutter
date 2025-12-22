@@ -26,6 +26,7 @@ import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../clients/clients_repository.dart';
 import '../clients/address_form_dialog.dart'; // <-- 2. IMPORTAR DIÁLOGO
+import 'catalog_repository.dart'; // Importar repositorio
 import 'orders_repository.dart';
 import 'order_detail_page.dart';
 import 'home_page.dart'; // Para invalidar ordersByFilterProvider
@@ -38,9 +39,9 @@ class NewOrderPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isEditMode = orderId != null;
-
-    // Colores de la marca (podrían estar en un archivo de tema global)
     Color darkBrown = Theme.of(context).colorScheme.primary;
+
+    final catalogAsync = ref.watch(catalogProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -52,38 +53,33 @@ class NewOrderPage extends ConsumerWidget {
         elevation: 1,
         iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
       ),
-      body: isEditMode
-          // Si estamos editando, buscamos el pedido primero
-          ? ref
+      body: catalogAsync.when(
+        loading: () =>
+            Center(child: CircularProgressIndicator(color: darkBrown)),
+        error: (err, stack) =>
+            Center(child: Text('Error cargando catálogo: $err')),
+        data: (catalogData) {
+          // Si estamos editando, buscamos also el pedido
+          if (isEditMode) {
+            return ref
                 .watch(orderByIdProvider(orderId!))
                 .when(
                   loading: () => Center(
                     child: CircularProgressIndicator(color: darkBrown),
                   ),
-                  error: (err, stack) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'Error al cargar el pedido: $err\nIntenta recargar la página.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onErrorContainer,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Cuando tenemos los datos, construimos el formulario y se los pasamos
+                  error: (err, stack) =>
+                      Center(child: Text('Error al cargar el pedido: $err')),
                   data: (order) {
-                    if (order == null) {
-                      return const Center(
-                        child: Text('Pedido no encontrado o eliminado.'),
-                      );
-                    }
-                    return _OrderForm(order: order);
+                    if (order == null)
+                      return const Center(child: Text('Pedido no encontrado.'));
+                    return _OrderForm(order: order, catalog: catalogData);
                   },
-                )
-          // Si estamos creando, construimos el formulario vacío
-          : const _OrderForm(),
+                );
+          }
+          // Si es nuevo
+          return _OrderForm(catalog: catalogData);
+        },
+      ),
     );
   }
 }
@@ -93,13 +89,13 @@ class BoxMesaDulceSelection {
   final Product product;
   int quantity;
 
-  // Para productos vendidos por tamaño (Tarta/Brownie Redondo), usamos esto en lugar de quantity
-  ProductUnit? selectedSize;
+  // Para productos con variantes (ej. tamaños 20cm, 24cm, o Pan Dulce 500g)
+  ProductVariant? selectedVariant;
 
   BoxMesaDulceSelection({
     required this.product,
     this.quantity = 1,
-    this.selectedSize,
+    this.selectedVariant,
   });
 }
 
@@ -114,7 +110,8 @@ class UnitExtraSelection {
 // Widget interno que contiene TODA la lógica y estado del formulario
 class _OrderForm extends ConsumerStatefulWidget {
   final Order? order; // El pedido a editar (puede ser nulo)
-  const _OrderForm({this.order});
+  final CatalogResponse? catalog;
+  const _OrderForm({this.order, this.catalog});
 
   @override
   ConsumerState<_OrderForm> createState() => _OrderFormState();
@@ -137,6 +134,61 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   final _deliveryCostController = TextEditingController();
   final _notesController = TextEditingController();
   final List<OrderItem> _items = [];
+
+  // Listas locales derivadas del catálogo
+  List<Product> get boxProducts =>
+      widget.catalog?.products
+          .where((p) => p.category == ProductCategory.box)
+          .toList() ??
+      [];
+  List<Product> get smallCakeProducts =>
+      widget.catalog?.products
+          .where(
+            (p) =>
+                p.category == ProductCategory.torta && p.name.contains('Base'),
+          )
+          .toList() ??
+      []; // Ajustar filtro si es necesario
+  // Nota: smallCakeProducts en el código original eran tortas "Base" específicas.
+  // Aquí asumo que son las que tienen 'Base' en el nombre o son de cierta categoría.
+  // Si smallCakeProducts eran las de 'torta' en general, usaremos eso.
+  // Revisando original: smallCakeProducts eran 'Micro Torta', 'Mini Torta', 'Torta Base 1kg'.
+  // Y 'cakeProducts' eran las decoradas.
+  // Podríamos diferenciar por un flag o convención de nombres. O simplemente usar todas las tortas en ambos si no hay distinción clara en backend.
+  // Por ahora filtro por nombre 'Base' para smallCakes y todas para cakeProducts?
+  // O mejor:
+  List<Product> get cakeProducts =>
+      widget.catalog?.products
+          .where((p) => p.category == ProductCategory.torta)
+          .toList() ??
+      [];
+
+  // Re-definir smallCakeProducts como subset de cakeProducts si es necesario, o simplemente usar cakeProducts.
+  // En el original 'smallCakeProducts' se usaba para seleccionar la base en Box.
+  // Voy a usar las que digan "Base" o sean baratas?
+  // Hack temporal: Filtro por precio < 16000 o nombre contiene "Base".
+  // Mejor: Filtro por nombre.
+  List<Product> get _derivedSmallCakeProducts => cakeProducts
+      .where(
+        (p) =>
+            p.name.contains('Base') ||
+            p.name.contains('Mini') ||
+            p.name.contains('Micro'),
+      )
+      .toList();
+
+  List<Product> get mesaDulceProducts =>
+      widget.catalog?.products
+          .where((p) => p.category == ProductCategory.mesaDulce)
+          .toList() ??
+      [];
+
+  List<Filling> get allFillings => widget.catalog?.fillings ?? [];
+  List<Filling> get freeFillings => allFillings.where((f) => f.isFree).toList();
+  List<Filling> get extraCostFillings =>
+      allFillings.where((f) => !f.isFree).toList();
+
+  List<Extra> get cakeExtras => widget.catalog?.extras ?? [];
 
   bool _isLoading = false;
   final NumberFormat _currencyFormat = NumberFormat.currency(
@@ -863,20 +915,32 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       for (var itemData in itemsData) {
         final name = itemData['name'];
         final qty = itemData['quantity'] ?? 1;
-        final sizeName = itemData['selected_size'];
+
+        final variantId = itemData['variant_id']; // Si guardaste ID
+        final variantName = itemData['variant_name']; // O nombre
+
         final product = mesaDulceProducts.firstWhereOrNull(
           (p) => p.name == name,
         );
         if (product != null) {
+          ProductVariant? variant;
+          if (product.variants.isNotEmpty) {
+            if (variantId != null) {
+              variant = product.variants.firstWhereOrNull(
+                (v) => v.id == variantId,
+              );
+            }
+            // Fallback por nombre si no hay ID o no se encontró
+            variant ??= product.variants.firstWhereOrNull(
+              (v) => v.variantName == variantName,
+            );
+          }
+
           selectedMesaDulceItems.add(
             BoxMesaDulceSelection(
               product: product,
               quantity: qty,
-              selectedSize: sizeName != null
-                  ? ProductUnit.values.firstWhereOrNull(
-                      (e) => e.name == sizeName,
-                    )
-                  : null,
+              selectedVariant: variant,
             ),
           );
         }
@@ -887,10 +951,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     // O si es un Box Personalizado que ya tenía una torta base seleccionada.
     // Esto es para mantener la selección al editar.
     Product? selectedBaseCake = customData['selected_base_cake'] != null
-        ? smallCakeProducts.firstWhereOrNull(
+        ? _derivedSmallCakeProducts.firstWhereOrNull(
             (p) => p.name == (customData['selected_base_cake'] as String?),
           )
-        : smallCakeProducts.firstWhereOrNull(
+        : _derivedSmallCakeProducts.firstWhereOrNull(
             (p) => p.name == 'Mini Torta Personalizada (Base)',
           ); // Default: Mini Torta
 
@@ -1065,12 +1129,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         // Suma Mesa Dulce
         for (var sel in selectedMesaDulceItems) {
           double unitPrice = 0.0;
-          // ... (Lógica de precio unitario)
-          if (sel.product.pricesBySize != null) {
-            unitPrice = sel.product.pricesBySize![sel.selectedSize] ?? 0.0;
+          if (sel.product.variants.isNotEmpty) {
+            unitPrice = sel.selectedVariant?.price ?? 0.0;
           } else if (sel.product.unit == ProductUnit.dozen) {
             unitPrice = sel.product.price / 12.0;
           } else if (sel.product.unit == ProductUnit.unit) {
+            unitPrice = sel.product.price;
+          } else {
+            // Fallback o precio base si no tiene variantes ni unidad especial
             unitPrice = sel.product.price;
           }
           calculatedSubItemsCost += unitPrice * sel.quantity;
@@ -1305,48 +1371,45 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 });
               }
 
-              // Si el producto usa precios por tamaño (Tartas, Brownie Redondo)
-              if (product.pricesBySize != null) {
+              // Si el producto tiene VARIANTES
+              if (product.variants.isNotEmpty) {
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ListTile(
-                      // Usamos ListTile y Checkbox manual
                       leading: Checkbox(
                         value: isSelected,
                         onChanged: toggleSelection,
                       ),
                       title: Text('${product.name} $basePriceText'),
-                      onTap: () => toggleSelection(
-                        !isSelected,
-                      ), // Permite seleccionar al tocar la fila
+                      onTap: () => toggleSelection(!isSelected),
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                     ),
                     if (isSelected)
                       Padding(
                         padding: const EdgeInsets.only(left: 32.0, bottom: 8.0),
-                        child: DropdownButtonFormField<ProductUnit>(
-                          value: selection.selectedSize,
-                          items: product.pricesBySize!.keys
+                        child: DropdownButtonFormField<ProductVariant>(
+                          value: selection.selectedVariant,
+                          items: product.variants
                               .map(
-                                (size) => DropdownMenuItem(
-                                  value: size,
+                                (variant) => DropdownMenuItem(
+                                  value: variant,
                                   child: Text(
-                                    '${getUnitText(size)} (\$${product.pricesBySize![size]!.toStringAsFixed(0)})',
+                                    '${variant.variantName} (\$${variant.price.toStringAsFixed(0)})',
                                   ),
                                 ),
                               )
                               .toList(),
-                          onChanged: (newSize) {
+                          onChanged: (newVariant) {
                             setDialogState(() {
-                              selection.selectedSize = newSize;
+                              selection.selectedVariant = newVariant;
                               calculatePrice();
                             });
                           },
                           decoration: const InputDecoration(
-                            labelText: 'Tamaño',
+                            labelText: 'Variante / Tamaño',
                           ),
                         ),
                       ),
@@ -1452,7 +1515,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           } else {
                             basePrice = newValue?.price ?? 0.0;
                             // Opcional: Re-seleccionar la torta base por defecto para el Box predefinido
-                            selectedBaseCake = smallCakeProducts
+                            selectedBaseCake = _derivedSmallCakeProducts
                                 .firstWhereOrNull(
                                   (p) =>
                                       p.name ==
@@ -1507,11 +1570,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 ),
                               ),
                               // Opciones de tortas
-                              ...smallCakeProducts.map((Product product) {
+                              ..._derivedSmallCakeProducts.map((
+                                Product product,
+                              ) {
                                 return DropdownMenuItem<Product>(
                                   value: product,
                                   child: Text(
-                                    '${product.name} (\$${product.price.toStringAsFixed(0)} Base)',
+                                    '${product.name} (\$${product.basePrice.toStringAsFixed(0)} Base)',
                                   ),
                                 );
                               }),
@@ -1885,8 +1950,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               (sel) => {
                                 'name': sel.product.name,
                                 'quantity': sel.quantity,
-                                if (sel.selectedSize != null)
-                                  'selected_size': sel.selectedSize!.name,
+                                if (sel.selectedVariant != null) ...{
+                                  'variant_id': sel.selectedVariant!.id,
+                                  'variant_name':
+                                      sel.selectedVariant!.variantName,
+                                },
                               },
                             )
                             .toList(),
@@ -2645,21 +2713,28 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ? mesaDulceProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : mesaDulceProducts.first;
 
-    ProductUnit? selectedSize;
+    ProductVariant? selectedVariant;
     double basePrice = 0.0;
     double adjustments = isEditing ? existingItem.adjustments : 0.0;
     bool isHalfDozen = customData['is_half_dozen'] as bool? ?? false;
 
-    if (selectedProduct?.pricesBySize != null) {
-      final sizeName = customData['selected_size'] as String?;
-      if (sizeName != null) {
-        try {
-          selectedSize = ProductUnit.values.byName(sizeName);
-        } catch (_) {}
+    if (selectedProduct != null && selectedProduct!.variants.isNotEmpty) {
+      final variantId = customData['variant_id'];
+      final variantName = customData['variant_name'];
+
+      if (variantId != null) {
+        selectedVariant = selectedProduct!.variants.firstWhereOrNull(
+          (v) => v.id == variantId,
+        );
       }
-      if (selectedSize == null ||
-          !selectedProduct!.pricesBySize!.containsKey(selectedSize)) {
-        selectedSize = selectedProduct!.pricesBySize!.keys.first;
+      // Fallback
+      selectedVariant ??= selectedProduct!.variants.firstWhereOrNull(
+        (v) => v.variantName == variantName,
+      );
+
+      // Default to first variant if none selected
+      if (selectedVariant == null && selectedProduct!.variants.isNotEmpty) {
+        selectedVariant = selectedProduct!.variants.first;
       }
     }
 
@@ -2701,12 +2776,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
 
       double unitBasePrice = 0.0;
-      if (selectedProduct!.pricesBySize != null) {
-        if (selectedSize == null) {
-          finalPriceController.text = 'Seleccione tamaño';
+      if (selectedProduct!.variants.isNotEmpty) {
+        if (selectedVariant == null) {
+          finalPriceController.text = 'Seleccione variante';
           return;
         }
-        unitBasePrice = getPriceBySize(selectedProduct!, selectedSize!) ?? 0.0;
+        unitBasePrice = selectedVariant!.price;
         if (qtyController.text != '1') {
           qtyController.text = '1';
           qty = 1;
@@ -2735,35 +2810,38 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           builder: (context, setDialogState) {
             Widget buildQuantityOrSizeInput() {
               if (selectedProduct == null) return const SizedBox.shrink();
-              if (selectedProduct!.pricesBySize != null) {
-                List<ProductUnit> availableSizes = selectedProduct!
-                    .pricesBySize!
-                    .keys
-                    .toList();
-                if (selectedSize == null ||
-                    !availableSizes.contains(selectedSize)) {
-                  selectedSize = availableSizes.first;
+
+              if (selectedProduct!.variants.isNotEmpty) {
+                // Asegurarse de que hay variante seleccionada
+                if (selectedVariant == null ||
+                    !selectedProduct!.variants.contains(selectedVariant)) {
+                  selectedVariant = selectedProduct!.variants.first;
                   WidgetsBinding.instance.addPostFrameCallback(
                     (_) => calculateMesaDulcePrice(),
                   );
                 }
-                return DropdownButtonFormField<ProductUnit>(
-                  value: selectedSize,
-                  items: availableSizes
+
+                return DropdownButtonFormField<ProductVariant>(
+                  value: selectedVariant,
+                  items: selectedProduct!.variants
                       .map(
-                        (size) => DropdownMenuItem(
-                          value: size,
-                          child: Text(getUnitText(size)),
+                        (variant) => DropdownMenuItem(
+                          value: variant,
+                          child: Text(
+                            '${variant.variantName} (\$${variant.price.toStringAsFixed(0)})',
+                          ),
                         ),
                       )
                       .toList(),
-                  onChanged: (ProductUnit? newValue) {
+                  onChanged: (ProductVariant? newValue) {
                     setDialogState(() {
-                      selectedSize = newValue;
+                      selectedVariant = newValue;
                       calculateMesaDulcePrice();
                     });
                   },
-                  decoration: const InputDecoration(labelText: 'Tamaño'),
+                  decoration: const InputDecoration(
+                    labelText: 'Variante / Tamaño',
+                  ),
                 );
               } else if (selectedProduct!.allowHalfDozen) {
                 return Column(
@@ -2831,8 +2909,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         String priceSuffix = '';
                         if (product.unit == ProductUnit.dozen) {
                           priceSuffix = '/doc';
-                        } else if (product.pricesBySize != null) {
-                          priceSuffix = '(ver tamaños)';
+                        } else if (product.variants.isNotEmpty) {
+                          priceSuffix = '(ver opciones)';
                         } else if (product.unit == ProductUnit.unit) {
                           priceSuffix = '/u';
                         }
@@ -2847,8 +2925,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       onChanged: (Product? newValue) {
                         setDialogState(() {
                           selectedProduct = newValue;
-                          if (newValue?.pricesBySize == null) {
-                            selectedSize = null;
+                          if (newValue != null && newValue.variants.isEmpty) {
+                            selectedVariant = null;
                           }
                           if (newValue?.allowHalfDozen == false) {
                             isHalfDozen = false;
@@ -2981,8 +3059,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                     if (qty <= 0 ||
                         basePrice <= 0 ||
-                        (selectedProduct!.pricesBySize != null &&
-                            selectedSize == null)) {
+                        (selectedProduct!.variants.isNotEmpty &&
+                            selectedVariant == null)) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Verifica la cantidad y/o tamaño.'),
@@ -2996,8 +3074,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     final customization = {
                       'product_category': selectedProduct!.category.name,
                       'product_unit': selectedProduct!.unit.name,
-                      if (selectedProduct!.pricesBySize != null)
-                        'selected_size': selectedSize!.name,
+                      if (selectedVariant != null) ...{
+                        'variant_id': selectedVariant!.id,
+                        'variant_name': selectedVariant!.variantName,
+                      },
                       if (selectedProduct!.allowHalfDozen)
                         'is_half_dozen': isHalfDozen,
                       if (itemNotes.isNotEmpty) 'item_notes': itemNotes,

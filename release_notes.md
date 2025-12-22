@@ -1,0 +1,3 @@
+﻿* Se agrego Desde Contactos para agregar a un cliente en la lista de clientes, se resolvio problema con el teclado y el fomrulario de direcciones, se soluciono problemas con buscador de clientes y se agrego poder agregar la direccion cuando creas un cliente nuevo (d117744)
+* Solucionado parte de pedidos con detalles incompletos ahora estan bien estructurados y organizados (60e5051)
+* Se mejora la estructura del pdf 2.0 (36f4326)

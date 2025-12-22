@@ -22,6 +22,10 @@ import 'feature/users/presentation/users_list_page.dart';
 import 'feature/users/presentation/edit_user_page.dart';
 import 'feature/orders/services/pdf_preview_page.dart';
 import 'core/services/firebase_messaging_service.dart';
+import 'feature/orders/admin_catalog_page.dart';
+import 'feature/orders/admin/product_form_page.dart';
+import 'core/models/catalog.dart';
+
 
 // 🔔 Notificador de GoRouter
 final goRouterNotifierProvider = ChangeNotifierProvider((ref) {
@@ -125,6 +129,24 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/admin/catalog',
+        builder: (_, __) => const AdminCatalogPage(),
+        routes: [
+          GoRoute(
+            path: 'product/new',
+            builder: (_, __) => const ProductFormPage(),
+          ),
+          GoRoute(
+            path: 'product/edit',
+            builder: (_, state) {
+              // Pasamos el producto completo como objeto 'extra'
+              final product = state.extra as Product;
+              return ProductFormPage(productToEdit: product);
+            },
           ),
         ],
       ),

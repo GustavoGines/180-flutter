@@ -474,6 +474,16 @@ class _HomePageState extends ConsumerState<HomePage> {
               // --- 👆 FIN DE ADAPTACIÓN 👆 ---
               onTap: () => context.push('/users'),
             ),
+
+          if (authState.user?.isAdmin ?? false)
+            SpeedDialChild(
+              child: const Icon(Icons.inventory_2_outlined),
+              label: 'Catálogo',
+              labelStyle: const TextStyle(fontSize: 16),
+              backgroundColor: cs.secondaryContainer,
+              foregroundColor: cs.onSecondaryContainer,
+              onTap: () => context.push('/admin/catalog'),
+            ),
         ],
       ),
 
