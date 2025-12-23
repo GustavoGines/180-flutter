@@ -12,6 +12,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart'; // Para mapEquals
 
 // --- AÑADIDOS PARA COMPRESIÓN ---
 import 'package:pasteleria_180_flutter/core/json_utils.dart';
@@ -587,9 +588,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   Expanded(
                     child: TypeAheadField<Client>(
                       controller: _clientNameController,
+                      // Permite buscar con 0 caracteres (al hacer click/foco)
                       debounceDuration: const Duration(milliseconds: 500),
                       suggestionsCallback: (pattern) async {
-                        if (pattern.length < 2) return [];
+                        // Eliminada la restricción de 2 caracteres.
+                        // Si pattern es vacío, traerá los default (paginados) del backend.
                         if (_selectedClient != null) {
                           setState(() {
                             _selectedClient = null;
@@ -1055,11 +1058,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       // Sumar Mesa Dulce (sólo si se está editando un box personalizado)
       for (var sel in selectedMesaDulceItems) {
         double unitPrice = 0.0;
-        if (sel.product.pricesBySize != null) {
-          unitPrice = sel.product.pricesBySize![sel.selectedSize] ?? 0.0;
+        if (sel.product.variants.isNotEmpty) {
+          unitPrice = sel.selectedVariant?.price ?? 0.0;
         } else if (sel.product.unit == ProductUnit.dozen) {
           unitPrice = sel.product.price / 12.0;
         } else if (sel.product.unit == ProductUnit.unit) {
+          unitPrice = sel.product.price;
+        } else {
+          // Fallback
           unitPrice = sel.product.price;
         }
         calculatedSubItemsCost += unitPrice * sel.quantity;
@@ -1345,21 +1351,16 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               void toggleSelection(bool? value) {
                 setDialogState(() {
                   if (value == true) {
-                    ProductUnit? defaultSize;
-                    if (product.pricesBySize != null) {
-                      // Si el producto es un bizcochuelo/tarta por tamaño, selecciona 20cm por defecto
-                      defaultSize =
-                          product.pricesBySize!.keys.firstWhereOrNull(
-                            (s) => s == ProductUnit.size20cm,
-                          ) ??
-                          product.pricesBySize!.keys.first;
+                    ProductVariant? defaultVariant;
+                    if (product.variants.isNotEmpty) {
+                      defaultVariant = product.variants.first;
                     }
 
                     selectedMesaDulceItems.add(
                       BoxMesaDulceSelection(
                         product: product,
                         quantity: 1,
-                        selectedSize: defaultSize, // Usa el tamaño por defecto
+                        selectedVariant: defaultVariant,
                       ),
                     );
                   } else {
@@ -2705,39 +2706,40 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
   void _addMesaDulceDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
-    Map<String, dynamic> customData = isEditing
-        ? (existingItem.customizationJson ?? {})
-        : {};
 
+    // --- ESTADO LOCAL DEL CARRITO ---
+    List<OrderItem> pendingItems = [];
+    if (isEditing) {
+      // Si editamos, iniciamos con ese item en la lista (aunque la UX de editar múltiple es rara,
+      // asumiremos que si edita, edita ESE item. Pero para mantener consistencia,
+      // el modo edición podría mantenerse simple o permitir agregar más).
+      // SIMPLIFICACIÓN: SI EDITA, ES SOLO ESE ITEM.
+    }
+
+    // Estado del formulario de selección actual
     Product? selectedProduct = isEditing
         ? mesaDulceProducts.firstWhereOrNull((p) => p.name == existingItem.name)
-        : mesaDulceProducts.first;
+        : mesaDulceProducts.firstWhereOrNull(
+                (p) => p.category == ProductCategory.mesaDulce,
+              ) ??
+              mesaDulceProducts.first;
 
     ProductVariant? selectedVariant;
     double basePrice = 0.0;
     double adjustments = isEditing ? existingItem.adjustments : 0.0;
-    bool isHalfDozen = customData['is_half_dozen'] as bool? ?? false;
-
-    if (selectedProduct != null && selectedProduct!.variants.isNotEmpty) {
-      final variantId = customData['variant_id'];
-      final variantName = customData['variant_name'];
-
-      if (variantId != null) {
-        selectedVariant = selectedProduct!.variants.firstWhereOrNull(
-          (v) => v.id == variantId,
+    bool isHalfDozen = false;
+    if (isEditing) {
+      final custom = existingItem.customizationJson ?? {};
+      isHalfDozen = custom['is_half_dozen'] as bool? ?? false;
+      final vId = custom['variant_id'];
+      if (vId != null && selectedProduct != null) {
+        selectedVariant = selectedProduct.variants.firstWhereOrNull(
+          (v) => v.id == vId,
         );
-      }
-      // Fallback
-      selectedVariant ??= selectedProduct!.variants.firstWhereOrNull(
-        (v) => v.variantName == variantName,
-      );
-
-      // Default to first variant if none selected
-      if (selectedVariant == null && selectedProduct!.variants.isNotEmpty) {
-        selectedVariant = selectedProduct!.variants.first;
       }
     }
 
+    // Controladores
     final qtyController = TextEditingController(
       text: isEditing ? existingItem.qty.toString() : '1',
     );
@@ -2748,371 +2750,488 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       text: isEditing ? existingItem.customizationNotes ?? '' : '',
     );
     final itemNotesController = TextEditingController(
-      text: customData['item_notes'] as String? ?? '',
+      text: isEditing
+          ? (existingItem.customizationJson?['item_notes'] ?? '')
+          : '',
     );
-
-    final ImagePicker picker = ImagePicker();
-    List<String> existingImageUrls = List<String>.from(
-      customData['photo_urls'] ?? [],
+    final unitAdjustmentsController = TextEditingController(
+      text: isEditing
+          ? (existingItem.customizationJson?['unit_adjustment']?.toString() ??
+                '0')
+          : '0',
     );
-    // 🚨 ELIMINADO: List<XFile> newImageFiles = [];
-
     final finalPriceController = TextEditingController();
 
-    double manualAdjustments = 0.0;
-
-    void calculateMesaDulcePrice() {
-      if (selectedProduct == null) {
-        finalPriceController.text = 'N/A';
-        return;
-      }
-
-      int qty = int.tryParse(qtyController.text) ?? 0;
-      manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
-
-      if (qty <= 0) {
-        finalPriceController.text = 'N/A';
-        return;
-      }
-
-      double unitBasePrice = 0.0;
-      if (selectedProduct!.variants.isNotEmpty) {
-        if (selectedVariant == null) {
-          finalPriceController.text = 'Seleccione variante';
-          return;
-        }
-        unitBasePrice = selectedVariant!.price;
-        if (qtyController.text != '1') {
-          qtyController.text = '1';
-          qty = 1;
-        }
-      } else if (selectedProduct!.allowHalfDozen && isHalfDozen) {
-        unitBasePrice =
-            selectedProduct!.halfDozenPrice ?? (selectedProduct!.price / 2);
-      } else {
-        unitBasePrice = selectedProduct!.price;
-      }
-
-      basePrice = unitBasePrice;
-      double finalUnitPrice = basePrice + manualAdjustments;
-      double totalItemPrice = finalUnitPrice * qty;
-      finalPriceController.text = totalItemPrice.toStringAsFixed(0);
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => calculateMesaDulcePrice(),
-    );
+    // Imagenes (Simplificación: Por ahora no implementaremos carga de fotos múltiple por item en esta refactorización masiva,
+    // o se aplicará al item que se está creando).
+    // Mantenemos la lógica de imagen para el item ACTUAL que se está configurando.
+    final ImagePicker picker = ImagePicker();
+    List<String> currentImageUrls = isEditing
+        ? List<String>.from(existingItem.customizationJson?['photo_urls'] ?? [])
+        : [];
+    Map<String, XFile> currentFilesToUpload = {};
 
     showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            Widget buildQuantityOrSizeInput() {
-              if (selectedProduct == null) return const SizedBox.shrink();
-
-              if (selectedProduct!.variants.isNotEmpty) {
-                // Asegurarse de que hay variante seleccionada
-                if (selectedVariant == null ||
-                    !selectedProduct!.variants.contains(selectedVariant)) {
-                  selectedVariant = selectedProduct!.variants.first;
-                  WidgetsBinding.instance.addPostFrameCallback(
-                    (_) => calculateMesaDulcePrice(),
-                  );
-                }
-
-                return DropdownButtonFormField<ProductVariant>(
-                  value: selectedVariant,
-                  items: selectedProduct!.variants
-                      .map(
-                        (variant) => DropdownMenuItem(
-                          value: variant,
-                          child: Text(
-                            '${variant.variantName} (\$${variant.price.toStringAsFixed(0)})',
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (ProductVariant? newValue) {
-                    setDialogState(() {
-                      selectedVariant = newValue;
-                      calculateMesaDulcePrice();
-                    });
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Variante / Tamaño',
-                  ),
-                );
-              } else if (selectedProduct!.allowHalfDozen) {
-                return Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: qtyController,
-                            decoration: InputDecoration(
-                              labelText: isHalfDozen
-                                  ? 'Cantidad (Medias Docenas)'
-                                  : 'Cantidad (Docenas)',
-                            ),
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                            onChanged: (_) =>
-                                setDialogState(calculateMesaDulcePrice),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        ChoiceChip(
-                          label: const Text('Media Docena'),
-                          selected: isHalfDozen,
-                          onSelected: (selected) {
-                            setDialogState(() {
-                              isHalfDozen = selected;
-                              calculateMesaDulcePrice();
-                            });
-                          },
-                          selectedColor: Theme.of(
-                            context,
-                          ).colorScheme.secondary,
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              } else {
-                return TextFormField(
-                  controller: qtyController,
-                  decoration: InputDecoration(
-                    labelText:
-                        'Cantidad (${getUnitText(selectedProduct!.unit, plural: true)})',
-                  ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => setDialogState(calculateMesaDulcePrice),
-                );
+            // --- CÁLCULO DE PRECIO DEL ITEM ACTUAL ---
+            void calculateCurrentItemPrice() {
+              if (selectedProduct == null) {
+                finalPriceController.text = '0';
+                return;
               }
+              int qty = int.tryParse(qtyController.text) ?? 0;
+              double manualAdj =
+                  double.tryParse(adjustmentsController.text) ?? 0.0;
+              // Ajuste Unitario
+              double unitAdj =
+                  double.tryParse(unitAdjustmentsController.text) ?? 0.0;
+
+              double unitBasePrice = 0.0;
+              if (selectedProduct!.variants.isNotEmpty) {
+                unitBasePrice = selectedVariant?.price ?? 0.0;
+              } else if (selectedProduct!.allowHalfDozen && isHalfDozen) {
+                unitBasePrice =
+                    selectedProduct!.halfDozenPrice ??
+                    (selectedProduct!.price / 2);
+              } else {
+                unitBasePrice = selectedProduct!.price;
+              }
+
+              // Precio unitario efectivo = precio base + ajuste unitario
+              double effectiveUnitDetailPrice = unitBasePrice + unitAdj;
+              basePrice = effectiveUnitDetailPrice;
+
+              // Total = (Effective Unit * Qty) + Manual Adjustment (Fixed)
+              double total = (effectiveUnitDetailPrice * qty) + manualAdj;
+              finalPriceController.text = total.toStringAsFixed(0);
+            }
+
+            // Forzamos un cálculo inicial al construir si el controlador está vacío
+            if (finalPriceController.text.isEmpty) {
+              calculateCurrentItemPrice();
+            }
+
+            // --- FUNCIÓN PARA AGREGAR A LA LISTA TEMPORAL ---
+            void addToPendingList() {
+              if (selectedProduct == null) return;
+              int qty = int.tryParse(qtyController.text) ?? 0;
+              if (qty <= 0) return;
+              if (selectedProduct!.variants.isNotEmpty &&
+                  selectedVariant == null)
+                return;
+
+              // Construir Customization
+              final customization = {
+                'product_category': selectedProduct!.category.name,
+                'product_unit': selectedProduct!.unit.name,
+                if (selectedVariant != null) ...{
+                  'variant_id': selectedVariant!.id,
+                  'variant_name': selectedVariant!.variantName,
+                },
+                if (selectedProduct!.allowHalfDozen)
+                  'is_half_dozen': isHalfDozen,
+                if (itemNotesController.text.trim().isNotEmpty)
+                  'item_notes': itemNotesController.text.trim(),
+                if (currentImageUrls.isNotEmpty)
+                  'photo_urls': List<String>.from(currentImageUrls),
+                if (double.tryParse(unitAdjustmentsController.text) != null &&
+                    double.parse(unitAdjustmentsController.text) != 0)
+                  'unit_adjustment': double.parse(
+                    unitAdjustmentsController.text,
+                  ),
+              };
+
+              final newItem = OrderItem(
+                id: isEditing ? existingItem.id : null, // Si edita, mantiene ID
+                name: selectedProduct!.name,
+                qty: qty,
+                basePrice:
+                    basePrice, // Precio unitario calculado arriba (sin ajustes)
+                adjustments: double.tryParse(adjustmentsController.text) ?? 0.0,
+                customizationNotes: notesController.text.trim().isEmpty
+                    ? null
+                    : notesController.text.trim(),
+                customizationJson: customization,
+              );
+
+              setDialogState(() {
+                if (isEditing) {
+                  // Si estamos en modo edición, reemplazar y cerrar
+                  _updateItemsAndRecalculate(() {
+                    _items[itemIndex!] = newItem;
+                  });
+                  Navigator.pop(context);
+                } else {
+                  // Modo Agregar Múltiple
+                  pendingItems.add(newItem);
+                  // Resetear formulario para siguiente item
+                  // Mantener producto seleccionado o resetear? Mejor mantener para carga rápida del mismo tipo.
+                  qtyController.text = '1';
+                  adjustmentsController.text = '0';
+                  notesController.clear();
+                  itemNotesController.clear();
+                  unitAdjustmentsController.text = '0';
+                  currentImageUrls.clear();
+                  currentFilesToUpload.clear();
+                  _filesToUpload.addAll(
+                    currentFilesToUpload,
+                  ); // Mover archivos a la cola global si fuera necesario, o manejarlos al guardar todo.
+                  // NOTA: La subida de archivos real se maneja en el save global. Aquí solo referenciamos.
+                  // Simplificación: Asumimos que _filesToUpload se procesa al final en el save del pedido.
+                }
+              });
             }
 
             return AlertDialog(
-              title: Text(isEditing ? 'Editar Item' : 'Añadir Item Mesa Dulce'),
-              content: SingleChildScrollView(
+              title: Text(
+                isEditing ? 'Editar Item Mesa Dulce' : 'Mesa Dulce (Carrito)',
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DropdownButtonFormField<Product>(
-                      initialValue: selectedProduct,
-                      items: mesaDulceProducts.map((Product product) {
-                        String priceSuffix = '';
-                        if (product.unit == ProductUnit.dozen) {
-                          priceSuffix = '/doc';
-                        } else if (product.variants.isNotEmpty) {
-                          priceSuffix = '(ver opciones)';
-                        } else if (product.unit == ProductUnit.unit) {
-                          priceSuffix = '/u';
-                        }
-                        return DropdownMenuItem<Product>(
-                          value: product,
-                          child: Text(
-                            '${product.name} ${product.price > 0 ? '\$${product.price.toStringAsFixed(0)}$priceSuffix' : priceSuffix}',
-                            overflow: TextOverflow.ellipsis,
+                    if (!isEditing) ...[
+                      // --- LISTA DE PROVISORIOS ---
+                      if (pendingItems.isNotEmpty)
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 150),
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (Product? newValue) {
-                        setDialogState(() {
-                          selectedProduct = newValue;
-                          if (newValue != null && newValue.variants.isEmpty) {
-                            selectedVariant = null;
-                          }
-                          if (newValue?.allowHalfDozen == false) {
-                            isHalfDozen = false;
-                          }
-                          calculateMesaDulcePrice();
-                        });
-                      },
-                      decoration: const InputDecoration(labelText: 'Producto'),
-                      isExpanded: true,
-                    ),
-                    const SizedBox(height: 16),
-                    buildQuantityOrSizeInput(),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: adjustmentsController,
-                      decoration: InputDecoration(
-                        labelText: 'Ajuste Manual al Precio Unitario (\$)',
-                        hintText: 'Ej: 50 (extra), -20 (desc)',
-                        prefixText: '${basePrice.toStringAsFixed(0)} + ',
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: pendingItems.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (ctx, idx) {
+                              final it = pendingItems[idx];
+                              final vName =
+                                  it.customizationJson?['variant_name'] ??
+                                  (it.customizationJson?['is_half_dozen'] ==
+                                          true
+                                      ? 'Media Docena'
+                                      : 'Unidad');
+                              // Limpieza visual del nombre de variante (ej: size20cm -> 20cm)
+                              final formattedVName = vName.startsWith('size')
+                                  ? vName.replaceAll('size', '')
+                                  : vName;
+                              return ListTile(
+                                dense: true,
+                                title: Text('${it.name} ($formattedVName)'),
+                                subtitle: Text(
+                                  '${it.qty} x \$${it.basePrice.toStringAsFixed(0)}',
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(
+                                    Icons.delete,
+                                    size: 20,
+                                    color: Colors.red,
+                                  ),
+                                  onPressed: () => setDialogState(
+                                    () => pendingItems.removeAt(idx),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 5, bottom: 5),
+                          child: Text(
+                            'Total Carrito: \$${pendingItems.fold<double>(0, (sum, item) => sum + (item.basePrice * item.qty) + item.adjustments).toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.blueGrey,
+                            ),
+                          ),
+                        ),
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        signed: true,
-                        decimal: false,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')),
-                      ],
-                      onChanged: (_) => setDialogState(calculateMesaDulcePrice),
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: notesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Notas del Ajuste',
-                        hintText: 'Ej: Diseño especial galletas, etc.',
-                      ),
-                      maxLines: 2,
-                      textCapitalization: TextCapitalization.sentences,
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: itemNotesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Notas Generales del Item',
-                      ),
-                      maxLines: 2,
-                      textCapitalization: TextCapitalization.sentences,
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const Text(
-                      'Fotos de Referencia (Opcional)',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Wrap(
-                        spacing: 8.0,
-                        runSpacing: 8.0,
-                        children: [
-                          ...existingImageUrls.map((url) {
-                            final bool isPlaceholder = url.startsWith(
-                              'placeholder_',
-                            );
-                            final dynamic imageSource = isPlaceholder
-                                ? _filesToUpload[url]
-                                : url;
+                      const Divider(thickness: 2),
+                    ],
 
-                            if (imageSource == null) {
-                              return const SizedBox.shrink();
-                            }
-
-                            return _buildImageThumbnail(
-                              imageSource,
-                              !isPlaceholder,
-                              () => setDialogState(() {
-                                if (isPlaceholder) {
-                                  _filesToUpload.remove(url);
+                    // --- FORMULARIO DE SELECCIÓN ---
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            DropdownButtonFormField<Product>(
+                              isExpanded: true,
+                              value: selectedProduct,
+                              items: mesaDulceProducts
+                                  .map(
+                                    (p) => DropdownMenuItem(
+                                      value: p,
+                                      child: Text(p.name),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (p) => setDialogState(() {
+                                selectedProduct = p;
+                                if (p != null && p.variants.isNotEmpty) {
+                                  selectedVariant = p.variants.first;
+                                } else {
+                                  selectedVariant = null;
                                 }
-                                existingImageUrls.remove(url);
+                                isHalfDozen = false;
+                                calculateCurrentItemPrice();
                               }),
-                            );
-                          }).toList(),
-                        ],
+                              decoration: const InputDecoration(
+                                labelText: 'Producto',
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            if (selectedProduct != null) ...[
+                              if (selectedProduct!.variants.isNotEmpty)
+                                DropdownButtonFormField<ProductVariant>(
+                                  value: selectedVariant,
+                                  items: selectedProduct!.variants
+                                      .map(
+                                        (v) => DropdownMenuItem(
+                                          value: v,
+                                          child: Text(
+                                            '${v.formattedName} (\$${v.price.toStringAsFixed(0)})',
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) => setDialogState(() {
+                                    selectedVariant = v;
+                                    calculateCurrentItemPrice();
+                                  }),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Variante',
+                                  ),
+                                )
+                              else if (selectedProduct!.allowHalfDozen)
+                                SwitchListTile(
+                                  title: const Text('Media Docena'),
+                                  value: isHalfDozen,
+                                  onChanged: (v) => setDialogState(() {
+                                    isHalfDozen = v;
+                                    calculateCurrentItemPrice();
+                                  }),
+                                ),
+                            ],
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: qtyController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Cantidad',
+                                    ),
+                                    onChanged: (_) => setDialogState(() {
+                                      calculateCurrentItemPrice();
+                                    }),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: TextField(
+                                    controller: unitAdjustmentsController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Ajuste Unit. \$',
+                                    ),
+                                    onChanged: (_) => setDialogState(() {
+                                      calculateCurrentItemPrice();
+                                    }),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: TextField(
+                                    controller: adjustmentsController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Ajuste Total \$',
+                                    ),
+                                    onChanged: (_) => setDialogState(() {
+                                      calculateCurrentItemPrice();
+                                    }),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            TextFormField(
+                              controller: notesController,
+                              decoration: const InputDecoration(
+                                labelText: 'Notas del Ajuste (Opcional)',
+                                hintText: 'Ej: Diseño especial, etc.',
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextFormField(
+                              controller: itemNotesController,
+                              decoration: const InputDecoration(
+                                labelText: 'Notas del Item (Sabor, etc)',
+                              ),
+                              maxLines: 2,
+                            ),
+                            const SizedBox(height: 10),
+
+                            // --- SECCIÓN FOTOS (Restaurada) ---
+                            if (currentImageUrls.isNotEmpty)
+                              Container(
+                                height: 90,
+                                margin: const EdgeInsets.only(bottom: 10),
+                                child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  children: [
+                                    ...currentImageUrls.map((url) {
+                                      final bool isPlaceholder = url.startsWith(
+                                        'placeholder_',
+                                      );
+                                      final dynamic imageSource = isPlaceholder
+                                          ? File(
+                                              currentFilesToUpload[url]!.path,
+                                            )
+                                          : url;
+
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 8.0,
+                                        ),
+                                        child: _buildImageThumbnail(
+                                          imageSource,
+                                          !isPlaceholder,
+                                          () => setDialogState(() {
+                                            if (isPlaceholder) {
+                                              currentFilesToUpload.remove(url);
+                                            }
+                                            currentImageUrls.remove(url);
+                                          }),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ],
+                                ),
+                              ),
+                            TextButton.icon(
+                              icon: const Icon(Icons.photo_library),
+                              label: const Text('Añadir Fotos al Item'),
+                              onPressed: () async {
+                                final pickedFiles = await picker
+                                    .pickMultiImage();
+                                if (pickedFiles.isNotEmpty) {
+                                  setDialogState(() {
+                                    for (var file in pickedFiles) {
+                                      final String placeholderId =
+                                          'placeholder_${DateTime.now().millisecondsSinceEpoch}_${file.name.replaceAll(' ', '_')}';
+                                      currentFilesToUpload[placeholderId] =
+                                          file;
+                                      currentImageUrls.add(placeholderId);
+                                    }
+                                  });
+                                }
+                              },
+                            ),
+                            const Divider(),
+                            const SizedBox(height: 10),
+                            // Visualización Precio Actual
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                'Subtotal Item: \$${finalPriceController.text}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            // Botón Agregar a Lista (Solo si no es editing, o si se quiere permitir)
+                            if (!isEditing)
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  icon: const Icon(Icons.add_shopping_cart),
+                                  label: const Text('AGREGAR A LISTA'),
+                                  onPressed: addToPendingList,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    TextButton.icon(
-                      icon: const Icon(Icons.photo_library),
-                      label: const Text('Añadir Fotos'),
-                      onPressed: () async {
-                        final pickedFiles = await picker.pickMultiImage();
-                        if (pickedFiles.isNotEmpty) {
-                          setDialogState(() {
-                            for (var file in pickedFiles) {
-                              final String placeholderId =
-                                  'placeholder_${DateTime.now().millisecondsSinceEpoch}_${file.name.replaceAll(' ', '_')}';
-                              _filesToUpload[placeholderId] = file;
-                              existingImageUrls.add(placeholderId);
-                            }
-                          });
-                        }
-                      },
-                    ),
-                    const Divider(),
-                    TextFormField(
-                      controller: finalPriceController,
-                      readOnly: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Precio Final Item (Total)',
-                        prefixText: '\$',
-                      ),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancelar'),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cerrar'),
                 ),
-                FilledButton(
-                  style: FilledButton.styleFrom(),
-                  onPressed: () {
-                    if (selectedProduct == null) return;
-
-                    final qty = int.tryParse(qtyController.text) ?? 0;
-                    final adjustmentNotes = notesController.text.trim();
-                    final itemNotes = itemNotesController.text.trim();
-
-                    if (qty <= 0 ||
-                        basePrice <= 0 ||
-                        (selectedProduct!.variants.isNotEmpty &&
-                            selectedVariant == null)) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Verifica la cantidad y/o tamaño.'),
-                        ),
-                      );
-                      return;
-                    }
-
-                    final allImageUrls = existingImageUrls;
-
-                    final customization = {
-                      'product_category': selectedProduct!.category.name,
-                      'product_unit': selectedProduct!.unit.name,
-                      if (selectedVariant != null) ...{
-                        'variant_id': selectedVariant!.id,
-                        'variant_name': selectedVariant!.variantName,
-                      },
-                      if (selectedProduct!.allowHalfDozen)
-                        'is_half_dozen': isHalfDozen,
-                      if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
-                      if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
-                    };
-                    customization.removeWhere(
-                      (key, value) => (value is List && value.isEmpty),
-                    );
-
-                    final newItem = OrderItem(
-                      id: isEditing ? existingItem.id : null,
-                      name: selectedProduct!.name,
-                      qty: qty,
-                      basePrice: basePrice,
-                      adjustments: manualAdjustments,
-                      customizationNotes: adjustmentNotes.isEmpty
-                          ? null
-                          : adjustmentNotes,
-                      customizationJson: customization,
-                    );
-
-                    _updateItemsAndRecalculate(() {
+                if (pendingItems.isNotEmpty || isEditing)
+                  FilledButton(
+                    onPressed: () {
                       if (isEditing) {
-                        _items[itemIndex!] = newItem;
+                        addToPendingList(); // Trigger save logic logic inside
                       } else {
-                        _items.add(newItem);
-                      }
-                    });
+                        // Agregar todos los pendientes
+                        // Agregar todos los pendientes con lógica de merge
+                        _updateItemsAndRecalculate(() {
+                          for (var newItem in pendingItems) {
+                            // Buscar si ya existe un item idéntico en la lista principal
+                            final existingIndex = _items.indexWhere((existing) {
+                              final bool nameMatch =
+                                  existing.name == newItem.name;
+                              // Comparar precio base para asegurar que es la misma variante/tipo
+                              final bool priceMatch =
+                                  existing.basePrice == newItem.basePrice;
+                              // Comparar notas y ajustes
+                              final bool notesMatch =
+                                  existing.customizationNotes ==
+                                  newItem.customizationNotes;
+                              final bool adjMatch =
+                                  existing.adjustments == newItem.adjustments;
+                              // Comparar personalización profunda (customizationJson)
+                              final bool customMatch = mapEquals(
+                                existing.customizationJson,
+                                newItem.customizationJson,
+                              );
 
-                    if (dialogContext.mounted) {
-                      Navigator.pop(dialogContext);
-                    }
-                  },
-                  child: Text(isEditing ? 'Guardar Cambios' : 'Agregar'),
-                ),
+                              return nameMatch &&
+                                  priceMatch &&
+                                  notesMatch &&
+                                  adjMatch &&
+                                  customMatch;
+                            });
+
+                            if (existingIndex != -1) {
+                              // MERGE: Sumar cantidad al existente
+                              final existing = _items[existingIndex];
+                              _items[existingIndex] = existing.copyWith(
+                                qty: existing.qty + newItem.qty,
+                              );
+                            } else {
+                              // ADD: Agregar nuevo
+                              _items.add(newItem);
+                            }
+                          }
+                        });
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: Text(
+                      isEditing
+                          ? 'Guardar Cambios'
+                          : 'AGREGAR TODO (${pendingItems.length})',
+                    ),
+                  ),
               ],
             );
           },

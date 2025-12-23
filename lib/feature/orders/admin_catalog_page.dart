@@ -209,7 +209,9 @@ class _ExtraList extends ConsumerWidget {
         return Card(
           child: ListTile(
             title: Text(e.name),
-            subtitle: Text('+\$${e.price} (${e.priceType})'),
+            subtitle: Text(
+              '+\$${e.price.toStringAsFixed(0)} ${e.priceType == 'per_unit' ? '(c/u)' : '(/kg)'}',
+            ),
             trailing: IconButton(
               icon: const Icon(Icons.edit_outlined),
               onPressed: () => showDialog(

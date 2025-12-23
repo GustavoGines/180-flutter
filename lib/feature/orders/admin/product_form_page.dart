@@ -169,7 +169,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
                   .map(
                     (u) => DropdownMenuItem(
                       value: u,
-                      child: Text(u.name.toUpperCase()),
+                      child: Text(getUnitText(u).toUpperCase()),
                     ),
                   )
                   .toList(),
@@ -212,7 +212,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
                     children: [
                       Expanded(
                         child: TextFormField(
-                          initialValue: variant.variantName,
+                          initialValue: variant.formattedName,
                           decoration: const InputDecoration(
                             labelText: 'Nombre Variante',
                           ),

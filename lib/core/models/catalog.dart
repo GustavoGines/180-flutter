@@ -98,6 +98,11 @@ class Product {
     final variantsList = (json['variants'] as List? ?? [])
         .map((e) => ProductVariant.fromJson(e))
         .toList();
+    if (json['variants'] != null && (json['variants'] as List).isNotEmpty) {
+      print(
+        'DEBUG: Product ${json['name']} has ${variantsList.length} variants.',
+      );
+    }
 
     Map<ProductUnit, double>? pricesMap;
     if (variantsList.isNotEmpty) {
@@ -149,6 +154,13 @@ class ProductVariant {
       variantName: json['variant_name'],
       price: double.tryParse(json['price'].toString()) ?? 0.0,
     );
+  }
+
+  String get formattedName {
+    if (variantName.startsWith('size')) {
+      return variantName.replaceAll('size', '');
+    }
+    return variantName;
   }
 }
 
