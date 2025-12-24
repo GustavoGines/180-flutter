@@ -346,14 +346,54 @@ extension _UpdateHelpers on _HomePageState {
       }
     }
     try {
-      // Intentamos buscar la actualización (sin mostrar UI)
-      await checkTesterUpdate(interactive: false);
+      // 1. Buscamos si hay actualización (Check Only mode)
+      final hasUpdate = await checkTesterUpdate(
+        interactive: false,
+        checkOnly: true,
+      );
+
+      if (hasUpdate && mounted) {
+        // 2. Mostrar Diálogo
+        final shouldUpdate = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Nueva versión disponible'),
+            content: const Text(
+              'Hay una nueva versión de la app lista para descargar. '
+              '¿Querés actualizarla ahora?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false), // Más tarde
+                child: const Text('Más tarde'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true), // Actualizar
+                child: const Text('Actualizar ahora'),
+              ),
+            ],
+          ),
+        );
+
+        // 3. Accionar decisión
+        if (shouldUpdate == true) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Iniciando descarga...'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          await startUpdate();
+        }
+      }
     } catch (_) {
-      // Ignoramos errores en el chequeo automático,
-      // no queremos molestar al usuario.
+      // Ignoramos errores en el chequeo automático
     } finally {
-      // 👇 AÑADIDO: Guardar la hora de esta revisión,
-      // sea exitosa o no, para reiniciar el contador de 8 horas.
+      // 👇 Guardar la hora de esta revisión (sea "Más tarde" o "Actualizar")
+      // Esto activa el cooldown de 8 horas.
       await prefs.setInt(
         _kLastUpdateCheckKey,
         DateTime.now().millisecondsSinceEpoch,

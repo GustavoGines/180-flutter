@@ -1233,7 +1233,16 @@ class OrderDetailPage extends ConsumerWidget {
       // === OTROS CASOS (Mesa Dulce, etc.)
       // =======================================================
       case ProductCategory.mesaDulce:
-        if (custom['selected_size'] != null) {
+        // 1. Mostrar Variante (String) si existe (ej: "18 cm")
+        if (custom['variant_name'] != null &&
+            custom['variant_name'].toString().isNotEmpty) {
+          final vName = custom['variant_name'].toString();
+          // Limpieza visual
+          final formatted = vName.startsWith('size')
+              ? vName.replaceFirst('size', '')
+              : vName;
+          details.add(_buildDetailRow(context, 'Variante:', formatted));
+        } else if (custom['selected_size'] != null) {
           details.add(
             _buildDetailRow(
               context,

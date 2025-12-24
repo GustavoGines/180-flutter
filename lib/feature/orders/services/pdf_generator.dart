@@ -597,6 +597,21 @@ class PdfGenerator {
     // === CASO 3: OTROS ITEMS (Se mantiene igual)
     // =======================================================
 
+    // --- NUEVO: Mostrar Variante / Tamaño (para Mesa Dulce) ---
+    final String? variantName = custom['variant_name'];
+    final bool isHalfDozen = custom['is_half_dozen'] == true;
+
+    if (variantName != null && variantName.isNotEmpty) {
+      // Limpieza visual: si viene como "size24cm", lo dejamos como "24cm"
+      final formatted = variantName.startsWith('size')
+          ? variantName.replaceFirst('size', '')
+          : variantName;
+      parts.add('Variante: $formatted');
+    } else if (isHalfDozen) {
+      parts.add('Variante: Media Docena');
+    }
+    // -----------------------------------------------------------
+
     // Rellenos (Si aplica a otros productos)
     // --- CORRECCIÓN AQUÍ ---
     final List<dynamic> fillingsRaw =

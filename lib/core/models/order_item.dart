@@ -15,16 +15,20 @@ class OrderItem {
 
   final Map<String, dynamic>? customizationJson;
 
+  // --- CAMPO TRANSITORIO PARA CARTA / UI (No se envía en toJson explícitamente) ---
+  final dynamic localFile; // Puede ser XFile (Flutter) o File (Dart IO)
+
   // Constructor actualizado
   OrderItem({
     this.id,
     required this.name,
     required this.qty,
-    // required this.unitPrice, // <-- Ya no se pasa
+    // required this.unitPrice, // <-- ELIMINADO del constructor y guardado directo
     required this.basePrice, // <-- Se requiere el precio base
     this.adjustments = 0.0, // <-- Ajuste opcional, default 0
     this.customizationNotes, // <-- Notas opcionales
     this.customizationJson,
+    this.localFile,
   });
 
   // --- GETTER PARA PRECIO FINAL ---
@@ -61,6 +65,7 @@ class OrderItem {
       adjustments: adjust,
       customizationNotes: j['customization_notes'] as String?,
       customizationJson: j['customization_json'] as Map<String, dynamic>?,
+      // localFile no se recupera del JSON (es solo local)
     );
   }
 
@@ -94,6 +99,7 @@ class OrderItem {
     double? adjustments,
     String? customizationNotes,
     Map<String, dynamic>? customizationJson,
+    dynamic localFile,
     bool clearCustomizationNotes = false, // Flag para borrar notas
   }) {
     return OrderItem(
@@ -107,6 +113,7 @@ class OrderItem {
           ? null
           : (customizationNotes ?? this.customizationNotes),
       customizationJson: customizationJson ?? this.customizationJson,
+      localFile: localFile ?? this.localFile,
       // Nota: orderId no está aquí porque usualmente no cambia al copiar un item DENTRO de una orden
     );
   }

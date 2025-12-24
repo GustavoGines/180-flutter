@@ -153,11 +153,60 @@ class _ProductList extends ConsumerWidget {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Text('\$${product.basePrice.toStringAsFixed(0)}'),
-            trailing: IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () {
-                context.push('/admin/catalog/product/edit', extra: product);
-              },
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () {
+                    context.push('/admin/catalog/product/edit', extra: product);
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Eliminar Producto'),
+                        content: Text(
+                          '¿Estás seguro de eliminar "${product.name}"?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Eliminar'),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirm == true) {
+                      try {
+                        await ref
+                            .read(catalogRepoProvider)
+                            .deleteProduct(product.id);
+                        ref.invalidate(catalogProvider);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Producto eliminado')),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        }
+                      }
+                    }
+                  },
+                ),
+              ],
             ),
           ),
         );
@@ -181,12 +230,59 @@ class _FillingList extends ConsumerWidget {
           child: ListTile(
             title: Text(f.name),
             subtitle: Text(f.isFree ? 'Gratis' : '+\$${f.pricePerKg}/kg'),
-            trailing: IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => FillingFormDialog(fillingToEdit: f),
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => FillingFormDialog(fillingToEdit: f),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Eliminar Relleno'),
+                        content: Text('¿Estás seguro de eliminar "${f.name}"?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Eliminar'),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirm == true) {
+                      try {
+                        await ref
+                            .read(catalogRepoProvider)
+                            .deleteFilling(f.id);
+                        ref.invalidate(catalogProvider);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Relleno eliminado')),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        }
+                      }
+                    }
+                  },
+                ),
+              ],
             ),
           ),
         );
@@ -212,12 +308,57 @@ class _ExtraList extends ConsumerWidget {
             subtitle: Text(
               '+\$${e.price.toStringAsFixed(0)} ${e.priceType == 'per_unit' ? '(c/u)' : '(/kg)'}',
             ),
-            trailing: IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => ExtraFormDialog(extraToEdit: e),
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => ExtraFormDialog(extraToEdit: e),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Eliminar Extra'),
+                        content: Text('¿Estás seguro de eliminar "${e.name}"?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Eliminar'),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirm == true) {
+                      try {
+                        await ref.read(catalogRepoProvider).deleteExtra(e.id);
+                        ref.invalidate(catalogProvider);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Extra eliminado')),
+                          );
+                        }
+                      } catch (err) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error: $err')),
+                          );
+                        }
+                      }
+                    }
+                  },
+                ),
+              ],
             ),
           ),
         );

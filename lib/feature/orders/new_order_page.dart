@@ -1964,6 +1964,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
                       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
                     };
+
+                    // --- LOGIC FIX: PRIMARY PHOTO FOR MAIN LIST (BOX) ---
+                    String? primaryPhotoUrl;
+                    List<Object>? primaryLocalFiles;
+
+                    if (allImageUrls.isNotEmpty) {
+                      final firstUrl = allImageUrls.first;
+                      if (firstUrl.startsWith('placeholder_')) {
+                        final file = _filesToUpload[firstUrl];
+                        if (file != null) {
+                          primaryLocalFiles = [file];
+                        }
+                      } else {
+                        primaryPhotoUrl = firstUrl;
+                      }
+                    }
+                    if (primaryPhotoUrl != null) {
+                      customization['photo_url'] = primaryPhotoUrl;
+                    }
+
                     customization.removeWhere(
                       (key, value) => (value is List && value.isEmpty),
                     );
@@ -1972,14 +1992,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       id: isEditing ? existingItem.id : null,
                       name: selectedProduct!.name,
                       qty: qty,
-                      basePrice: selectedProduct!
-                          .price, // Usamos el precio original del producto
-                      adjustments:
-                          totalAdjustment, // Ajuste es la diferencia de precio
+                      basePrice: selectedProduct!.price,
+                      adjustments: totalAdjustment,
                       customizationNotes: adjustmentNotes.isEmpty
                           ? null
                           : adjustmentNotes,
                       customizationJson: customization,
+                      localFile: primaryLocalFiles,
                     );
 
                     _updateItemsAndRecalculate(() {
@@ -2666,6 +2685,30 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         'item_notes': notesController.text.trim(),
                       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
                     };
+
+                    // --- LOGIC FIX: PRIMARY PHOTO FOR MAIN LIST ---
+                    // Determine primary photo for thumbnail display
+                    // Supports 'photo_url' (single) and 'localFile' (List<XFile>)
+                    String? primaryPhotoUrl;
+                    List<Object>? primaryLocalFiles;
+
+                    if (allImageUrls.isNotEmpty) {
+                      final firstUrl = allImageUrls.first;
+                      if (firstUrl.startsWith('placeholder_')) {
+                        // It's a local file in _filesToUpload
+                        final file = _filesToUpload[firstUrl];
+                        if (file != null) {
+                          primaryLocalFiles = [file];
+                        }
+                      } else {
+                        // It's a remote URL
+                        primaryPhotoUrl = firstUrl;
+                      }
+                    }
+                    if (primaryPhotoUrl != null) {
+                      customization['photo_url'] = primaryPhotoUrl;
+                    }
+
                     customization.removeWhere(
                       (key, value) => (value is List && value.isEmpty),
                     );
@@ -2680,6 +2723,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           ? null
                           : adjustmentNotes,
                       customizationJson: customization,
+                      localFile:
+                          primaryLocalFiles, // <-- Attach local file for preview
                     );
 
                     _updateItemsAndRecalculate(() {
@@ -2760,16 +2805,44 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 '0')
           : '0',
     );
+    // Removed duplicate declaration
     final finalPriceController = TextEditingController();
+    bool isUnitSaleForDozen = isEditing
+        ? (existingItem.customizationJson?['is_unit_sale_for_dozen'] == true)
+        : false;
 
     // Imagenes (Simplificación: Por ahora no implementaremos carga de fotos múltiple por item en esta refactorización masiva,
     // o se aplicará al item que se está creando).
     // Mantenemos la lógica de imagen para el item ACTUAL que se está configurando.
     final ImagePicker picker = ImagePicker();
-    List<String> currentImageUrls = isEditing
-        ? List<String>.from(existingItem.customizationJson?['photo_urls'] ?? [])
-        : [];
-    Map<String, XFile> currentFilesToUpload = {};
+    // Variables de estado para FOTOS locales en el diálogo
+    List<XFile> _selectedFiles = [];
+    String? _existingRemoteUrl;
+
+    if (isEditing) {
+      // 1. Cargar locales
+      if (existingItem.localFile != null &&
+          (existingItem.localFile is List) &&
+          (existingItem.localFile as List).isNotEmpty) {
+        // Asumiendo que son XFile o File, lo convertimos a XFile si es necesario
+        // Para simplificar, si ya está en memoria, lo usamos.
+        final files = existingItem.localFile as List;
+        for (var f in files) {
+          if (f is XFile) {
+            _selectedFiles.add(f);
+          } else if (f is File) {
+            _selectedFiles.add(XFile(f.path));
+          }
+        }
+      }
+
+      // 2. Cargar remota (Si no hay locales nuevas que la reemplacen, o para mostrarla)
+      // La lógica actual de Mesa Dulce es "Una sola foto" (o al menos UX para una).
+      // Si hay URL remota y no hay local, la mostramos.
+      if (existingItem.customizationJson?['photo_url'] != null) {
+        _existingRemoteUrl = existingItem.customizationJson!['photo_url'];
+      }
+    }
 
     showDialog(
       context: context,
@@ -2796,6 +2869,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 unitBasePrice =
                     selectedProduct!.halfDozenPrice ??
                     (selectedProduct!.price / 2);
+              } else if (selectedProduct!.unit == ProductUnit.dozen &&
+                  isUnitSaleForDozen) {
+                // Lógica de venta por unidad suelta para docenas
+                unitBasePrice = selectedProduct!.price / 12;
               } else {
                 unitBasePrice = selectedProduct!.price;
               }
@@ -2823,6 +2900,19 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   selectedVariant == null)
                 return;
 
+              // --- LOGIC FIX: Photo Handling for Mesa Dulce Edit/Add ---
+              List<Object> finalLocalFiles = [];
+              String? finalPhotoUrl;
+
+              // 1. Si hay locales nuevas, toman precedencia para la preview
+              if (_selectedFiles.isNotEmpty) {
+                finalLocalFiles.addAll(_selectedFiles);
+              }
+              // 2. Si quedó la remota y no se borró
+              if (_existingRemoteUrl != null) {
+                finalPhotoUrl = _existingRemoteUrl;
+              }
+
               // Construir Customization
               final customization = {
                 'product_category': selectedProduct!.category.name,
@@ -2835,8 +2925,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   'is_half_dozen': isHalfDozen,
                 if (itemNotesController.text.trim().isNotEmpty)
                   'item_notes': itemNotesController.text.trim(),
-                if (currentImageUrls.isNotEmpty)
-                  'photo_urls': List<String>.from(currentImageUrls),
+                if (isUnitSaleForDozen) 'is_unit_sale_for_dozen': true,
+                if (finalPhotoUrl != null) 'photo_url': finalPhotoUrl,
+                if (finalPhotoUrl != null) 'photo_urls': [finalPhotoUrl],
                 if (double.tryParse(unitAdjustmentsController.text) != null &&
                     double.parse(unitAdjustmentsController.text) != 0)
                   'unit_adjustment': double.parse(
@@ -2845,16 +2936,16 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               };
 
               final newItem = OrderItem(
-                id: isEditing ? existingItem.id : null, // Si edita, mantiene ID
+                id: isEditing ? existingItem.id : null,
                 name: selectedProduct!.name,
                 qty: qty,
-                basePrice:
-                    basePrice, // Precio unitario calculado arriba (sin ajustes)
+                basePrice: basePrice * qty,
                 adjustments: double.tryParse(adjustmentsController.text) ?? 0.0,
                 customizationNotes: notesController.text.trim().isEmpty
                     ? null
                     : notesController.text.trim(),
                 customizationJson: customization,
+                localFile: finalLocalFiles.isNotEmpty ? finalLocalFiles : null,
               );
 
               setDialogState(() {
@@ -2865,22 +2956,94 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   });
                   Navigator.pop(context);
                 } else {
-                  // Modo Agregar Múltiple
-                  pendingItems.add(newItem);
+                  // --- MERGE LOGIC START ---
+                  // Check if identical exists
+                  int existingIndex = pendingItems.indexWhere((item) {
+                    // 1. Core Identity
+                    if (item.name != newItem.name) return false;
+                    if (item.customizationJson?['variant_id'] !=
+                        newItem.customizationJson?['variant_id'])
+                      return false;
+
+                    // 2. Adjustments & Price (Must match exactly to merge)
+                    // basePrice here is TOTAL for the qty. We should compare UNIT price.
+                    // But calculating unit price from totals is risky if floating point.
+                    // Instead, check if the config that DERIVES price is same.
+                    // The newItem.basePrice is (unitBase * qty).
+                    // item.basePrice is (unitBase * item.qty).
+                    // So we can check if (item.basePrice / item.qty) ~= (newItem.basePrice / newItem.qty).
+                    double itemUnit = item.basePrice / item.qty;
+                    double newUnit = newItem.basePrice / newItem.qty;
+                    if ((itemUnit - newUnit).abs() > 0.01) return false;
+
+                    if (item.adjustments != 0 || newItem.adjustments != 0)
+                      return false;
+
+                    // 3. Customization Notes
+                    if (item.customizationNotes != newItem.customizationNotes)
+                      return false;
+
+                    // 4. Photos (Merge Logic: Allow merge if one is missing photos)
+                    bool itemHasPhotos =
+                        (item.customizationJson?['photo_url'] != null) ||
+                        (item.customizationJson?['photo_urls'] != null) ||
+                        (item.localFile != null);
+                    bool newHasPhotos =
+                        (newItem.customizationJson?['photo_url'] != null) ||
+                        (newItem.customizationJson?['photo_urls'] != null) ||
+                        (newItem.localFile != null);
+
+                    // Conflict: Both have photos -> No Merge
+                    if (itemHasPhotos && newHasPhotos) return false;
+
+                    return true;
+                  });
+
+                  if (existingIndex != -1) {
+                    // Update existing
+                    final existing = pendingItems[existingIndex];
+                    final newQty = existing.qty + newItem.qty;
+                    // Recalculate total base price
+                    double itemUnit = existing.basePrice / existing.qty;
+                    final newBasePrice = itemUnit * newQty;
+
+                    // Determine which photo/customization to keep
+                    // If new item has photos, it overrides (or populates) the existing one.
+                    // If existing has photos and new doesn't, we keep existing.
+                    bool newHasPhotos =
+                        (newItem.customizationJson?['photo_url'] != null) ||
+                        (newItem.customizationJson?['photo_urls'] != null) ||
+                        (newItem.localFile != null);
+
+                    final resolvedCustomization = newHasPhotos
+                        ? newItem.customizationJson
+                        : existing.customizationJson;
+                    final resolvedLocalFile = newHasPhotos
+                        ? newItem.localFile
+                        : existing.localFile;
+
+                    pendingItems[existingIndex] = OrderItem(
+                      id: existing.id,
+                      name: existing.name,
+                      qty: newQty,
+                      basePrice: newBasePrice,
+                      adjustments: 0.0,
+                      customizationNotes: existing.customizationNotes,
+                      customizationJson: resolvedCustomization,
+                      localFile: resolvedLocalFile,
+                    );
+                  } else {
+                    pendingItems.add(newItem);
+                  }
+                  // --- MERGE LOGIC END ---
                   // Resetear formulario para siguiente item
-                  // Mantener producto seleccionado o resetear? Mejor mantener para carga rápida del mismo tipo.
                   qtyController.text = '1';
                   adjustmentsController.text = '0';
                   notesController.clear();
                   itemNotesController.clear();
                   unitAdjustmentsController.text = '0';
-                  currentImageUrls.clear();
-                  currentFilesToUpload.clear();
-                  _filesToUpload.addAll(
-                    currentFilesToUpload,
-                  ); // Mover archivos a la cola global si fuera necesario, o manejarlos al guardar todo.
-                  // NOTA: La subida de archivos real se maneja en el save global. Aquí solo referenciamos.
-                  // Simplificación: Asumimos que _filesToUpload se procesa al final en el save del pedido.
+                  _selectedFiles.clear();
+                  // No agregamos a _filesToUpload todavía, lo hacemos al dar "Agregar Todo"
                 }
               });
             }
@@ -2923,6 +3086,35 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   : vName;
                               return ListTile(
                                 dense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                leading:
+                                    (it.localFile != null &&
+                                        (it.localFile as List).isNotEmpty)
+                                    ? GestureDetector(
+                                        onTap: () => _showImagePreview(
+                                          context,
+                                          (it.localFile as List).first,
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                          child: Image.file(
+                                            File(
+                                              ((it.localFile as List).first
+                                                      as XFile)
+                                                  .path,
+                                            ),
+                                            width: 40,
+                                            height: 40,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
                                 title: Text('${it.name} ($formattedVName)'),
                                 subtitle: Text(
                                   '${it.qty} x \$${it.basePrice.toStringAsFixed(0)}',
@@ -2983,6 +3175,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   selectedVariant = null;
                                 }
                                 isHalfDozen = false;
+                                isUnitSaleForDozen = false;
                                 calculateCurrentItemPrice();
                               }),
                               decoration: const InputDecoration(
@@ -3018,44 +3211,64 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   value: isHalfDozen,
                                   onChanged: (v) => setDialogState(() {
                                     isHalfDozen = v;
+                                    if (v) isUnitSaleForDozen = false;
+                                    calculateCurrentItemPrice();
+                                  }),
+                                ),
+                              if (selectedProduct!.unit == ProductUnit.dozen &&
+                                  !isHalfDozen)
+                                SwitchListTile(
+                                  title: const Text('Venta por Unidad'),
+                                  value: isUnitSaleForDozen,
+                                  onChanged: (v) => setDialogState(() {
+                                    isUnitSaleForDozen = v;
                                     calculateCurrentItemPrice();
                                   }),
                                 ),
                             ],
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(
+                                  flex: 2,
                                   child: TextField(
                                     controller: qtyController,
                                     keyboardType: TextInputType.number,
                                     decoration: const InputDecoration(
-                                      labelText: 'Cantidad',
+                                      labelText: 'Cant.',
+                                      isDense: true,
                                     ),
                                     onChanged: (_) => setDialogState(() {
                                       calculateCurrentItemPrice();
                                     }),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                                const SizedBox(width: 8),
                                 Expanded(
+                                  flex: 3,
                                   child: TextField(
                                     controller: unitAdjustmentsController,
                                     keyboardType: TextInputType.number,
                                     decoration: const InputDecoration(
-                                      labelText: 'Ajuste Unit. \$',
+                                      labelText: '\$ Unit.',
+                                      isDense: true,
+                                      prefixText: '\$',
                                     ),
                                     onChanged: (_) => setDialogState(() {
                                       calculateCurrentItemPrice();
                                     }),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
+                                const SizedBox(width: 8),
                                 Expanded(
+                                  flex: 3,
                                   child: TextField(
                                     controller: adjustmentsController,
                                     keyboardType: TextInputType.number,
                                     decoration: const InputDecoration(
-                                      labelText: 'Ajuste Total \$',
+                                      labelText: '\$ Tot.',
+                                      isDense: true,
+                                      prefixText: '\$',
                                     ),
                                     onChanged: (_) => setDialogState(() {
                                       calculateCurrentItemPrice();
@@ -3082,36 +3295,39 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             ),
                             const SizedBox(height: 10),
 
-                            // --- SECCIÓN FOTOS (Restaurada) ---
-                            if (currentImageUrls.isNotEmpty)
+                            // --- SECCIÓN FOTOS (Mejorada) ---
+                            // --- SECCIÓN FOTOS (Mejorada) ---
+                            if (_selectedFiles.isNotEmpty ||
+                                _existingRemoteUrl != null)
                               Container(
                                 height: 90,
                                 margin: const EdgeInsets.only(bottom: 10),
                                 child: ListView(
                                   scrollDirection: Axis.horizontal,
                                   children: [
-                                    ...currentImageUrls.map((url) {
-                                      final bool isPlaceholder = url.startsWith(
-                                        'placeholder_',
-                                      );
-                                      final dynamic imageSource = isPlaceholder
-                                          ? File(
-                                              currentFilesToUpload[url]!.path,
-                                            )
-                                          : url;
-
+                                    if (_existingRemoteUrl != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 8.0,
+                                        ),
+                                        child: _buildImageThumbnail(
+                                          _existingRemoteUrl!,
+                                          true, // isNetwork? No, isNetwork url string
+                                          () => setDialogState(() {
+                                            _existingRemoteUrl = null;
+                                          }),
+                                        ),
+                                      ),
+                                    ..._selectedFiles.map((file) {
                                       return Padding(
                                         padding: const EdgeInsets.only(
                                           right: 8.0,
                                         ),
                                         child: _buildImageThumbnail(
-                                          imageSource,
-                                          !isPlaceholder,
+                                          file,
+                                          false, // isNetwork
                                           () => setDialogState(() {
-                                            if (isPlaceholder) {
-                                              currentFilesToUpload.remove(url);
-                                            }
-                                            currentImageUrls.remove(url);
+                                            _selectedFiles.remove(file);
                                           }),
                                         ),
                                       );
@@ -3121,19 +3337,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               ),
                             TextButton.icon(
                               icon: const Icon(Icons.photo_library),
-                              label: const Text('Añadir Fotos al Item'),
+                              label: const Text('Añadir Fotos al Item/Box'),
                               onPressed: () async {
                                 final pickedFiles = await picker
                                     .pickMultiImage();
                                 if (pickedFiles.isNotEmpty) {
                                   setDialogState(() {
-                                    for (var file in pickedFiles) {
-                                      final String placeholderId =
-                                          'placeholder_${DateTime.now().millisecondsSinceEpoch}_${file.name.replaceAll(' ', '_')}';
-                                      currentFilesToUpload[placeholderId] =
-                                          file;
-                                      currentImageUrls.add(placeholderId);
-                                    }
+                                    _selectedFiles.addAll(pickedFiles);
                                   });
                                 }
                               },
@@ -3185,30 +3395,46 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         // Agregar todos los pendientes con lógica de merge
                         _updateItemsAndRecalculate(() {
                           for (var newItem in pendingItems) {
+                            // Procesar fotos si existen
+                            if (newItem.localFile != null &&
+                                (newItem.localFile as List).isNotEmpty) {
+                              final files = newItem.localFile as List<XFile>;
+                              // Usamos la primera foto como la principal para 'photo_url'
+                              final file = files.first;
+                              final String key =
+                                  'photo_${DateTime.now().microsecondsSinceEpoch}';
+
+                              _filesToUpload[key] = file;
+
+                              // Actualizar el JSON del item para incluir la referencia
+                              if (newItem.customizationJson != null) {
+                                newItem.customizationJson!['photo_url'] = key;
+                              }
+                            }
+
                             // Buscar si ya existe un item idéntico en la lista principal
                             final existingIndex = _items.indexWhere((existing) {
                               final bool nameMatch =
                                   existing.name == newItem.name;
-                              // Comparar precio base para asegurar que es la misma variante/tipo
                               final bool priceMatch =
                                   existing.basePrice == newItem.basePrice;
                               // Comparar notas y ajustes
                               final bool notesMatch =
                                   existing.customizationNotes ==
                                   newItem.customizationNotes;
-                              final bool adjMatch =
-                                  existing.adjustments == newItem.adjustments;
-                              // Comparar personalización profunda (customizationJson)
-                              final bool customMatch = mapEquals(
+                              // Comparar JSON (IMPORTANTE: ahora incluye photo_url si tiene foto)
+                              final bool jsonMatch = mapEquals(
                                 existing.customizationJson,
                                 newItem.customizationJson,
                               );
+                              final bool adjMatch =
+                                  existing.adjustments == newItem.adjustments;
 
                               return nameMatch &&
                                   priceMatch &&
                                   notesMatch &&
                                   adjMatch &&
-                                  customMatch;
+                                  jsonMatch;
                             });
 
                             if (existingIndex != -1) {
@@ -3240,14 +3466,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- WIDGET HELPER MINIATURA DE IMAGEN (sin cambios) ---
   Widget _buildImageThumbnail(
     dynamic imageSource,
     bool isNetwork,
     VoidCallback onRemove,
   ) {
     Widget imageWidget;
-
     if (isNetwork) {
       imageWidget = Image.network(
         imageSource as String,
@@ -3260,30 +3484,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             height: 80,
             width: 80,
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                    : null,
-              ),
-            ),
+            child: const Center(child: CircularProgressIndicator()),
           );
         },
-        errorBuilder: (context, error, stackTrace) => Container(
-          height: 80,
-          width: 80,
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Icon(
-            Icons.broken_image,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
       );
     } else {
+      // FIX: Cast correcto a XFile y uso de File(path)
+      // Soporta tanto File como XFile para evitar errores
+      final String path = imageSource is XFile
+          ? imageSource.path
+          : (imageSource is File ? imageSource.path : imageSource.toString());
+
       imageWidget = Image.file(
-        File((imageSource as XFile).path),
+        File(path),
         height: 80,
         width: 80,
         fit: BoxFit.cover,
@@ -3293,21 +3507,70 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        ClipRRect(borderRadius: BorderRadius.circular(8), child: imageWidget),
+        GestureDetector(
+          onTap: () => _showImagePreview(context, imageSource),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: imageWidget,
+          ),
+        ),
         Positioned(
-          top: -14,
-          right: -14,
-          child: IconButton(
-            icon: Icon(
-              Icons.cancel_rounded,
-              color: Theme.of(context).colorScheme.error,
-              size: 28,
+          top: -10,
+          right: -10,
+          child: InkWell(
+            onTap: onRemove,
+            child: Container(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+              ),
+              child: Icon(
+                Icons.cancel,
+                color: Theme.of(context).colorScheme.error,
+                size: 24,
+              ),
             ),
-            onPressed: onRemove,
-            tooltip: 'Quitar imagen',
           ),
         ),
       ],
+    );
+  }
+
+  // --- HELPER: VISTA PREVIA DE IMAGEN ---
+  void _showImagePreview(BuildContext context, dynamic imageSource) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              child: (imageSource is XFile || imageSource is File)
+                  ? Image.file(
+                      File(
+                        imageSource is XFile
+                            ? imageSource.path
+                            : (imageSource as File).path,
+                      ),
+                    )
+                  : Image.network(imageSource as String),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -3802,7 +4065,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           parts.add('Extras (x ud): $extrasUnit');
                         }
                       } else if (category == ProductCategory.mesaDulce) {
-                        if (custom['selected_size'] != null) {
+                        // 1. Mostrar Variante (String) si existe (ej: "18 cm")
+                        if (custom['variant_name'] != null &&
+                            custom['variant_name'].toString().isNotEmpty) {
+                          final vName = custom['variant_name'].toString();
+                          // Limpieza visual: si viene como "size24cm", lo dejamos como "24cm"
+                          final formatted = vName.startsWith('size')
+                              ? vName.replaceFirst('size', '')
+                              : vName;
+                          parts.add(formatted);
+                        }
+                        // 2. Mostrar Size (Enum) si existe (legacy/compatibility)
+                        else if (custom['selected_size'] != null) {
                           parts.add(
                             getUnitText(
                               ProductUnit.values.byName(
@@ -3920,20 +4194,93 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         margin: const EdgeInsets.symmetric(vertical: 4),
                         elevation: 1,
                         child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.tertiaryContainer,
-                            child: Text(
-                              '${item.qty}',
-                              style: TextStyle(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onTertiaryContainer,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
+                          leading:
+                              (custom['photo_url'] != null ||
+                                  (item.localFile != null &&
+                                      (item.localFile as List).isNotEmpty))
+                              ? GestureDetector(
+                                  onTap: () {
+                                    // Determinar fuente de imagen para preview
+                                    dynamic imageSource;
+                                    if (item.localFile != null &&
+                                        (item.localFile as List).isNotEmpty) {
+                                      // Prioridad a local
+                                      imageSource =
+                                          (item.localFile as List).first;
+                                    } else {
+                                      // Fallback a URL
+                                      imageSource = custom['photo_url'];
+                                    }
+                                    if (imageSource != null) {
+                                      _showImagePreview(context, imageSource);
+                                    }
+                                  },
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(4),
+                                        child:
+                                            (item.localFile != null &&
+                                                (item.localFile as List)
+                                                    .isNotEmpty)
+                                            ? Image.file(
+                                                File(
+                                                  ((item.localFile as List)
+                                                              .first
+                                                          as XFile)
+                                                      .path,
+                                                ),
+                                                width: 50,
+                                                height: 50,
+                                                fit: BoxFit.cover,
+                                              )
+                                            : Image.network(
+                                                custom['photo_url'],
+                                                width: 50,
+                                                height: 50,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) =>
+                                                    const Icon(Icons.image),
+                                              ),
+                                      ),
+                                      Positioned(
+                                        bottom: -6,
+                                        right: -6,
+                                        child: CircleAvatar(
+                                          radius: 10,
+                                          backgroundColor: Theme.of(
+                                            context,
+                                          ).colorScheme.tertiary,
+                                          child: Text(
+                                            '${item.qty}',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.onTertiary,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : CircleAvatar(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.tertiaryContainer,
+                                  child: Text(
+                                    '${item.qty}',
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onTertiaryContainer,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
                           title: Text(item.name),
                           subtitle: Text(
                             details.isNotEmpty

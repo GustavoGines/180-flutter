@@ -12,14 +12,19 @@ final _fad = FirebaseAppDistributionPlatform.instance;
 /// 🔍 Comprueba si hay una nueva versión disponible.
 /// [interactive] Si es true, intentará loguear al tester si no está logueado.
 /// Si es false, simplemente saldrá si el tester no está logueado.
-Future<bool> checkTesterUpdate({bool interactive = false}) async {
+Future<bool> checkTesterUpdate({
+  bool interactive = false,
+  bool checkOnly = false, // <-- AÑADIDO
+}) async {
   if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) return false;
 
   final allow = kDebugMode || kFlavor == 'dev';
   if (!allow) return false;
 
   try {
-    debugPrint("🧭 [AppDist] Iniciando chequeo (Interactivo: $interactive)...");
+    debugPrint(
+      "🧭 [AppDist] Iniciando chequeo (Interactivo: $interactive, CheckOnly: $checkOnly)...",
+    );
 
     final isSignedIn = await _fad.isTesterSignedIn();
     if (!isSignedIn) {
@@ -40,13 +45,34 @@ Future<bool> checkTesterUpdate({bool interactive = false}) async {
       return false;
     }
 
-    debugPrint("⬇️ [AppDist] Nueva versión disponible. Iniciando descarga…");
+    // --- LÓGICA DE DETECCIÓN FINALIZADA (HAY UPDATE) ---
+
+    // Si solo queríamos chequear, devolvemos true y NO iniciamos la UI de descarga nativa
+    if (checkOnly) {
+      debugPrint(
+        "ℹ️ [AppDist] Nueva versión detectada (CheckOnly). Retornando true.",
+      );
+      return true;
+    }
+
+    debugPrint(
+      "⬇️ [AppDist] Nueva versión disponible. Iniciando descarga (Nativa)…",
+    );
     await _fad.updateIfNewReleaseAvailable();
-    debugPrint("✅ [AppDist] Actualización completada.");
+    debugPrint("✅ [AppDist] Actualización completada (Nativa).");
     return true;
   } catch (e) {
     debugPrint("❌ [AppDist] Error en checkTesterUpdate: $e");
     return false;
+  }
+}
+
+/// Inicia el flujo nativo de actualización (descarga e instalación).
+Future<void> startUpdate() async {
+  try {
+    await _fad.updateIfNewReleaseAvailable();
+  } catch (e) {
+    debugPrint("❌ [AppDist] Error iniciando update: $e");
   }
 }
 
