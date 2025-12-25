@@ -1,4 +1,5 @@
-Release 1.3.11: Corrección Lógica de Pagos.
-- Botón 'Desmarcar como Pagado' disponible si un pedido ya figura pagado.
+Release 1.3.11+26:
+- UI: Formulario de pedido optimizado (Checks de pago compactos y layouts mejorados).
+- Fix: Corrección de lógica de ingresos diarios y semanales (ahora coinciden con el mensual: Entregado + Pagado).
+- Fix: Botón 'Desmarcar como Pagado' disponible si un pedido ya figura pagado.
 - Backend: Migración para marcar automáticamente 'Entregados' como 'Pagados'.
-- Fix: Botón de pago ahora actualiza correctamente el estado.
