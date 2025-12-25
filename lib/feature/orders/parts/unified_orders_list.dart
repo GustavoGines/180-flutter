@@ -295,10 +295,12 @@ class _FlatListBuilder {
               if (ordersForThisDay != null && ordersForThisDay.isNotEmpty) {
                 weekHasOrdersInThisMonth = true;
                 for (final order in ordersForThisDay) {
-                  // Suma solo si el total es positivo (como en tus providers)
-                  final v = order.total ?? 0;
-                  if (v >= 0) {
-                    weekTotalForThisMonth += v;
+                  // Suma solo si cumple la lógica de "Ingreso Real" (Entregado y Pagado)
+                  if (order.status == 'delivered' && order.isPaid) {
+                    final v = order.total ?? 0;
+                    if (v >= 0) {
+                      weekTotalForThisMonth += v;
+                    }
                   }
                 }
               }

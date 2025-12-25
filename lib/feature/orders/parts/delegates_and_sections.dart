@@ -93,9 +93,12 @@ class _DateHeader extends StatelessWidget {
     if (count >= 2) {
       double dayTotal = 0;
       for (final order in orders) {
-        final v = order.total ?? 0;
-        if (v >= 0) {
-          dayTotal += v;
+        // Solo sumamos si es un Ingreso Real (Entregado y Pagado)
+        if (order.status == 'delivered' && order.isPaid) {
+          final v = order.total ?? 0;
+          if (v >= 0) {
+            dayTotal += v;
+          }
         }
       }
       final fmt = NumberFormat(r"'$' #,##0.00", 'es_AR');

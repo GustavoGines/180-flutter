@@ -282,7 +282,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     double deposit =
         double.tryParse(_depositController.text.replaceAll(',', '.')) ?? 0.0;
     double total = subtotal + delivery;
-    double remaining = total - deposit;
+    double remaining = _isPaid ? 0.0 : (total - deposit);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -4478,31 +4478,29 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   Widget _buildSummaryAndSave() {
     return Material(
       elevation: 8.0,
-      color: Theme.of(context).colorScheme.surfaceContainer,
+      // Usar 'surface' en lugar de 'surfaceContainer' para que se sienta menos "pesado/marrón"
+      color: Theme.of(context).colorScheme.surface,
+      // Contenedor con borde superior sutil
+      shape: Border(
+        top: BorderSide(
+          color: Theme.of(context).colorScheme.outlineVariant,
+          width: 0.5,
+        ),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        // Reducir padding vertical
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Switch de Pagado
-            SwitchListTile(
-              title: const Text(
-                '¿El pedido está TOTALMENTE pagado?',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: const Text(
-                'Si se marca, aparecerá con el ícono verde (\$) en el listado.',
-              ),
-              value: _isPaid,
-              activeColor: Colors.green,
-              onChanged: (val) {
-                setState(() => _isPaid = val);
-              },
-            ),
-            const Divider(),
+            // (Switch y Divider eliminados para ahorrar espacio)
+
+            // Fila de Entradas + Check Pagado
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
+                  flex: 3,
                   child: TextFormField(
                     controller: _depositController,
                     decoration: const InputDecoration(
@@ -4510,6 +4508,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       prefixText: '\$',
                       border: OutlineInputBorder(),
                       isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 12,
+                      ),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: false,
@@ -4518,15 +4520,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     onChanged: (_) => _recalculateTotals(),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 Expanded(
+                  flex: 3,
                   child: TextFormField(
                     controller: _deliveryCostController,
                     decoration: const InputDecoration(
-                      labelText: 'Costo Envío (\$)',
+                      labelText: 'Envío (\$)',
                       prefixText: '\$',
                       border: OutlineInputBorder(),
                       isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 12,
+                      ),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: false,
@@ -4534,12 +4541,41 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   ),
                 ),
+                const SizedBox(width: 8),
+                // Switch Pagado Compacto
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Pagado?',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    SizedBox(
+                      height: 30, // Forzar altura pequeña
+                      child: Transform.scale(
+                        scale: 0.8,
+                        child: Switch(
+                          value: _isPaid,
+                          activeColor: Colors.green,
+                          onChanged: (val) {
+                            setState(() => _isPaid = val);
+                            _recalculateTotals();
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             _buildSummaryRow('Subtotal Productos:', _itemsSubtotal),
             if (_deliveryCost > 0)
               _buildSummaryRow('Costo Envío:', _deliveryCost),
+
             _buildSummaryRow('TOTAL PEDIDO:', _grandTotal, isTotal: true),
             if (_depositAmount > 0)
               _buildSummaryRow('Seña Recibida:', -_depositAmount),
