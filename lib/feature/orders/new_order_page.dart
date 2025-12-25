@@ -126,6 +126,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
   // --- 3. NUEVOS ESTADOS PARA DIRECCIÓN ---
   int? _selectedAddressId; // El ID de la dirección de entrega
+  bool _isPaid = false; // Estado local de pagado
   // ------------------------------------
 
   late DateTime _date;
@@ -219,6 +220,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           order.deliveryCost?.toStringAsFixed(0) ?? '0';
       _notesController.text = order.notes ?? '';
       _items.addAll(order.items);
+      _isPaid = order.isPaid; // Inicializar estado pagado
 
       // --- 4. CARGAR DATOS DE DIRECCIÓN EN MODO EDICIÓN ---
       _selectedAddressId = order.clientAddressId;
@@ -2901,7 +2903,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 return;
 
               // --- LOGIC FIX: Photo Handling for Mesa Dulce Edit/Add ---
-              List<Object> finalLocalFiles = [];
+              List<XFile> finalLocalFiles = [];
               String? finalPhotoUrl;
 
               // 1. Si hay locales nuevas, toman precedencia para la preview
@@ -3697,6 +3699,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           ? null
           : _notesController.text.trim(),
       'client_address_id': _selectedAddressId,
+      'is_paid': _isPaid, // Enviar estado pagado
       'items': _items.map((item) => item.toJson()).toList(),
     };
 
@@ -4481,6 +4484,22 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Switch de Pagado
+            SwitchListTile(
+              title: const Text(
+                '¿El pedido está TOTALMENTE pagado?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                'Si se marca, aparecerá con el ícono verde (\$) en el listado.',
+              ),
+              value: _isPaid,
+              activeColor: Colors.green,
+              onChanged: (val) {
+                setState(() => _isPaid = val);
+              },
+            ),
+            const Divider(),
             Row(
               children: [
                 Expanded(

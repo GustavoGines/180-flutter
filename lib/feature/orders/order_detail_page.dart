@@ -510,29 +510,46 @@ class OrderDetailPage extends ConsumerWidget {
                         highlight: balance > 0,
                         context: context,
                       ),
-                      if (canEdit && balance > 0.01) ...[
+                      if (canEdit) ...[
                         const SizedBox(height: 16),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: SizedBox(
                             width: double.infinity,
-                            child: FilledButton.icon(
-                              icon: const Icon(Icons.price_check, size: 18),
-                              label: const Text(
-                                'Marcar como Pagado Totalmente',
-                              ),
-                              // --- ADAPTADO AL TEMA ---
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(
-                                  0xFF1E8E3E,
-                                ), // Verde
-                                foregroundColor: Colors.white,
-                              ),
-                              // --- FIN ---
-                              onPressed: () {
-                                _handleMarkAsPaid(context, ref, order);
-                              },
-                            ),
+                            child: order.isPaid
+                                // --- BOTÓN PARA DESMARCAR (Si ya está pagado) ---
+                                ? OutlinedButton.icon(
+                                    icon: const Icon(Icons.money_off, size: 18),
+                                    label: const Text('Desmarcar como Pagado'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: cs.error,
+                                      side: BorderSide(color: cs.error),
+                                    ),
+                                    onPressed: () {
+                                      _handleMarkAsUnpaid(context, ref, order);
+                                    },
+                                  )
+                                // --- BOTÓN PARA MARCAR (Si NO está pagado y hay saldo) ---
+                                : (balance > 0.01)
+                                ? FilledButton.icon(
+                                    icon: const Icon(
+                                      Icons.price_check,
+                                      size: 18,
+                                    ),
+                                    label: const Text(
+                                      'Marcar como Pagado Totalmente',
+                                    ),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(
+                                        0xFF1E8E3E,
+                                      ), // Verde
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: () {
+                                      _handleMarkAsPaid(context, ref, order);
+                                    },
+                                  )
+                                : const SizedBox.shrink(),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -1530,6 +1547,68 @@ class OrderDetailPage extends ConsumerWidget {
           SnackBar(
             content: Text(
               'Error al marcar como pagado: $e',
+              style: TextStyle(color: cs.onError),
+            ),
+            backgroundColor: cs.error,
+          ),
+        );
+      }
+    }
+  }
+
+  // --- _handleMarkAsUnpaid (NUEVO) ---
+  Future<void> _handleMarkAsUnpaid(
+    BuildContext context,
+    WidgetRef ref,
+    Order order,
+  ) async {
+    final cs = Theme.of(context).colorScheme;
+
+    final bool confirm =
+        await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Confirmar Desmarcar Pago'),
+            content: const Text(
+              'El pedido dejará de figurar como pagado. (El saldo/depósito no se modificará automáticamente). ¿Continuar?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Confirmar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (confirm) {
+      try {
+        final Order updatedOrder = await ref
+            .read(ordersRepoProvider)
+            .markAsUnpaid(order.id);
+
+        await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
+        ref.invalidate(orderByIdProvider(order.id));
+
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pedido marcado como NO pagado.')),
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error al desmarcar: $e',
               style: TextStyle(color: cs.onError),
             ),
             backgroundColor: cs.error,

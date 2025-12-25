@@ -138,6 +138,18 @@ class OrdersRepository {
     }
   }
 
+  Future<Order> markAsUnpaid(int orderId) async {
+    try {
+      final response = await _dio.patch('/orders/$orderId/mark-unpaid');
+      return Order.fromJson(response.data);
+    } on DioException catch (e) {
+      if (kDebugMode) {
+        print('Error al desmarcar como pagado: $e');
+      }
+      rethrow;
+    }
+  }
+
   Future<Order> createOrderWithFiles(
     Map<String, dynamic> payload,
     Map<String, XFile> files,

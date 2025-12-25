@@ -118,15 +118,31 @@ class OrderCard extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    totalString,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      // --- 👇 ADAPTADO 👇 ---
-                      color: primaryTextColor,
-                      // --- 👆 FIN 👆 ---
-                      letterSpacing: 0.1,
-                    ),
+                  Row(
+                    children: [
+                      // 👇 NUEVO: Icono de "Pagado"
+                      if (order.isPaid)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6.0),
+                          child: Icon(
+                            Icons.monetization_on,
+                            size: 16,
+                            color: Colors
+                                .green
+                                .shade600, // Color distintivo para pagado
+                          ),
+                        ),
+                      Text(
+                        totalString,
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          // --- 👇 ADAPTADO 👇 ---
+                          color: primaryTextColor,
+                          // --- 👆 FIN 👆 ---
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

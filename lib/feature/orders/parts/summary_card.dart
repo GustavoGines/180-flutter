@@ -1,22 +1,24 @@
 part of '../home_page.dart';
 
 class _SummaryCard extends ConsumerWidget {
-  // 👈 CAMBIO a ConsumerWidget
   const _SummaryCard({
     required this.title,
-    required this.valueProvider, // 👈 CAMBIO
+    required this.valueProvider,
     required this.icon,
     required this.color,
+    // 👇 NUEVO: Provider opcional para ingreso pendiente
+    this.pendingValueProvider,
   });
 
   final String title;
-  final ProviderBase<num> valueProvider; // 👈 CAMBIO (acepta int o double)
+  final ProviderBase<num> valueProvider;
+  final ProviderBase<num>?
+  pendingValueProvider; // 👈 NUEVO: Provider para el valor gris
   final IconData icon;
   final Color color;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 👈 CAMBIO (añade ref)
     final fmtCurrency = NumberFormat(r"'$' #,##0.00", 'es_AR');
     final fmtInt = NumberFormat("#,##0", 'es_AR');
 
@@ -24,7 +26,7 @@ class _SummaryCard extends ConsumerWidget {
     final cs = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    // --- Lógica de color (sin cambios) ---
+    // --- Lógica de color ---
     final bool isLightMode = theme.brightness == Brightness.light;
     final Color contentColor;
     if (isLightMode) {
@@ -34,13 +36,15 @@ class _SummaryCard extends ConsumerWidget {
     }
     // --- Fin lógica de color ---
 
-    // --- 👇 AQUÍ ESTÁN LOS CAMBIOS IMPORTANTES 👇 ---
-
     // 1. Determinamos si es moneda basado en el provider
     final bool isCurrency = valueProvider == monthlyIncomeProvider;
 
-    // 2. Obtenemos el VALOR OBJETIVO del provider
+    // 2. Obtenemos los VALORES
     final num targetValue = ref.watch(valueProvider);
+    // 👇 NUEVO: Leer valor pendiente
+    final num pendingValue = pendingValueProvider != null
+        ? ref.watch(pendingValueProvider!)
+        : 0;
 
     return Card(
       elevation: 0,
@@ -67,22 +71,15 @@ class _SummaryCard extends ConsumerWidget {
 
                   // 3. ENVOLVEMOS EL NÚMERO CON LA ANIMACIÓN
                   TweenAnimationBuilder<double>(
-                    // El Tween 'end' se actualiza automáticamente con 'targetValue'
-                    // y el 'TweenAnimationBuilder' anima desde el valor anterior.
                     tween: Tween(end: targetValue.toDouble()),
-                    duration: const Duration(
-                      milliseconds: 600,
-                    ), // Duración del conteo
-                    curve: Curves.easeOutCubic, // Curva suave
-                    // 'animatedValue' es el valor en cada fotograma de la animación
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeOutCubic,
                     builder: (context, animatedValue, child) {
-                      // 4. Formateamos el valor animado en cada fotograma
                       String show;
                       if (isCurrency) {
                         final prefix = (animatedValue >= 0) ? '+' : '';
                         show = prefix + fmtCurrency.format(animatedValue);
                       } else {
-                        // Redondeamos el valor animado para los 'Pedidos'
                         show = fmtInt.format(animatedValue.round());
                       }
 
@@ -90,12 +87,11 @@ class _SummaryCard extends ConsumerWidget {
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          show, // Mostramos el valor animado
+                          show,
                           style: textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: contentColor,
                             letterSpacing: 0.1,
-                            // Añadimos esto para que los números no "salten" de ancho
                             fontFeatures: const [FontFeature.tabularFigures()],
                           ),
                           maxLines: 1,
@@ -104,6 +100,19 @@ class _SummaryCard extends ConsumerWidget {
                       );
                     },
                   ),
+
+                  // 👇 NUEVO: Mostrar pendiente si existe y es > 0
+                  if (pendingValue > 0 && isCurrency)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2.0),
+                      child: Text(
+                        'Pendiente: ${fmtCurrency.format(pendingValue)}',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant.withOpacity(0.7),
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

@@ -366,7 +366,9 @@ class _HomePageState extends ConsumerState<HomePage> {
 
         // Barra inferior fija con Resumen y Meses
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(148),
+          // 👇 AUMENTADO de 148 a 170 para evitar que el SummaryCard
+          // "tape" el logo o rompa el layout al crecer por el texto "Pendiente".
+          preferredSize: const Size.fromHeight(170),
           child: Column(
             children: [
               Consumer(
@@ -384,6 +386,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             valueProvider: monthlyIncomeProvider,
                             icon: Icons.trending_up,
                             color: cs.tertiary,
+                            pendingValueProvider: monthlyPendingIncomeProvider,
                           ),
                         ),
                         const SizedBox(width: 12),

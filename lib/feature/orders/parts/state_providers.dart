@@ -240,33 +240,60 @@ final selectedMonthOrdersProvider = rp.Provider.autoDispose<List<Order>>((ref) {
 });
 
 /// ===============================================================
-/// Cálculo de ingresos para el mes seleccionado
+/// Cálculo de ingresos REALIZADOS (Verdes): Entregados y Pagados (o solo entregados si así se desea, pero el requerimiento es Entregado + Pagado).
+/// REQUERIMIENTO: "ingresos del mes tiene que calcular el total de los pedidos con estado entregado nomás... y que sea estado entregado y este marcado como pagado"
 /// ===============================================================
 final monthlyIncomeProvider = rp.Provider.autoDispose<double>((ref) {
-  // 1. Escucha al nuevo provider filtrado
   final monthOrders = ref.watch(selectedMonthOrdersProvider);
 
   double ingresosMes = 0;
   for (final o in monthOrders) {
-    final v = o.total ?? 0;
-    if (v >= 0) {
-      ingresosMes += v;
+    // CONDICIÓN: Status 'delivered' AND isPaid == true
+    if (o.status == 'delivered' && o.isPaid) {
+      final v = o.total ?? 0;
+      if (v >= 0) {
+        ingresosMes += v;
+      }
     }
   }
   return ingresosMes;
 });
 
 /// ===============================================================
-/// 👇 NUEVO: Conteo de pedidos (ingresos) para el mes
+/// Cálculo de ingresos PENDIENTES (Gris): Confirmados, Listos (o Entregados NO pagados)
+/// REQUERIMIENTO: "confirmados y listos tienen que ser un ingreso pendiente"
+/// ===============================================================
+final monthlyPendingIncomeProvider = rp.Provider.autoDispose<double>((ref) {
+  final monthOrders = ref.watch(selectedMonthOrdersProvider);
+
+  double pendingIncome = 0;
+  for (final o in monthOrders) {
+    final s = o.status;
+    // CONDICIÓN: Confirmed OR Ready AND !isPaid (Según feedback usuario)
+    // "solo los confirmados y listos que no están marcados como pagados Aparecerían en pendiente"
+    // (Excluimos delivered por completo de esta categoría para evitar confusión)
+    final isConfirmedOrReady = s == 'confirmed' || s == 'ready';
+    if (isConfirmedOrReady && !o.isPaid) {
+      final v = o.total ?? 0;
+      if (v >= 0) {
+        pendingIncome += v;
+      }
+    }
+  }
+  return pendingIncome;
+});
+
+/// ===============================================================
+/// Conteo de pedidos (ingresos) para el mes
+/// (Opcional: ¿Contamos solo los verdes o todos los activos?)
+/// Por ahora contamos todos los activos (no cancelados/unknown) para dar volumen de trabajo.
 /// ===============================================================
 final monthlyOrdersCountProvider = rp.Provider.autoDispose<int>((ref) {
-  // 1. Escucha al nuevo provider filtrado
   final monthOrders = ref.watch(selectedMonthOrdersProvider);
 
   int count = 0;
   for (final o in monthOrders) {
-    final v = o.total ?? 0;
-    if (v >= 0) {
+    if (o.status != 'canceled' && o.status != 'unknown') {
       count++;
     }
   }

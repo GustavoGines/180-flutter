@@ -23,7 +23,7 @@ class Order {
   // --- 1. Renombrar variables ---
   final int? clientAddressId; // ANTES: deliveryAddressId
   final ClientAddress? clientAddress; // ANTES: deliveryAddress
-  // ---------------------------
+  final bool isPaid;
 
   const Order({
     required this.id,
@@ -38,8 +38,9 @@ class Order {
     this.deliveryCost,
     this.notes,
     this.client,
-    this.clientAddressId, // <-- Renombrado
-    this.clientAddress, // <-- Renombrado
+    this.clientAddressId,
+    this.clientAddress,
+    this.isPaid = false,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -79,7 +80,6 @@ class Order {
       deposit: double.tryParse(json['deposit']?.toString() ?? ''),
       deliveryCost: double.tryParse(json['delivery_cost']?.toString() ?? ''),
       notes: json['notes']?.toString(),
-
       // --- 2. Cambiar claves del JSON ---
       // Busca 'client_address_id' en el JSON
       clientAddressId: int.tryParse(
@@ -111,6 +111,7 @@ class Order {
           })
           .whereType<OrderItem>()
           .toList(),
+      isPaid: json['is_paid'] == 1 || json['is_paid'] == true,
     );
   }
 
@@ -127,10 +128,9 @@ class Order {
     String? notes,
     List<OrderItem>? items,
     Client? client,
-    // --- 3. Renombrar en copyWith ---
     int? clientAddressId,
     ClientAddress? clientAddress,
-    // -----------------------------
+    bool? isPaid,
   }) {
     return Order(
       id: id ?? this.id,
@@ -145,9 +145,9 @@ class Order {
       notes: notes ?? this.notes,
       items: items ?? this.items,
       client: client ?? this.client,
-      clientAddressId:
-          clientAddressId ?? this.clientAddressId, // <-- Renombrado
-      clientAddress: clientAddress ?? this.clientAddress, // <-- Renombrado
+      clientAddressId: clientAddressId ?? this.clientAddressId,
+      clientAddress: clientAddress ?? this.clientAddress,
+      isPaid: isPaid ?? this.isPaid,
     );
   }
 }
