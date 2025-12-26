@@ -39,7 +39,7 @@ jobs:
           echo "storeFile=upload-keystore.jks" >> android/key.properties
 
       - name: Build APK
-        run: flutter build apk --release --flavor prod --dart-define=API_BASE=https://one80-api.onrender.com/api
+        run: flutter build apk --release --flavor dev --dart-define=API_BASE=https://one80-api.onrender.com/api
 
       - name: Upload to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
@@ -47,4 +47,4 @@ jobs:
           appId: ${{ secrets.FIREBASE_APP_ID }}
           token: ${{ secrets.FIREBASE_TOKEN }}
           groups: staff
-          file: build/app/outputs/flutter-apk/app-prod-release.apk
+          file: build/app/outputs/flutter-apk/app-dev-release.apk
