@@ -30,8 +30,8 @@ class PdfGenerator {
   // --- 👇 CORRECCIÓN 1: Formateador solo para NÚMEROS (sin moneda) ---
   // ---
   final currencyFormat = NumberFormat(
-    r"'$' #,##0", // Patrón para números enteros con separador de miles y símbolo de moneda
-    'es_AR', // Locale para usar el "." como separador de miles
+    r"#,##0", // Patrón para números enteros con separador de miles
+    'es_AR',
   );
   // ---
 
@@ -599,6 +599,7 @@ class PdfGenerator {
 
     // --- NUEVO: Mostrar Variante / Tamaño (para Mesa Dulce) ---
     final String? variantName = custom['variant_name'];
+    final String? selectedSize = custom['selected_size']; // <-- ADD THIS
     final bool isHalfDozen = custom['is_half_dozen'] == true;
 
     if (variantName != null && variantName.isNotEmpty) {
@@ -607,6 +608,12 @@ class PdfGenerator {
           ? variantName.replaceFirst('size', '')
           : variantName;
       parts.add('Variante: $formatted');
+    } else if (selectedSize != null && selectedSize.isNotEmpty) {
+      // <-- ADD THIS BLOCK
+      final formatted = selectedSize.startsWith('size')
+          ? selectedSize.replaceFirst('size', '')
+          : selectedSize;
+      parts.add('Tamaño: $formatted');
     } else if (isHalfDozen) {
       parts.add('Variante: Media Docena');
     }
