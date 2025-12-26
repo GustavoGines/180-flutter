@@ -30,7 +30,7 @@ class PdfGenerator {
   // --- 👇 CORRECCIÓN 1: Formateador solo para NÚMEROS (sin moneda) ---
   // ---
   final currencyFormat = NumberFormat(
-    "#,##0", // Patrón para números enteros con separador de miles
+    r"'$' #,##0", // Patrón para números enteros con separador de miles y símbolo de moneda
     'es_AR', // Locale para usar el "." como separador de miles
   );
   // ---

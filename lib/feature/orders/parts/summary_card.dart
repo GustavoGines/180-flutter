@@ -19,7 +19,7 @@ class _SummaryCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final fmtCurrency = NumberFormat(r"'$' #,##0.00", 'es_AR');
+    final fmtCurrency = NumberFormat(r"'$' #,##0", 'es_AR');
     final fmtInt = NumberFormat("#,##0", 'es_AR');
 
     final theme = Theme.of(context);
@@ -105,11 +105,16 @@ class _SummaryCard extends ConsumerWidget {
                   if (pendingValue > 0 && isCurrency)
                     Padding(
                       padding: const EdgeInsets.only(top: 2.0),
-                      child: Text(
-                        'Pendiente: ${fmtCurrency.format(pendingValue)}',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant.withOpacity(0.7),
-                          fontSize: 10,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Pendiente: ${fmtCurrency.format(pendingValue)}',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant.withOpacity(0.7),
+                            fontSize: 10,
+                          ),
+                          maxLines: 1,
                         ),
                       ),
                     ),

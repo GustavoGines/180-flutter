@@ -41,9 +41,7 @@ class OrderList extends ConsumerWidget {
               '${DateFormat.Hm().format(o.startTime)} – ${DateFormat.Hm().format(o.endTime)} • ${o.status.toUpperCase()}',
             ),
             subtitle: Text('Cliente #${o.clientId} • ${o.notes ?? ""}'),
-            trailing: Text(
-              NumberFormat("'\$' #,##0.00", 'es_AR').format(o.total),
-            ),
+            trailing: Text(NumberFormat(r"'$' #,##0", 'es_AR').format(o.total)),
           );
         },
       ),

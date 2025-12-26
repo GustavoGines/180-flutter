@@ -101,7 +101,7 @@ class _DateHeader extends StatelessWidget {
           }
         }
       }
-      final fmt = NumberFormat(r"'$' #,##0.00", 'es_AR');
+      final fmt = NumberFormat(r"'$' #,##0", 'es_AR');
       totalString = fmt.format(dayTotal);
     }
 
@@ -200,7 +200,7 @@ class _WeekSeparator extends StatelessWidget {
     final String txt;
     final Color color;
     if (!muted) {
-      final fmt = NumberFormat(r"'$' #,##0.00", 'es_AR');
+      final fmt = NumberFormat(r"'$' #,##0", 'es_AR');
       txt = total >= 0 ? '+${fmt.format(total)}' : fmt.format(total);
       color = total >= 0 ? Colors.green : Colors.red;
     } else {
