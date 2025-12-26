@@ -102,9 +102,17 @@ class OrdersRepository {
     return orders; // Devolver los datos después del retraso asegurado
   }
 
+  // Helper para extraer 'data' si existe (Laravel Resources)
+  Map<String, dynamic> _parseOrderData(dynamic data) {
+    if (data is Map<String, dynamic> && data.containsKey('data')) {
+      return data['data'] as Map<String, dynamic>;
+    }
+    return data as Map<String, dynamic>;
+  }
+
   Future<Order> getOrderById(int id) async {
     final res = await _dio.get('/orders/$id');
-    return Order.fromJson(res.data as Map<String, dynamic>);
+    return Order.fromJson(_parseOrderData(res.data));
   }
 
   Future<void> deleteOrder(int id) async {
@@ -117,7 +125,7 @@ class OrdersRepository {
         '/orders/$orderId/status',
         data: {'status': status},
       );
-      return Order.fromJson(response.data);
+      return Order.fromJson(_parseOrderData(response.data));
     } catch (e) {
       if (kDebugMode) {
         print('Error al actualizar estado: $e');
@@ -129,7 +137,7 @@ class OrdersRepository {
   Future<Order?> markAsPaid(int orderId) async {
     try {
       final response = await _dio.patch('/orders/$orderId/mark-paid');
-      return Order.fromJson(response.data);
+      return Order.fromJson(_parseOrderData(response.data));
     } on DioException catch (e) {
       if (kDebugMode) {
         print('Error al marcar como pagado: $e');
@@ -141,7 +149,7 @@ class OrdersRepository {
   Future<Order> markAsUnpaid(int orderId) async {
     try {
       final response = await _dio.patch('/orders/$orderId/mark-unpaid');
-      return Order.fromJson(response.data);
+      return Order.fromJson(_parseOrderData(response.data));
     } on DioException catch (e) {
       if (kDebugMode) {
         print('Error al desmarcar como pagado: $e');
@@ -187,7 +195,8 @@ class OrdersRepository {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 201) {
-        return Order.fromJson(jsonDecode(response.body));
+        final body = jsonDecode(response.body);
+        return Order.fromJson(_parseOrderData(body));
       } else {
         if (kDebugMode) {
           print('Error createOrderWithFiles: ${response.body}');
@@ -246,7 +255,8 @@ class OrdersRepository {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
-        return Order.fromJson(jsonDecode(response.body));
+        final body = jsonDecode(response.body);
+        return Order.fromJson(_parseOrderData(body));
       } else {
         if (kDebugMode) {
           print('Error updateOrderWithFiles: ${response.body}');
