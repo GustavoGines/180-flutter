@@ -3,3 +3,4 @@ Esta versión incluye mejoras de estabilidad y correcciones importantes:
 [Correcciones]
 - Solucionado: Al abrir una notificación de pedido, ahora puedes volver atrás correctamente al listado de pedidos.
 - Refactorización interna: La app ahora está sincronizada con la nueva API estandarizada (Resources), mejorando la seguridad y consistencia de datos.
+- [CI] Prueba de despliegue automático (Flavor Dev).
