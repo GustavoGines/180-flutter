@@ -1,2 +1,5 @@
-Corrección: Se eliminó el doble signo '$' en los precios del PDF.
-Mejora: El PDF ahora muestra variantes, tamaños y detalles de productos en la lista.
+Esta versión incluye mejoras de estabilidad y correcciones importantes:
+
+[Correcciones]
+- Solucionado: Al abrir una notificación de pedido, ahora puedes volver atrás correctamente al listado de pedidos.
+- Refactorización interna: La app ahora está sincronizada con la nueva API estandarizada (Resources), mejorando la seguridad y consistencia de datos.
