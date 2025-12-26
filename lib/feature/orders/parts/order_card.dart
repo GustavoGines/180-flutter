@@ -39,7 +39,7 @@ class OrderCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final fmt = NumberFormat(r"'$' #,##0.00", 'es_AR');
+    final fmt = NumberFormat(r"'$' #,##0", 'es_AR');
     final totalString = fmt.format(order.total); // Usando order.total
 
     // --- 👇 ADAPTACIÓN TEMA 👇 ---
