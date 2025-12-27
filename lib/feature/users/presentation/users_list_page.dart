@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
 
 import '../../../core/models/user.dart';
 import '../../auth/auth_state.dart';
@@ -103,12 +102,14 @@ class _UsersListPageState extends ConsumerState<UsersListPage> {
         // 🎯 NUEVO: Botón de Papelera en las acciones del AppBar
         actions: [
           IconButton(
-            icon: const Icon(Icons.archive_outlined), // Ícono de archivo/papelera
+            icon:
+                const Icon(Icons.archive_outlined), // Ícono de archivo/papelera
             tooltip: 'Ver Papelera',
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const UsersTrashedPage(), // Navega a la Papelera
+                  builder: (_) =>
+                      const UsersTrashedPage(), // Navega a la Papelera
                 ),
               );
             },
@@ -209,9 +210,8 @@ class _UsersListPageState extends ConsumerState<UsersListPage> {
                               label: Text(
                                 user.role == 'admin' ? 'Admin' : 'Staff',
                                 style: TextStyle(
-                                  color: user.isAdmin
-                                      ? Colors.red
-                                      : Colors.blue,
+                                  color:
+                                      user.isAdmin ? Colors.red : Colors.blue,
                                 ),
                               ),
                               backgroundColor: user.isAdmin

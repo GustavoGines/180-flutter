@@ -1,7 +1,7 @@
 // lib/router.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
+
 import 'package:go_router/go_router.dart';
 
 // Páginas
@@ -162,15 +162,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Usuario no autenticado
       if (!isLoggedIn && !atLogin && !atForgot && !atReset) {
         debugPrint('🚪 Usuario no logueado → /login');
-        Future.microtask(() => context.go('/login'));
-        return null;
+        return '/login';
       }
 
       // Usuario autenticado pero en login/loading → home
       if (isLoggedIn && (atLogin || atLoading)) {
         debugPrint('🏠 Usuario logueado → /');
-        Future.microtask(() => context.go('/'));
-        return null;
+        return '/';
       }
 
       return null;

@@ -10,7 +10,7 @@ import 'dart:collection';
 import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/misc.dart';
+
 // Importamos tu AppThemeMode y themeModeProvider
 import 'package:pasteleria_180_flutter/core/theme/theme_provider.dart';
 import 'package:riverpod/riverpod.dart' as rp;
@@ -90,6 +90,15 @@ class _HomePageState extends ConsumerState<HomePage> {
     // Guardamos el provider en el estado
     setState(() {
       _logoImageProvider = logo;
+    });
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() {
+      _versionName = info.version;
+      _buildNumber = info.buildNumber;
     });
   }
 

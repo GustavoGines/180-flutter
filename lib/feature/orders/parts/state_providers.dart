@@ -29,7 +29,7 @@ const int _kFwdMonths = 24;
 /// ===============================================================
 
 // 1. Esta es la clase Notifier
-class OrdersWindowNotifier extends rp.AsyncNotifier<List<Order>> {
+class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
   // El método 'build' hace lo mismo que tu FutureProvider:
   // Carga los datos iniciales.
   @override
@@ -60,14 +60,13 @@ class OrdersWindowNotifier extends rp.AsyncNotifier<List<Order>> {
       'canceled': 4,
     };
     orders.sort((a, b) {
-      final dayCmp =
-          DateTime(
-            a.eventDate.year,
-            a.eventDate.month,
-            a.eventDate.day,
-          ).compareTo(
-            DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
-          );
+      final dayCmp = DateTime(
+        a.eventDate.year,
+        a.eventDate.month,
+        a.eventDate.day,
+      ).compareTo(
+        DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
+      );
       if (dayCmp != 0) return dayCmp;
       final timeCmp = a.startTime.compareTo(b.startTime);
       if (timeCmp != 0) return timeCmp;
@@ -141,14 +140,13 @@ class OrdersWindowNotifier extends rp.AsyncNotifier<List<Order>> {
       'canceled': 4,
     };
     newList.sort((a, b) {
-      final dayCmp =
-          DateTime(
-            a.eventDate.year,
-            a.eventDate.month,
-            a.eventDate.day,
-          ).compareTo(
-            DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
-          );
+      final dayCmp = DateTime(
+        a.eventDate.year,
+        a.eventDate.month,
+        a.eventDate.day,
+      ).compareTo(
+        DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
+      );
       if (dayCmp != 0) return dayCmp;
       final timeCmp = a.startTime.compareTo(b.startTime);
       if (timeCmp != 0) return timeCmp;
@@ -177,14 +175,13 @@ class OrdersWindowNotifier extends rp.AsyncNotifier<List<Order>> {
       'canceled': 4,
     };
     newList.sort((a, b) {
-      final dayCmp =
-          DateTime(
-            a.eventDate.year,
-            a.eventDate.month,
-            a.eventDate.day,
-          ).compareTo(
-            DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
-          );
+      final dayCmp = DateTime(
+        a.eventDate.year,
+        a.eventDate.month,
+        a.eventDate.day,
+      ).compareTo(
+        DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
+      );
       if (dayCmp != 0) return dayCmp;
       final timeCmp = a.startTime.compareTo(b.startTime);
       if (timeCmp != 0) return timeCmp;
@@ -200,8 +197,8 @@ class OrdersWindowNotifier extends rp.AsyncNotifier<List<Order>> {
 // 4. Esta es la nueva definición del provider
 final ordersWindowProvider =
     rp.AsyncNotifierProvider.autoDispose<OrdersWindowNotifier, List<Order>>(
-      OrdersWindowNotifier.new,
-    );
+  OrdersWindowNotifier.new,
+);
 
 /// ===============================================================
 /// 👇 NUEVO: Provider intermedio para los pedidos del mes
