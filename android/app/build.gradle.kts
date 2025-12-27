@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "com.one80.pasteleria.pasteleria_180_flutter"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -26,7 +26,7 @@ android {
     defaultConfig {
         applicationId = "com.one80.pasteleria.pasteleria_180_flutter"
         minSdk = 23
-        targetSdk = 34
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
