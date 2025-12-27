@@ -1,7 +1,7 @@
 // lib/router.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
+
 import 'package:go_router/go_router.dart';
 
 // Páginas
@@ -21,11 +21,9 @@ import 'feature/clients/client_detail_page.dart';
 import 'feature/users/presentation/users_list_page.dart';
 import 'feature/users/presentation/edit_user_page.dart';
 import 'feature/orders/services/pdf_preview_page.dart';
-import 'core/services/firebase_messaging_service.dart';
 import 'feature/orders/admin_catalog_page.dart';
 import 'feature/orders/admin/product_form_page.dart';
 import 'core/models/catalog.dart';
-
 
 // 🔔 Notificador de GoRouter
 final goRouterNotifierProvider = ChangeNotifierProvider((ref) {
@@ -40,12 +38,6 @@ class GoRouterNotifier extends ChangeNotifier {
           prev?.initialLoading != next.initialLoading) {
         notifyListeners();
       }
-    });
-    _ref.listen<Map<String, dynamic>?>(notificationTapPayloadProvider, (
-      prev,
-      next,
-    ) {
-      if (next != null) notifyListeners();
     });
   }
 }
@@ -157,7 +149,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       final auth = ref.read(authStateProvider);
       final isLoading = auth.initialLoading;
       final isLoggedIn = auth.isAuthenticated;
-      final payload = ref.read(notificationTapPayloadProvider);
 
       final loc = state.matchedLocation;
       final atLoading = loc == '/loading';
@@ -168,28 +159,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Mientras carga → quedarse en /loading
       if (isLoading) return atLoading ? null : '/loading';
 
-      // Redirección de notificaciones
-      if (payload != null && isLoggedIn) {
-        ref.read(notificationTapPayloadProvider.notifier).state = null;
-        final type = payload['type'];
-        final orderId = payload['orderId'];
-        if (type == 'order_detail' && orderId != null) {
-          return '/order/${int.tryParse(orderId)}';
-        }
-      }
-
       // Usuario no autenticado
       if (!isLoggedIn && !atLogin && !atForgot && !atReset) {
         debugPrint('🚪 Usuario no logueado → /login');
-        Future.microtask(() => context.go('/login'));
-        return null;
+        return '/login';
       }
 
       // Usuario autenticado pero en login/loading → home
       if (isLoggedIn && (atLogin || atLoading)) {
         debugPrint('🏠 Usuario logueado → /');
-        Future.microtask(() => context.go('/'));
-        return null;
+        return '/';
       }
 
       return null;

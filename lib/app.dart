@@ -3,6 +3,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Importa el router y los temas
+import 'package:pasteleria_180_flutter/core/services/firebase_messaging_service.dart';
+
+// Importa el router y los temas
 import 'router.dart';
 import 'core/theme/theme_data.dart';
 import 'core/theme/theme_provider.dart';
@@ -23,6 +26,24 @@ class One80App extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Escuchar notificaciones y navegar (PUSH para mantener back button)
+    final notifPayload = ref.watch(notificationTapPayloadProvider);
+
+    if (notifPayload != null) {
+      Future.microtask(() {
+        ref.read(notificationTapPayloadProvider.notifier).state = null;
+        final type = notifPayload['type'];
+        final orderId = notifPayload['orderId'];
+
+        if (type == 'order_detail' && orderId != null) {
+          final id = int.tryParse(orderId) ?? 0;
+          if (id > 0) {
+            ref.read(routerProvider).push('/order/$id');
+          }
+        }
+      });
+    }
+
     // ✅ Router estable, sin re-crearse en cada cambio
     final router = ref.watch(routerProvider);
 

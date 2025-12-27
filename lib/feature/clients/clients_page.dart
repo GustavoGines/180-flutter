@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 // ignore: legacy_Linter_file_Name
-import 'package:flutter_riverpod/legacy.dart';
+
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:pasteleria_180_flutter/core/models/client.dart'; // <-- AÑADIDO
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
@@ -83,9 +83,8 @@ class ClientsPage extends HookConsumerWidget {
     if (contact != null) {
       // 3. Extraer datos y normalizar
       final String name = contact.displayName;
-      final String? phone = contact.phones.isNotEmpty
-          ? contact.phones.first.number
-          : null;
+      final String? phone =
+          contact.phones.isNotEmpty ? contact.phones.first.number : null;
 
       if (phone == null) {
         _showSnackbar(
@@ -97,9 +96,8 @@ class ClientsPage extends HookConsumerWidget {
       }
 
       // 4. Intentar buscar si el cliente ya existe por teléfono
-      final existingClients = await ref
-          .read(clientsRepoProvider)
-          .searchClients(query: phone);
+      final existingClients =
+          await ref.read(clientsRepoProvider).searchClients(query: phone);
       final existingClient = existingClients.firstWhereOrNull(
         (c) => c.phone == phone,
       );

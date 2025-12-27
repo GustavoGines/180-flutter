@@ -1,4 +1,4 @@
-part of '../home_page.dart';
+part of orders_home;
 
 class _ProgressSheetController {
   final void Function(String) _update;
@@ -14,17 +14,6 @@ class _ProgressSheetController {
 }
 
 extension _UpdateHelpers on _HomePageState {
-  // (Este método sí lo tenías en _HomePageState, muévelo)
-  Future<void> _loadVersion() async {
-    final info = await PackageInfo.fromPlatform();
-    if (!mounted) return;
-    // ignore: invalid_use_of_protected_member
-    setState(() {
-      _versionName = info.version;
-      _buildNumber = info.buildNumber;
-    });
-  }
-
   // --------------------- Update Checker + Sheets ---------------------
 
   // Clave para guardar la última revisión en SharedPreferences

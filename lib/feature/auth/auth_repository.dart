@@ -48,7 +48,18 @@ class AuthRepository {
   // Obtiene los datos del usuario actualmente autenticado
   Future<AppUser> me() async {
     final res = await _dio.get('/me');
-    return AppUser.fromJson(res.data as Map<String, dynamic>);
+    final body = res.data;
+
+    late final Map<String, dynamic> map;
+    if (body is Map && body['data'] is Map) {
+      map = (body['data'] as Map).map((k, v) => MapEntry(k.toString(), v));
+    } else if (body is Map) {
+      // Fallback para estructura vieja
+      map = body.map((k, v) => MapEntry(k.toString(), v));
+    } else {
+      throw Exception('Respuesta inesperada en /me');
+    }
+    return AppUser.fromJson(map);
   }
 
   // Cierra la sesión en el backend y borra el token local

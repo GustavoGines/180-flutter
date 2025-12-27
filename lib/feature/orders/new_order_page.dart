@@ -62,9 +62,7 @@ class NewOrderPage extends ConsumerWidget {
         data: (catalogData) {
           // Si estamos editando, buscamos also el pedido
           if (isEditMode) {
-            return ref
-                .watch(orderByIdProvider(orderId!))
-                .when(
+            return ref.watch(orderByIdProvider(orderId!)).when(
                   loading: () => Center(
                     child: CircularProgressIndicator(color: darkBrown),
                   ),
@@ -278,7 +276,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     double delivery =
         double.tryParse(_deliveryCostController.text.replaceAll(',', '.')) ??
-        0.0;
+            0.0;
     double deposit =
         double.tryParse(_depositController.text.replaceAll(',', '.')) ?? 0.0;
     double total = subtotal + delivery;
@@ -408,9 +406,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     if (contact != null) {
       // 3. Extraer datos y normalizar
       final String name = contact.displayName;
-      final String? phone = contact.phones.isNotEmpty
-          ? contact.phones.first.number
-          : null;
+      final String? phone =
+          contact.phones.isNotEmpty ? contact.phones.first.number : null;
 
       if (phone == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -430,9 +427,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
       // 4. Intentar buscar si el cliente ya existe por teléfono
       // NOTA: Tu API debe tener una búsqueda por teléfono implementada en searchClients
-      final existingClients = await ref
-          .read(clientsRepoProvider)
-          .searchClients(query: phone);
+      final existingClients =
+          await ref.read(clientsRepoProvider).searchClients(query: phone);
       final existingClient = existingClients.firstWhereOrNull(
         (c) => c.phone == phone,
       );
@@ -621,20 +617,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       ),
                       builder: (context, controller, focusNode) =>
                           TextFormField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            decoration: const InputDecoration(
-                              labelText: 'Buscar cliente...',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.search),
-                            ),
-                            validator: (value) {
-                              if (_selectedClient == null) {
-                                return 'Debes seleccionar un cliente.';
-                              }
-                              return null;
-                            },
-                          ),
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: 'Buscar cliente...',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.search),
+                        ),
+                        validator: (value) {
+                          if (_selectedClient == null) {
+                            return 'Debes seleccionar un cliente.';
+                          }
+                          return null;
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -649,7 +645,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                     buttonSize: const Size(
                       56,
-
                       56,
                     ), // Mismo tamaño que un FAB estándar
 
@@ -663,18 +658,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       // Opción 1: Seleccionar desde Contactos
                       SpeedDialChild(
                         child: const Icon(Icons.contact_phone_outlined),
-
                         label: 'Desde Contactos',
-
                         onTap: _selectClientFromContacts,
                       ),
 
                       // Opción 2: Agregar Nuevo Manualmente
                       SpeedDialChild(
                         child: const Icon(Icons.person_add_alt_1),
-
                         label: 'Nuevo Manualmente',
-
                         onTap: _addClientManuallyDialog,
                       ),
                     ],
@@ -776,9 +767,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     setState(() => _isLoading = true);
     try {
-      final restoredClient = await ref
-          .read(clientsRepoProvider)
-          .restoreClient(clientToRestore.id);
+      final restoredClient =
+          await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
 
       ref.invalidate(clientsListProvider('')); // Invalida búsqueda
       ref.invalidate(trashedClientsProvider);
@@ -872,9 +862,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
   void _addBoxDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
-    Map<String, dynamic> customData = isEditing
-        ? (existingItem.customizationJson ?? {})
-        : {};
+    Map<String, dynamic> customData =
+        isEditing ? (existingItem.customizationJson ?? {}) : {};
 
     const personalizedBoxName = 'BOX DULCE Personalizado (Armar)';
 
@@ -882,14 +871,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ? boxProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : boxProducts.first;
 
-    double basePrice = isEditing
-        ? existingItem.basePrice
-        : selectedProduct?.price ?? 0.0;
+    double basePrice =
+        isEditing ? existingItem.basePrice : selectedProduct?.price ?? 0.0;
     // 🎯 Paso 1: Leer el Ajuste Manual Puro del JSON si existe
     double manualAdjustmentValue = isEditing
         ? (customData['manual_adjustment_value'] is num
-              ? (customData['manual_adjustment_value'] as num).toDouble()
-              : 0.0)
+            ? (customData['manual_adjustment_value'] as num).toDouble()
+            : 0.0)
         : 0.0;
 
     // La variable 'adjustments' DEBE reflejar el valor inicial del controlador (el ajuste manual puro)
@@ -1083,8 +1071,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       bool isSmallCake = false;
       if (isPersonalizedBox) {
         // Si es personalizado, chequea la torta base seleccionada
-        isSmallCake =
-            selectedBaseCake?.name == miniCakeName ||
+        isSmallCake = selectedBaseCake?.name == miniCakeName ||
             selectedBaseCake?.name == microCakeName;
       } else {
         // Si es predefinido, asumimos que SIEMPRE usa la lógica de mini torta
@@ -1161,8 +1148,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         bool isSmallCake = false;
         if (isPersonalizedBox) {
           // Si es personalizado, chequea la torta base seleccionada
-          isSmallCake =
-              selectedBaseCake?.name == miniCakeName ||
+          isSmallCake = selectedBaseCake?.name == miniCakeName ||
               selectedBaseCake?.name == microCakeName;
         } else {
           // Si es predefinido, asumimos que SIEMPRE usa la lógica de mini torta
@@ -1518,12 +1504,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           } else {
                             basePrice = newValue?.price ?? 0.0;
                             // Opcional: Re-seleccionar la torta base por defecto para el Box predefinido
-                            selectedBaseCake = _derivedSmallCakeProducts
-                                .firstWhereOrNull(
-                                  (p) =>
-                                      p.name ==
-                                      'Mini Torta Personalizada (Base)',
-                                );
+                            selectedBaseCake =
+                                _derivedSmallCakeProducts.firstWhereOrNull(
+                              (p) =>
+                                  p.name == 'Mini Torta Personalizada (Base)',
+                            );
                           }
 
                           calculatePrice();
@@ -1558,7 +1543,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           // ⬅️ NUEVO: SELECTOR DE TORTA BASE
                           Text(
                             'Base de Torta para el Box Personalizado (Opcional):',
-                            style: Theme.of(context).textTheme.titleMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
@@ -1608,7 +1595,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           if (selectedBaseCake != null) ...[
                             Text(
                               'Personalización de Torta Base:',
-                              style: Theme.of(context).textTheme.titleMedium
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
@@ -1653,7 +1642,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           // Selector de Productos de Mesa Dulce
                           Text(
                             'Productos de Mesa Dulce a Incluir:',
-                            style: Theme.of(context).textTheme.titleMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
@@ -1671,7 +1662,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         children: [
                           Text(
                             'Personalización de Mini Torta/Contenido:',
-                            style: Theme.of(context).textTheme.titleMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
@@ -1783,9 +1776,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             final bool isPlaceholder = url.startsWith(
                               'placeholder_',
                             );
-                            final dynamic imageSource = isPlaceholder
-                                ? _filesToUpload[url]
-                                : url;
+                            final dynamic imageSource =
+                                isPlaceholder ? _filesToUpload[url] : url;
                             if (imageSource == null)
                               return const SizedBox.shrink();
                             return _buildImageThumbnail(
@@ -1834,8 +1826,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         ? 1
                         : int.tryParse(qtyController.text) ?? 0;
                     final itemNotes = itemNotesController.text.trim();
-                    final adjustmentNotes = adjustmentNotesController.text
-                        .trim();
+                    final adjustmentNotes =
+                        adjustmentNotesController.text.trim();
 
                     if (qty <= 0 || calculatedTotalBasePrice <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1916,9 +1908,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           'selected_base_cake': selectedBaseCake?.name,
                         // Guardar la personalización de la torta base si existe
                         if (selectedBaseCake != null) ...{
-                          'selected_fillings': selectedFillings
-                              .map((f) => f.name)
-                              .toList(),
+                          'selected_fillings':
+                              selectedFillings.map((f) => f.name).toList(),
                           'selected_extra_fillings': selectedExtraFillings
                               .map(
                                 (f) => {
@@ -1941,8 +1932,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   'name': sel.extra.name,
                                   'quantity': sel.quantity,
                                   'price': sel
-                                      .extra
-                                      .costPerUnit, // <-- Agregar precio
+                                      .extra.costPerUnit, // <-- Agregar precio
                                 },
                               )
                               .toList(),
@@ -1996,9 +1986,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       qty: qty,
                       basePrice: selectedProduct!.price,
                       adjustments: totalAdjustment,
-                      customizationNotes: adjustmentNotes.isEmpty
-                          ? null
-                          : adjustmentNotes,
+                      customizationNotes:
+                          adjustmentNotes.isEmpty ? null : adjustmentNotes,
                       customizationJson: customization,
                       localFile: primaryLocalFiles,
                     );
@@ -2027,9 +2016,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
   void _addCakeDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
-    Map<String, dynamic> customData = isEditing
-        ? (existingItem.customizationJson ?? {})
-        : {};
+    Map<String, dynamic> customData =
+        isEditing ? (existingItem.customizationJson ?? {}) : {};
 
     Product? selectedCakeType = isEditing
         ? cakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
@@ -2052,7 +2040,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       text: existingItem?.name == miniCakeName
           ? '0'
           : customData['multiplier_adjustment_per_kg']?.toStringAsFixed(0) ??
-                '0',
+              '0',
     );
     final notesController = TextEditingController(
       text: customData['item_notes'] as String? ?? '',
@@ -2156,20 +2144,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       // --- 2. USAR LAS CONSTANTES PARA TODO ---
       final bool isMiniCake = selectedCakeType?.name == miniCakeName;
       final bool isMicroCake = selectedCakeType?.name == microCakeName;
-      final bool isSmallCake =
-          isMiniCake ||
+      final bool isSmallCake = isMiniCake ||
           isMicroCake; // <-- Esta es la única variable que importa
 
       // --- Lógica de Peso y Multiplicador (AHORA USA isSmallCake) ---
-      double weight =
-          isSmallCake // <-- Corregido
+      double weight = isSmallCake // <-- Corregido
           ? 1.0 // Fuerza el peso a 1.0 si es Torta Chica
           : double.tryParse(weightController.text.replaceAll(',', '.')) ?? 0.0;
 
       manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
 
-      multiplierAdjustment =
-          isSmallCake // <-- Corregido
+      multiplierAdjustment = isSmallCake // <-- Corregido
           ? 0.0 // Fuerza el multiplicador a 0 si es Torta Chica
           : double.tryParse(multiplierAdjustmentController.text) ?? 0.0;
 
@@ -2252,11 +2237,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   // --- CORREGIDO: Usar isSmallCake ---
                   isSmallCake
                       ? (filling.extraCostPerKg > 0
-                            ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)})'
-                            : '(Gratis)')
+                          ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)})'
+                          : '(Gratis)')
                       : (isExtraCost
-                            ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)}/kg)'
-                            : '(Gratis)'),
+                          ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)}/kg)'
+                          : '(Gratis)'),
                 ),
                 value: isSelected,
                 onChanged: (bool? value) {
@@ -2380,7 +2365,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         // --- CORREGIDO: Usar las constantes locales ---
                         final isCurrentProductMiniCake =
                             product.name == miniCakeName ||
-                            product.name == microCakeName;
+                                product.name == microCakeName;
                         return DropdownMenuItem<Product>(
                           value: product,
                           child: Text(
@@ -2399,7 +2384,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           // Calcular el NUEVO estado (esto no es necesario si 'isSmallCake' está arriba)
                           final bool esTortaChicaNueva =
                               newValue?.name == miniCakeName ||
-                              newValue?.name == microCakeName;
+                                  newValue?.name == microCakeName;
 
                           if (esTortaChicaNueva) {
                             // Si es Mini Torta, forzar valores
@@ -2530,9 +2515,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             final bool isPlaceholder = url.startsWith(
                               'placeholder_',
                             );
-                            final dynamic imageSource = isPlaceholder
-                                ? _filesToUpload[url]
-                                : url;
+                            final dynamic imageSource =
+                                isPlaceholder ? _filesToUpload[url] : url;
 
                             if (imageSource == null) {
                               return const SizedBox.shrink();
@@ -2629,20 +2613,20 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     final weight = isSmallCake
                         ? 1.0
                         : double.tryParse(
-                                weightController.text.replaceAll(',', '.'),
-                              ) ??
-                              0.0;
+                              weightController.text.replaceAll(',', '.'),
+                            ) ??
+                            0.0;
 
                     final multiplierAdjustmentValue = isSmallCake
                         ? 0.0
                         : double.tryParse(
-                                multiplierAdjustmentController.text,
-                              ) ??
-                              0.0;
+                              multiplierAdjustmentController.text,
+                            ) ??
+                            0.0;
                     // --- FIN CORRECCIÓN ---
 
-                    final adjustmentNotes = adjustmentNotesController.text
-                        .trim();
+                    final adjustmentNotes =
+                        adjustmentNotesController.text.trim();
 
                     if (weight <= 0 && !isSmallCake) {
                       // <-- CORREGIDO
@@ -2663,9 +2647,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       if (!isSmallCake) // <-- CORREGIDO
                         'multiplier_adjustment_per_kg':
                             multiplierAdjustmentValue,
-                      'selected_fillings': selectedFillings
-                          .map((f) => f.name)
-                          .toList(),
+                      'selected_fillings':
+                          selectedFillings.map((f) => f.name).toList(),
                       'selected_extra_fillings': selectedExtraFillings
                           .map(
                             (f) => {'name': f.name, 'price': f.extraCostPerKg},
@@ -2721,9 +2704,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       qty: 1,
                       basePrice: calculatedBasePrice,
                       adjustments: manualAdjustments,
-                      customizationNotes: adjustmentNotes.isEmpty
-                          ? null
-                          : adjustmentNotes,
+                      customizationNotes:
+                          adjustmentNotes.isEmpty ? null : adjustmentNotes,
                       customizationJson: customization,
                       localFile:
                           primaryLocalFiles, // <-- Attach local file for preview
@@ -2767,9 +2749,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     Product? selectedProduct = isEditing
         ? mesaDulceProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : mesaDulceProducts.firstWhereOrNull(
-                (p) => p.category == ProductCategory.mesaDulce,
-              ) ??
-              mesaDulceProducts.first;
+              (p) => p.category == ProductCategory.mesaDulce,
+            ) ??
+            mesaDulceProducts.first;
 
     ProductVariant? selectedVariant;
     double basePrice = 0.0;
@@ -2804,7 +2786,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     final unitAdjustmentsController = TextEditingController(
       text: isEditing
           ? (existingItem.customizationJson?['unit_adjustment']?.toString() ??
-                '0')
+              '0')
           : '0',
     );
     // Removed duplicate declaration
@@ -2868,8 +2850,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               if (selectedProduct!.variants.isNotEmpty) {
                 unitBasePrice = selectedVariant?.price ?? 0.0;
               } else if (selectedProduct!.allowHalfDozen && isHalfDozen) {
-                unitBasePrice =
-                    selectedProduct!.halfDozenPrice ??
+                unitBasePrice = selectedProduct!.halfDozenPrice ??
                     (selectedProduct!.price / 2);
               } else if (selectedProduct!.unit == ProductUnit.dozen &&
                   isUnitSaleForDozen) {
@@ -2899,8 +2880,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               int qty = int.tryParse(qtyController.text) ?? 0;
               if (qty <= 0) return;
               if (selectedProduct!.variants.isNotEmpty &&
-                  selectedVariant == null)
-                return;
+                  selectedVariant == null) return;
 
               // --- LOGIC FIX: Photo Handling for Mesa Dulce Edit/Add ---
               List<XFile> finalLocalFiles = [];
@@ -2941,7 +2921,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 id: isEditing ? existingItem.id : null,
                 name: selectedProduct!.name,
                 qty: qty,
-                basePrice: basePrice * qty,
+                basePrice: basePrice,
                 adjustments: double.tryParse(adjustmentsController.text) ?? 0.0,
                 customizationNotes: notesController.text.trim().isEmpty
                     ? null
@@ -2964,8 +2944,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     // 1. Core Identity
                     if (item.name != newItem.name) return false;
                     if (item.customizationJson?['variant_id'] !=
-                        newItem.customizationJson?['variant_id'])
-                      return false;
+                        newItem.customizationJson?['variant_id']) return false;
 
                     // 2. Adjustments & Price (Must match exactly to merge)
                     // basePrice here is TOTAL for the qty. We should compare UNIT price.
@@ -2988,12 +2967,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     // 4. Photos (Merge Logic: Allow merge if one is missing photos)
                     bool itemHasPhotos =
                         (item.customizationJson?['photo_url'] != null) ||
-                        (item.customizationJson?['photo_urls'] != null) ||
-                        (item.localFile != null);
+                            (item.customizationJson?['photo_urls'] != null) ||
+                            (item.localFile != null);
                     bool newHasPhotos =
                         (newItem.customizationJson?['photo_url'] != null) ||
-                        (newItem.customizationJson?['photo_urls'] != null) ||
-                        (newItem.localFile != null);
+                            (newItem.customizationJson?['photo_urls'] !=
+                                null) ||
+                            (newItem.localFile != null);
 
                     // Conflict: Both have photos -> No Merge
                     if (itemHasPhotos && newHasPhotos) return false;
@@ -3014,15 +2994,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     // If existing has photos and new doesn't, we keep existing.
                     bool newHasPhotos =
                         (newItem.customizationJson?['photo_url'] != null) ||
-                        (newItem.customizationJson?['photo_urls'] != null) ||
-                        (newItem.localFile != null);
+                            (newItem.customizationJson?['photo_urls'] !=
+                                null) ||
+                            (newItem.localFile != null);
 
                     final resolvedCustomization = newHasPhotos
                         ? newItem.customizationJson
                         : existing.customizationJson;
-                    final resolvedLocalFile = newHasPhotos
-                        ? newItem.localFile
-                        : existing.localFile;
+                    final resolvedLocalFile =
+                        newHasPhotos ? newItem.localFile : existing.localFile;
 
                     pendingItems[existingIndex] = OrderItem(
                       id: existing.id,
@@ -3078,10 +3058,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               final it = pendingItems[idx];
                               final vName =
                                   it.customizationJson?['variant_name'] ??
-                                  (it.customizationJson?['is_half_dozen'] ==
-                                          true
-                                      ? 'Media Docena'
-                                      : 'Unidad');
+                                      (it.customizationJson?['is_half_dozen'] ==
+                                              true
+                                          ? 'Media Docena'
+                                          : 'Unidad');
                               // Limpieza visual del nombre de variante (ej: size20cm -> 20cm)
                               final formattedVName = vName.startsWith('size')
                                   ? vName.replaceAll('size', '')
@@ -3092,8 +3072,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   horizontal: 8,
                                   vertical: 4,
                                 ),
-                                leading:
-                                    (it.localFile != null &&
+                                leading: (it.localFile != null &&
                                         (it.localFile as List).isNotEmpty)
                                     ? GestureDetector(
                                         onTap: () => _showImagePreview(
@@ -3341,8 +3320,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               icon: const Icon(Icons.photo_library),
                               label: const Text('Añadir Fotos al Item/Box'),
                               onPressed: () async {
-                                final pickedFiles = await picker
-                                    .pickMultiImage();
+                                final pickedFiles =
+                                    await picker.pickMultiImage();
                                 if (pickedFiles.isNotEmpty) {
                                   setDialogState(() {
                                     _selectedFiles.addAll(pickedFiles);
@@ -3423,7 +3402,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               // Comparar notas y ajustes
                               final bool notesMatch =
                                   existing.customizationNotes ==
-                                  newItem.customizationNotes;
+                                      newItem.customizationNotes;
                               // Comparar JSON (IMPORTANTE: ahora incluye photo_url si tiene foto)
                               final bool jsonMatch = mapEquals(
                                 existing.customizationJson,
@@ -3913,8 +3892,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     Text(
                       'Productos *',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                     ),
                     IconButton.filled(
                       onPressed: _addItemDialog,
@@ -3960,8 +3939,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         const microCakeName =
                             'Micro Torta (Base)'; // <-- Revisa este nombre
 
-                        final bool isSmallCake =
-                            item.name == miniCakeName ||
+                        final bool isSmallCake = item.name == miniCakeName ||
                             item.name == microCakeName;
 
                         final double weight =
@@ -3969,9 +3947,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                         // --- 2. Definir el multiplicador de extras ---
                         // Usa 0.5 si es torta chica, si no, el peso
-                        final double extraMultiplier = isSmallCake
-                            ? 0.5
-                            : weight;
+                        final double extraMultiplier =
+                            isSmallCake ? 0.5 : weight;
 
                         // --- 3. Calcular Precio Base (despejando) ---
                         final List<dynamic> extraFillingsRaw =
@@ -3984,8 +3961,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         final double extraFillingsPrice = extraFillingsRaw.fold(
                           0.0,
                           (sum, data) {
-                            final price =
-                                (data is Map
+                            final price = (data is Map
                                     ? (data['price'] as num?)?.toDouble()
                                     : null) ??
                                 0.0;
@@ -3996,8 +3972,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           sum,
                           data,
                         ) {
-                          final price =
-                              (data is Map
+                          final price = (data is Map
                                   ? (data['price'] as num?)?.toDouble()
                                   : null) ??
                               0.0;
@@ -4007,21 +3982,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           sum,
                           data,
                         ) {
-                          final price =
-                              (data is Map
+                          final price = (data is Map
                                   ? (data['price'] as num?)?.toDouble()
                                   : null) ??
                               0.0;
-                          final qty =
-                              (data is Map
+                          final qty = (data is Map
                                   ? (data['quantity'] as num?)?.toDouble()
                                   : null) ??
                               1.0;
                           return sum + (price * qty);
                         });
 
-                        final double costoExtrasTotal =
-                            extraFillingsPrice +
+                        final double costoExtrasTotal = extraFillingsPrice +
                             extrasKgPrice +
                             extrasUnitPrice;
                         final double precioCalculadoConAjusteKg =
@@ -4102,7 +4074,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                         bool isSmallCake = isPersonalizado
                             ? (baseCakeName == miniCakeName ||
-                                  baseCakeName == microCakeName)
+                                baseCakeName == microCakeName)
                             : true; // Predefinido siempre es torta chica
 
                         final double costMultiplier = isSmallCake ? 0.5 : 1.0;
@@ -4140,20 +4112,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                         final List<Map<String, dynamic>> mesaDulceItems =
                             (custom['selected_mesa_dulce_items'] as List?)
-                                ?.whereType<Map<String, dynamic>>()
-                                .toList() ??
-                            [];
+                                    ?.whereType<Map<String, dynamic>>()
+                                    .toList() ??
+                                [];
                         if (mesaDulceItems.isNotEmpty) {
-                          final mesaItemsText = mesaDulceItems
-                              .map((e) {
-                                final name = e['name'];
-                                final qty = e['quantity'];
-                                final size = e['selected_size'];
-                                return size != null
-                                    ? '$name (${size.replaceAll('size', '')}) x$qty'
-                                    : '$name x$qty';
-                              })
-                              .join(', ');
+                          final mesaItemsText = mesaDulceItems.map((e) {
+                            final name = e['name'];
+                            final qty = e['quantity'];
+                            final size = e['selected_size'];
+                            return size != null
+                                ? '$name (${size.replaceAll('size', '')}) x$qty'
+                                : '$name x$qty';
+                          }).join(', ');
                           parts.add('Mesa Dulce: $mesaItemsText');
                         }
                       }
@@ -4164,8 +4134,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         // En los Boxes, el ajuste manual PURO se guarda en el JSON
                         manualAdjustment =
                             (custom['manual_adjustment_value'] as num?)
-                                ?.toDouble() ??
-                            0.0;
+                                    ?.toDouble() ??
+                                0.0;
                       } else {
                         // En Tortas y Mesa Dulce, el 'adjustments' del item es el ajuste manual
                         manualAdjustment = item.adjustments;
@@ -4197,8 +4167,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         margin: const EdgeInsets.symmetric(vertical: 4),
                         elevation: 1,
                         child: ListTile(
-                          leading:
-                              (custom['photo_url'] != null ||
+                          leading: (custom['photo_url'] != null ||
                                   (item.localFile != null &&
                                       (item.localFile as List).isNotEmpty))
                               ? GestureDetector(
@@ -4223,15 +4192,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                     children: [
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(4),
-                                        child:
-                                            (item.localFile != null &&
+                                        child: (item.localFile != null &&
                                                 (item.localFile as List)
                                                     .isNotEmpty)
                                             ? Image.file(
                                                 File(
                                                   ((item.localFile as List)
-                                                              .first
-                                                          as XFile)
+                                                          .first as XFile)
                                                       .path,
                                                 ),
                                                 width: 50,
@@ -4630,8 +4597,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       color: highlight
           ? Theme.of(context).colorScheme.error
           : (isTotal
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.onSurface),
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.onSurface),
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),

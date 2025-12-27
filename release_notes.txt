@@ -1,7 +1,6 @@
-Release 1.3.12:
-- UI Fix: Se eliminaron los centavos (,00) en todos los precios de la app.
-- UI Fix: Ajuste en tarjeta de resumen para evitar salto de línea en "Ingreso Pendiente".
-- UI: Formulario de pedido optimizado (Checks de pago compactos y layouts mejorados).
-- Fix: Corrección de lógica de ingresos diarios y semanales (ahora coinciden con el mensual: Entregado + Pagado).
-- Fix: Botón 'Desmarcar como Pagado' disponible si un pedido ya figura pagado.
-- Backend: Migración para marcar automáticamente 'Entregados' como 'Pagados'.
+Esta versión incluye mejoras de estabilidad y correcciones importantes:
+
+[Correcciones]
+- Solucionado: Al abrir una notificación de pedido, ahora puedes volver atrás correctamente al listado de pedidos.
+- Refactorización interna: La app ahora está sincronizada con la nueva API estandarizada (Resources), mejorando la seguridad y consistencia de datos.
+- [CI] Prueba de despliegue automático (Flavor Dev).

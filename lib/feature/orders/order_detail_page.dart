@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
+
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'package:collection/collection.dart';
@@ -253,21 +253,20 @@ class OrderDetailPage extends ConsumerWidget {
                                     items: statusTranslations.keys
                                         .where((k) => k != 'unknown')
                                         .map((String value) {
-                                          final Color optionColor =
-                                              _statusInk[value] ?? Colors.grey;
-                                          return DropdownMenuItem<String>(
-                                            value: value,
-                                            child: Text(
-                                              statusTranslations[value]!,
-                                              style: TextStyle(
-                                                color: optionColor,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          );
-                                        })
-                                        .toList(),
+                                      final Color optionColor =
+                                          _statusInk[value] ?? Colors.grey;
+                                      return DropdownMenuItem<String>(
+                                        value: value,
+                                        child: Text(
+                                          statusTranslations[value]!,
+                                          style: TextStyle(
+                                            color: optionColor,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
                                     onChanged: !canEdit
                                         ? null
                                         : (String? newStatus) {
@@ -323,7 +322,8 @@ class OrderDetailPage extends ConsumerWidget {
                                         url,
                                         width: 180,
                                         fit: BoxFit.cover,
-                                        loadingBuilder: (context, child, progress) {
+                                        loadingBuilder:
+                                            (context, child, progress) {
                                           return progress == null
                                               ? child
                                               : Container(
@@ -333,20 +333,20 @@ class OrderDetailPage extends ConsumerWidget {
                                                   child: const Center(
                                                     child:
                                                         CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                        ),
+                                                      strokeWidth: 2,
+                                                    ),
                                                   ),
                                                 );
                                         },
                                         errorBuilder: (context, error, stack) =>
                                             Container(
-                                              width: 180,
-                                              color: cs.surfaceContainerHigh,
-                                              child: Icon(
-                                                Icons.broken_image,
-                                                color: cs.onSurfaceVariant,
-                                              ),
-                                            ),
+                                          width: 180,
+                                          color: cs.surfaceContainerHigh,
+                                          child: Icon(
+                                            Icons.broken_image,
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -415,7 +415,6 @@ class OrderDetailPage extends ConsumerWidget {
                                       ),
                                     )
                                   : null,
-
                               trailing: Text(
                                 currencyFormat.format(itemTotal),
                                 style: TextStyle(
@@ -531,25 +530,26 @@ class OrderDetailPage extends ConsumerWidget {
                                   )
                                 // --- BOTÓN PARA MARCAR (Si NO está pagado y hay saldo) ---
                                 : (balance > 0.01)
-                                ? FilledButton.icon(
-                                    icon: const Icon(
-                                      Icons.price_check,
-                                      size: 18,
-                                    ),
-                                    label: const Text(
-                                      'Marcar como Pagado Totalmente',
-                                    ),
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: const Color(
-                                        0xFF1E8E3E,
-                                      ), // Verde
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    onPressed: () {
-                                      _handleMarkAsPaid(context, ref, order);
-                                    },
-                                  )
-                                : const SizedBox.shrink(),
+                                    ? FilledButton.icon(
+                                        icon: const Icon(
+                                          Icons.price_check,
+                                          size: 18,
+                                        ),
+                                        label: const Text(
+                                          'Marcar como Pagado Totalmente',
+                                        ),
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: const Color(
+                                            0xFF1E8E3E,
+                                          ), // Verde
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        onPressed: () {
+                                          _handleMarkAsPaid(
+                                              context, ref, order);
+                                        },
+                                      )
+                                    : const SizedBox.shrink(),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -834,18 +834,16 @@ class OrderDetailPage extends ConsumerWidget {
         // --- 3. Leer datos (ya corrigiendo el TypeError) ---
         final List<dynamic> extraFillingsRaw =
             custom['selected_extra_fillings'] ?? [];
-        final List<Map> extraFillingsData = extraFillingsRaw
-            .whereType<Map>()
-            .toList();
+        final List<Map> extraFillingsData =
+            extraFillingsRaw.whereType<Map>().toList();
 
         final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
         final List<Map> extrasKgData = extrasKgRaw.whereType<Map>().toList();
 
         final List<dynamic> extrasUnitRaw =
             custom['selected_extras_unit'] ?? [];
-        final List<Map> extrasUnitData = extrasUnitRaw
-            .whereType<Map>()
-            .toList();
+        final List<Map> extrasUnitData =
+            extrasUnitRaw.whereType<Map>().toList();
 
         // --- 4. Calcular el Precio Base (despejando) ---
         // (Esta lógica usa el multiplicador para calcular el costo real de los extras)
@@ -904,19 +902,17 @@ class OrderDetailPage extends ConsumerWidget {
 
         // Rellenos extra (con precio * 0.5 si es Torta Chica)
         if (extraFillingsData.isNotEmpty) {
-          final extraFillingsText = extraFillingsData
-              .map((e) {
-                final name = e['name'] ?? 'Extra';
-                final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                // --- CORRECCIÓN AQUÍ ---
-                final displayedPrice =
-                    price * extraMultiplier; // Aplicar multiplicador
-                final priceText = (displayedPrice > 0)
-                    ? ' (${currencyFormat.format(displayedPrice)})'
-                    : '';
-                return '$name$priceText';
-              })
-              .join(', ');
+          final extraFillingsText = extraFillingsData.map((e) {
+            final name = e['name'] ?? 'Extra';
+            final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+            // --- CORRECCIÓN AQUÍ ---
+            final displayedPrice =
+                price * extraMultiplier; // Aplicar multiplicador
+            final priceText = (displayedPrice > 0)
+                ? ' (${currencyFormat.format(displayedPrice)})'
+                : '';
+            return '$name$priceText';
+          }).join(', ');
           details.add(
             _buildDetailRow(
               context,
@@ -929,19 +925,17 @@ class OrderDetailPage extends ConsumerWidget {
 
         // Extras por kg (con precio * 0.5 si es Torta Chica)
         if (extrasKgData.isNotEmpty) {
-          final extrasKgText = extrasKgData
-              .map((e) {
-                final name = e['name'] ?? 'Extra';
-                final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                // --- CORRECCIÓN AQUÍ ---
-                final displayedPrice =
-                    price * extraMultiplier; // Aplicar multiplicador
-                final priceText = (displayedPrice > 0)
-                    ? ' (${currencyFormat.format(displayedPrice)})'
-                    : '';
-                return '$name$priceText';
-              })
-              .join(', ');
+          final extrasKgText = extrasKgData.map((e) {
+            final name = e['name'] ?? 'Extra';
+            final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+            // --- CORRECCIÓN AQUÍ ---
+            final displayedPrice =
+                price * extraMultiplier; // Aplicar multiplicador
+            final priceText = (displayedPrice > 0)
+                ? ' (${currencyFormat.format(displayedPrice)})'
+                : '';
+            return '$name$priceText';
+          }).join(', ');
           details.add(
             _buildDetailRow(
               context,
@@ -954,18 +948,15 @@ class OrderDetailPage extends ConsumerWidget {
 
         // Extras por unidad (El precio de estos no se multiplica)
         if (extrasUnitData.isNotEmpty) {
-          final unitExtrasText = extrasUnitData
-              .map((e) {
-                final name = e['name'] ?? 'Extra';
-                final qty = (e['quantity'] as num?) ?? 1;
-                final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                final totalCost = price * (qty > 0 ? qty : 1);
-                final priceText = (totalCost > 0)
-                    ? ' (${currencyFormat.format(totalCost)})'
-                    : '';
-                return '$name (x$qty)$priceText';
-              })
-              .join(', ');
+          final unitExtrasText = extrasUnitData.map((e) {
+            final name = e['name'] ?? 'Extra';
+            final qty = (e['quantity'] as num?) ?? 1;
+            final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+            final totalCost = price * (qty > 0 ? qty : 1);
+            final priceText =
+                (totalCost > 0) ? ' (${currencyFormat.format(totalCost)})' : '';
+            return '$name (x$qty)$priceText';
+          }).join(', ');
           details.add(
             _buildDetailRow(
               context,
@@ -983,9 +974,8 @@ class OrderDetailPage extends ConsumerWidget {
               context,
               'Ajuste Adicional (fijo):',
               currencyFormat.format(item.adjustments),
-              highlight: item.adjustments > 0
-                  ? const Color(0xFF1E8E3E)
-                  : accentRed,
+              highlight:
+                  item.adjustments > 0 ? const Color(0xFF1E8E3E) : accentRed,
             ),
           );
         }
@@ -1025,27 +1015,25 @@ class OrderDetailPage extends ConsumerWidget {
         );
         final List<dynamic> extraFillingsRaw =
             custom['selected_extra_fillings'] ?? [];
-        final List<Map> extraFillingsData = extraFillingsRaw
-            .whereType<Map>()
-            .toList();
+        final List<Map> extraFillingsData =
+            extraFillingsRaw.whereType<Map>().toList();
 
         final List<dynamic> extrasKgRaw = custom['selected_extras_kg'] ?? [];
         final List<Map> extrasKgData = extrasKgRaw.whereType<Map>().toList();
 
         final List<Map<String, dynamic>> extrasUnitData =
             (custom['selected_extras_unit'] as List?)
-                ?.whereType<Map<String, dynamic>>()
-                .toList() ??
-            [];
+                    ?.whereType<Map<String, dynamic>>()
+                    .toList() ??
+                [];
 
         final List<Map<String, dynamic>> mesaDulceItems =
             (custom['selected_mesa_dulce_items'] as List?)
-                ?.whereType<Map<String, dynamic>>()
-                .toList() ??
-            [];
+                    ?.whereType<Map<String, dynamic>>()
+                    .toList() ??
+                [];
 
-        final bool hasExtras =
-            extraFillingsData.isNotEmpty ||
+        final bool hasExtras = extraFillingsData.isNotEmpty ||
             extrasKgData.isNotEmpty ||
             extrasUnitData.isNotEmpty;
 
@@ -1065,36 +1053,32 @@ class OrderDetailPage extends ConsumerWidget {
           }
 
           if (extraFillingsData.isNotEmpty) {
-            final text = extraFillingsData
-                .map((e) {
-                  final name = e['name'] ?? 'Extra';
-                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  // --- CORRECCIÓN AQUÍ ---
-                  final displayedPrice = price * costMultiplier;
-                  final priceText = (displayedPrice > 0)
-                      ? ' (${currencyFormat.format(displayedPrice)})'
-                      : '';
-                  return '$name$priceText';
-                })
-                .join(', ');
+            final text = extraFillingsData.map((e) {
+              final name = e['name'] ?? 'Extra';
+              final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+              // --- CORRECCIÓN AQUÍ ---
+              final displayedPrice = price * costMultiplier;
+              final priceText = (displayedPrice > 0)
+                  ? ' (${currencyFormat.format(displayedPrice)})'
+                  : '';
+              return '$name$priceText';
+            }).join(', ');
             details.add(
               _buildDetailRow(context, 'Extras Torta:', text, isList: true),
             );
           }
 
           if (extrasKgData.isNotEmpty) {
-            final text = extrasKgData
-                .map((e) {
-                  final name = e['name'] ?? 'Extra';
-                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  // --- CORRECCIÓN AQUÍ ---
-                  final displayedPrice = price * costMultiplier;
-                  final priceText = (displayedPrice > 0)
-                      ? ' (${currencyFormat.format(displayedPrice)})'
-                      : '';
-                  return '$name$priceText';
-                })
-                .join(', ');
+            final text = extrasKgData.map((e) {
+              final name = e['name'] ?? 'Extra';
+              final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+              // --- CORRECCIÓN AQUÍ ---
+              final displayedPrice = price * costMultiplier;
+              final priceText = (displayedPrice > 0)
+                  ? ' (${currencyFormat.format(displayedPrice)})'
+                  : '';
+              return '$name$priceText';
+            }).join(', ');
             details.add(
               _buildDetailRow(
                 context,
@@ -1106,18 +1090,16 @@ class OrderDetailPage extends ConsumerWidget {
           }
 
           if (extrasUnitData.isNotEmpty) {
-            final text = extrasUnitData
-                .map((e) {
-                  final name = e['name'] ?? 'Extra';
-                  final qty = (e['quantity'] as num?) ?? 1;
-                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  final totalCost = price * (qty > 0 ? qty : 1);
-                  final priceText = (totalCost > 0)
-                      ? ' (${currencyFormat.format(totalCost)})'
-                      : '';
-                  return '$name (x$qty)$priceText';
-                })
-                .join(', ');
+            final text = extrasUnitData.map((e) {
+              final name = e['name'] ?? 'Extra';
+              final qty = (e['quantity'] as num?) ?? 1;
+              final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+              final totalCost = price * (qty > 0 ? qty : 1);
+              final priceText = (totalCost > 0)
+                  ? ' (${currencyFormat.format(totalCost)})'
+                  : '';
+              return '$name (x$qty)$priceText';
+            }).join(', ');
             details.add(
               _buildDetailRow(
                 context,
@@ -1129,16 +1111,14 @@ class OrderDetailPage extends ConsumerWidget {
           }
 
           if (mesaDulceItems.isNotEmpty) {
-            final text = mesaDulceItems
-                .map((e) {
-                  final name = e['name'];
-                  final qty = e['quantity'];
-                  final size = e['selected_size'];
-                  return size != null
-                      ? '$name (${size.replaceAll('size', '')}) x$qty'
-                      : '$name x$qty';
-                })
-                .join(', ');
+            final text = mesaDulceItems.map((e) {
+              final name = e['name'];
+              final qty = e['quantity'];
+              final size = e['selected_size'];
+              return size != null
+                  ? '$name (${size.replaceAll('size', '')}) x$qty'
+                  : '$name x$qty';
+            }).join(', ');
             details.add(
               _buildDetailRow(context, 'Mesa Dulce:', text, isList: true),
             );
@@ -1169,56 +1149,50 @@ class OrderDetailPage extends ConsumerWidget {
           }
 
           if (extraFillingsData.isNotEmpty) {
-            final text = extraFillingsData
-                .map((e) {
-                  final name = e['name'] ?? 'Extra';
-                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  // --- CORRECCIÓN AQUÍ ---
-                  final displayedPrice =
-                      price * costMultiplier; // Siempre es 0.5 para predefinido
-                  final priceText = (displayedPrice > 0)
-                      ? ' (${currencyFormat.format(displayedPrice)})'
-                      : '';
-                  return '$name$priceText';
-                })
-                .join(', ');
+            final text = extraFillingsData.map((e) {
+              final name = e['name'] ?? 'Extra';
+              final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+              // --- CORRECCIÓN AQUÍ ---
+              final displayedPrice =
+                  price * costMultiplier; // Siempre es 0.5 para predefinido
+              final priceText = (displayedPrice > 0)
+                  ? ' (${currencyFormat.format(displayedPrice)})'
+                  : '';
+              return '$name$priceText';
+            }).join(', ');
             details.add(
               _buildDetailRow(context, 'Rellenos Extra:', text, isList: true),
             );
           }
 
           if (extrasKgData.isNotEmpty) {
-            final text = extrasKgData
-                .map((e) {
-                  final name = e['name'] ?? 'Extra';
-                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  // --- CORRECCIÓN AQUÍ ---
-                  final displayedPrice =
-                      price * costMultiplier; // Siempre es 0.5 para predefinido
-                  final priceText = (displayedPrice > 0)
-                      ? ' (${currencyFormat.format(displayedPrice)})'
-                      : '';
-                  return '$name$priceText';
-                })
-                .join(', ');
+            final text = extrasKgData.map((e) {
+              final name = e['name'] ?? 'Extra';
+              final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+              // --- CORRECCIÓN AQUÍ ---
+              final displayedPrice =
+                  price * costMultiplier; // Siempre es 0.5 para predefinido
+              final priceText = (displayedPrice > 0)
+                  ? ' (${currencyFormat.format(displayedPrice)})'
+                  : '';
+              return '$name$priceText';
+            }).join(', ');
             details.add(
               _buildDetailRow(context, 'Extras (x kg):', text, isList: true),
             );
           }
 
           if (extrasUnitData.isNotEmpty) {
-            final text = extrasUnitData
-                .map((e) {
-                  final name = e['name'] ?? 'Extra';
-                  final qty = (e['quantity'] as num?) ?? 1;
-                  final price = (e['price'] as num?)?.toDouble() ?? 0.0;
-                  final totalCost = price * (qty > 0 ? qty : 1);
-                  final priceText = (totalCost > 0)
-                      ? ' (${currencyFormat.format(totalCost)})'
-                      : '';
-                  return '$name (x$qty)$priceText';
-                })
-                .join(', ');
+            final text = extrasUnitData.map((e) {
+              final name = e['name'] ?? 'Extra';
+              final qty = (e['quantity'] as num?) ?? 1;
+              final price = (e['price'] as num?)?.toDouble() ?? 0.0;
+              final totalCost = price * (qty > 0 ? qty : 1);
+              final priceText = (totalCost > 0)
+                  ? ' (${currencyFormat.format(totalCost)})'
+                  : '';
+              return '$name (x$qty)$priceText';
+            }).join(', ');
             details.add(
               _buildDetailRow(
                 context,
@@ -1237,9 +1211,8 @@ class OrderDetailPage extends ConsumerWidget {
                 context,
                 'Ajuste Adicional (fijo):',
                 currencyFormat.format(manualAdjustment),
-                highlight: manualAdjustment > 0
-                    ? const Color(0xFF1E8E3E)
-                    : accentRed,
+                highlight:
+                    manualAdjustment > 0 ? const Color(0xFF1E8E3E) : accentRed,
               ),
             );
           }
@@ -1255,9 +1228,8 @@ class OrderDetailPage extends ConsumerWidget {
             custom['variant_name'].toString().isNotEmpty) {
           final vName = custom['variant_name'].toString();
           // Limpieza visual
-          final formatted = vName.startsWith('size')
-              ? vName.replaceFirst('size', '')
-              : vName;
+          final formatted =
+              vName.startsWith('size') ? vName.replaceFirst('size', '') : vName;
           details.add(_buildDetailRow(context, 'Variante:', formatted));
         } else if (custom['selected_size'] != null) {
           details.add(
@@ -1282,9 +1254,8 @@ class OrderDetailPage extends ConsumerWidget {
               context,
               'Ajuste:',
               currencyFormat.format(item.adjustments),
-              highlight: item.adjustments > 0
-                  ? const Color(0xFF1E8E3E)
-                  : accentRed,
+              highlight:
+                  item.adjustments > 0 ? const Color(0xFF1E8E3E) : accentRed,
             ),
           );
         }
@@ -1399,9 +1370,8 @@ class OrderDetailPage extends ConsumerWidget {
     final style = TextStyle(
       fontSize: isTotal ? 16 : 14,
       fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-      color: highlight
-          ? cs.error
-          : (isTotal ? mainTextColor : secondaryTextColor),
+      color:
+          highlight ? cs.error : (isTotal ? mainTextColor : secondaryTextColor),
     );
     // --- FIN ---
 
@@ -1449,7 +1419,7 @@ class OrderDetailPage extends ConsumerWidget {
                           child: CircularProgressIndicator(
                             value: loadingProgress.expectedTotalBytes != null
                                 ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
+                                    loadingProgress.expectedTotalBytes!
                                 : null,
                             color: cs.primary,
                           ),
@@ -1490,8 +1460,7 @@ class OrderDetailPage extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
     // --- FIN ---
 
-    final bool confirm =
-        await showDialog<bool>(
+    final bool confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Confirmar Pago Total'),
@@ -1522,9 +1491,8 @@ class OrderDetailPage extends ConsumerWidget {
     if (confirm) {
       try {
         // 1. Capturamos la orden actualizada (CORREGIDO A Order?)
-        final Order? updatedOrder = await ref
-            .read(ordersRepoProvider)
-            .markAsPaid(order.id);
+        final Order? updatedOrder =
+            await ref.read(ordersRepoProvider).markAsPaid(order.id);
 
         // 2. 🔥 CHEQUEAMOS SI NO ES NULLA ANTES DE ACTUALIZAR
         if (updatedOrder != null) {
@@ -1564,8 +1532,7 @@ class OrderDetailPage extends ConsumerWidget {
   ) async {
     final cs = Theme.of(context).colorScheme;
 
-    final bool confirm =
-        await showDialog<bool>(
+    final bool confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Confirmar Desmarcar Pago'),
@@ -1592,9 +1559,8 @@ class OrderDetailPage extends ConsumerWidget {
 
     if (confirm) {
       try {
-        final Order updatedOrder = await ref
-            .read(ordersRepoProvider)
-            .markAsUnpaid(order.id);
+        final Order updatedOrder =
+            await ref.read(ordersRepoProvider).markAsUnpaid(order.id);
 
         await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
         ref.invalidate(orderByIdProvider(order.id));
@@ -1633,9 +1599,8 @@ class OrderDetailPage extends ConsumerWidget {
       // 1. Capturamos la orden actualizada
       // (Tu repo devuelve Order? pero updateOrderStatus en el Notifier también lo hace)
       // (Asumimos que updateStatus no devuelve null si tiene éxito)
-      final Order? updatedOrder = await ref
-          .read(ordersRepoProvider)
-          .updateStatus(order.id, newStatus);
+      final Order? updatedOrder =
+          await ref.read(ordersRepoProvider).updateStatus(order.id, newStatus);
 
       if (updatedOrder != null) {
         // 2. 🔥 ACTUALIZA LA LISTA LOCAL (en vez de invalidate)
@@ -1700,9 +1665,8 @@ class OrderDetailPage extends ConsumerWidget {
               ),
               actions: <Widget>[
                 TextButton(
-                  onPressed: isDeleting
-                      ? null
-                      : () => Navigator.of(context).pop(),
+                  onPressed:
+                      isDeleting ? null : () => Navigator.of(context).pop(),
                   // --- ADAPTADO AL TEMA ---
                   child: Text(
                     'Cancelar',
