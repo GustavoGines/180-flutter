@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.one80.pasteleria.pasteleria_180_flutter">
     
     <!-- PERMISOS PARA CONTACTOS (Flutter Contacts) -->
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
