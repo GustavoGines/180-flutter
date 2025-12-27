@@ -266,11 +266,11 @@ final monthlyPendingIncomeProvider = rp.Provider.autoDispose<double>((ref) {
   double pendingIncome = 0;
   for (final o in monthOrders) {
     final s = o.status;
-    // CONDICIÓN: Confirmed OR Ready AND !isPaid (Según feedback usuario)
-    // "solo los confirmados y listos que no están marcados como pagados Aparecerían en pendiente"
-    // (Excluimos delivered por completo de esta categoría para evitar confusión)
-    final isConfirmedOrReady = s == 'confirmed' || s == 'ready';
-    if (isConfirmedOrReady && !o.isPaid) {
+    // CONDICIÓN: Confirmed OR Ready OR Delivered AND !isPaid (Según feedback usuario)
+    // "confirmed, ready, delivered que NO están pagados son Pendientes"
+    final isRelevantStatus =
+        s == 'confirmed' || s == 'ready' || s == 'delivered';
+    if (isRelevantStatus && !o.isPaid) {
       final v = o.total ?? 0;
       if (v >= 0) {
         pendingIncome += v;
