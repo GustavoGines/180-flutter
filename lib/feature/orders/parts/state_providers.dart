@@ -54,6 +54,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
 
     // Tu lógica de sort (sin cambios)
     const statusOrder = {
+      'pending': 0, // 'pending' aparece primero
       'confirmed': 1,
       'ready': 2,
       'delivered': 3,
@@ -134,6 +135,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
 
     // Lógica de sort (copiada de tu 'build')
     const statusOrder = {
+      'pending': 0,
       'confirmed': 1,
       'ready': 2,
       'delivered': 3,
@@ -169,6 +171,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
 
     // Lógica de sort (copiada de tu 'build')
     const statusOrder = {
+      'pending': 0,
       'confirmed': 1,
       'ready': 2,
       'delivered': 3,
@@ -245,8 +248,9 @@ final monthlyIncomeProvider = rp.Provider.autoDispose<double>((ref) {
 
   double ingresosMes = 0;
   for (final o in monthOrders) {
-    // CONDICIÓN: Status 'delivered' AND isPaid == true
-    if (o.status == 'delivered' && o.isPaid) {
+    // CONDICIÓN: Status NO cancelado AND isPaid == true
+    // (Abarca confirmed, ready, delivered si están pagados)
+    if (o.status != 'canceled' && o.status != 'unknown' && o.isPaid) {
       final v = o.total ?? 0;
       if (v >= 0) {
         ingresosMes += v;
@@ -267,9 +271,9 @@ final monthlyPendingIncomeProvider = rp.Provider.autoDispose<double>((ref) {
   for (final o in monthOrders) {
     final s = o.status;
     // CONDICIÓN: Confirmed OR Ready OR Delivered AND !isPaid (Según feedback usuario)
-    // "confirmed, ready, delivered que NO están pagados son Pendientes"
+    // "pending, confirmed, ready, delivered que NO están pagados son Pendientes"
     final isRelevantStatus =
-        s == 'confirmed' || s == 'ready' || s == 'delivered';
+        s == 'pending' || s == 'confirmed' || s == 'ready' || s == 'delivered';
     if (isRelevantStatus && !o.isPaid) {
       final v = o.total ?? 0;
       if (v >= 0) {

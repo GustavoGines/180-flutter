@@ -1,6 +1,6 @@
-Esta versión incluye mejoras de estabilidad y correcciones importantes:
+Esta versión incluye lo necesario para la integración con la Inteligencia Artificial (n8n):
 
-[Correcciones]
-- Solucionado: Al abrir una notificación de pedido, ahora puedes volver atrás correctamente al listado de pedidos.
-- Refactorización interna: La app ahora está sincronizada con la nueva API estandarizada (Resources), mejorando la seguridad y consistencia de datos.
-- [CI] Prueba de despliegue automático (Flavor Dev).
+[Nuevas Funciones]
+- Nuevo Estado de Pedido "**Pendiente**": Ahora la aplicación reconoce e interpreta correctamente los pedidos ingresados automáticamente por la Inteligencia Artificial.
+- Diferenciación Visual: Los pedidos pendientes se destacan en la lista con color Amarillo y se ubican siempre al tope para su rápida revisión.
+- Métrica Financiera: Los pedidos pendientes ahora suman correctamente a las estadísticas de "Ingresos Pendientes" en la vista superior de la app.

@@ -1467,7 +1467,21 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             // -----------------------------------------------------
 
             return AlertDialog(
-              title: Text(isEditing ? 'Editar Item Box' : 'Añadir Item Box'),
+              title: Row(
+                children: [
+                  if (!isEditing)
+                    IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                          _addItemDialog();
+                        }),
+                  Expanded(
+                    child:
+                        Text(isEditing ? 'Editar Item Box' : 'Añadir Item Box'),
+                  ),
+                ],
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1957,24 +1971,21 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
                     };
 
-                    // --- LOGIC FIX: PRIMARY PHOTO FOR MAIN LIST (BOX) ---
-                    String? primaryPhotoUrl;
-                    List<Object>? primaryLocalFiles;
-
+                    // --- LOGIC FIX: Gather ALL local files for Smart Merge ---
+                    List<Object> finalLocalFiles = [];
                     if (allImageUrls.isNotEmpty) {
-                      final firstUrl = allImageUrls.first;
-                      if (firstUrl.startsWith('placeholder_')) {
-                        final file = _filesToUpload[firstUrl];
-                        if (file != null) {
-                          primaryLocalFiles = [file];
+                      for (var url in allImageUrls) {
+                        if (url.startsWith('placeholder_')) {
+                          final file = _filesToUpload[url];
+                          if (file != null) {
+                            finalLocalFiles.add(file);
+                          }
                         }
-                      } else {
-                        primaryPhotoUrl = firstUrl;
                       }
                     }
-                    if (primaryPhotoUrl != null) {
-                      customization['photo_url'] = primaryPhotoUrl;
-                    }
+
+                    // Primary URL logic (for backward compat) handled above in loop or primarily via photo_urls
+                    // (Smart merge handles both)
 
                     customization.removeWhere(
                       (key, value) => (value is List && value.isEmpty),
@@ -1989,14 +2000,16 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       customizationNotes:
                           adjustmentNotes.isEmpty ? null : adjustmentNotes,
                       customizationJson: customization,
-                      localFile: primaryLocalFiles,
+                      localFile:
+                          finalLocalFiles.isNotEmpty ? finalLocalFiles : null,
                     );
 
                     _updateItemsAndRecalculate(() {
                       if (isEditing) {
                         _items[itemIndex!] = newItem;
                       } else {
-                        _items.add(newItem);
+                        // --- SMART MERGE ---
+                        _smartMergeItem(_items, newItem);
                       }
                     });
 
@@ -2353,7 +2366,19 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             // --- Fin de re-definición de helpers ---
 
             return AlertDialog(
-              title: Text(isEditing ? 'Editar Torta' : 'Añadir Torta'),
+              title: Row(
+                children: [
+                  if (!isEditing)
+                    IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                          _addItemDialog();
+                        }),
+                  Expanded(
+                      child: Text(isEditing ? 'Editar Torta' : 'Añadir Torta')),
+                ],
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -2671,28 +2696,21 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
                     };
 
-                    // --- LOGIC FIX: PRIMARY PHOTO FOR MAIN LIST ---
-                    // Determine primary photo for thumbnail display
-                    // Supports 'photo_url' (single) and 'localFile' (List<XFile>)
-                    String? primaryPhotoUrl;
-                    List<Object>? primaryLocalFiles;
-
+                    // --- LOGIC FIX: Gather ALL local files for Smart Merge ---
+                    List<Object> finalLocalFiles = [];
                     if (allImageUrls.isNotEmpty) {
-                      final firstUrl = allImageUrls.first;
-                      if (firstUrl.startsWith('placeholder_')) {
-                        // It's a local file in _filesToUpload
-                        final file = _filesToUpload[firstUrl];
-                        if (file != null) {
-                          primaryLocalFiles = [file];
+                      for (var url in allImageUrls) {
+                        if (url.startsWith('placeholder_')) {
+                          final file = _filesToUpload[url];
+                          if (file != null) {
+                            finalLocalFiles.add(file);
+                          }
                         }
-                      } else {
-                        // It's a remote URL
-                        primaryPhotoUrl = firstUrl;
                       }
                     }
-                    if (primaryPhotoUrl != null) {
-                      customization['photo_url'] = primaryPhotoUrl;
-                    }
+
+                    // Primary URL for single-field backward compatibility (if needed)
+                    // (Smart merge handles photo_urls list primarily)
 
                     customization.removeWhere(
                       (key, value) => (value is List && value.isEmpty),
@@ -2708,14 +2726,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           adjustmentNotes.isEmpty ? null : adjustmentNotes,
                       customizationJson: customization,
                       localFile:
-                          primaryLocalFiles, // <-- Attach local file for preview
+                          finalLocalFiles.isNotEmpty ? finalLocalFiles : null,
                     );
 
                     _updateItemsAndRecalculate(() {
                       if (isEditing) {
+                        // Editing specific item -> Replace directly (no merge usually, or maybe yes?)
+                        // Usually edit replaces that specific slot. Merge is for ADD new.
                         _items[itemIndex!] = newItem;
                       } else {
-                        _items.add(newItem);
+                        // Add New -> Attempt Smart Merge
+                        _smartMergeItem(_items, newItem);
                       }
                     });
 
@@ -2824,7 +2845,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       // La lógica actual de Mesa Dulce es "Una sola foto" (o al menos UX para una).
       // Si hay URL remota y no hay local, la mostramos.
       if (existingItem.customizationJson?['photo_url'] != null) {
-        _existingRemoteUrl = existingItem.customizationJson!['photo_url'];
+        final url = existingItem.customizationJson!['photo_url'];
+        // Ignore placeholders as they are local files
+        if (!url.startsWith('placeholder_')) {
+          _existingRemoteUrl = url;
+        }
       }
     }
 
@@ -2940,83 +2965,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 } else {
                   // --- MERGE LOGIC START ---
                   // Check if identical exists
-                  int existingIndex = pendingItems.indexWhere((item) {
-                    // 1. Core Identity
-                    if (item.name != newItem.name) return false;
-                    if (item.customizationJson?['variant_id'] !=
-                        newItem.customizationJson?['variant_id']) return false;
-
-                    // 2. Adjustments & Price (Must match exactly to merge)
-                    // basePrice here is TOTAL for the qty. We should compare UNIT price.
-                    // But calculating unit price from totals is risky if floating point.
-                    // Instead, check if the config that DERIVES price is same.
-                    // The newItem.basePrice is (unitBase * qty).
-                    // item.basePrice is (unitBase * item.qty).
-                    // So we can check if (item.basePrice / item.qty) ~= (newItem.basePrice / newItem.qty).
-                    double itemUnit = item.basePrice / item.qty;
-                    double newUnit = newItem.basePrice / newItem.qty;
-                    if ((itemUnit - newUnit).abs() > 0.01) return false;
-
-                    if (item.adjustments != 0 || newItem.adjustments != 0)
-                      return false;
-
-                    // 3. Customization Notes
-                    if (item.customizationNotes != newItem.customizationNotes)
-                      return false;
-
-                    // 4. Photos (Merge Logic: Allow merge if one is missing photos)
-                    bool itemHasPhotos =
-                        (item.customizationJson?['photo_url'] != null) ||
-                            (item.customizationJson?['photo_urls'] != null) ||
-                            (item.localFile != null);
-                    bool newHasPhotos =
-                        (newItem.customizationJson?['photo_url'] != null) ||
-                            (newItem.customizationJson?['photo_urls'] !=
-                                null) ||
-                            (newItem.localFile != null);
-
-                    // Conflict: Both have photos -> No Merge
-                    if (itemHasPhotos && newHasPhotos) return false;
-
-                    return true;
-                  });
-
-                  if (existingIndex != -1) {
-                    // Update existing
-                    final existing = pendingItems[existingIndex];
-                    final newQty = existing.qty + newItem.qty;
-                    // Recalculate total base price
-                    double itemUnit = existing.basePrice / existing.qty;
-                    final newBasePrice = itemUnit * newQty;
-
-                    // Determine which photo/customization to keep
-                    // If new item has photos, it overrides (or populates) the existing one.
-                    // If existing has photos and new doesn't, we keep existing.
-                    bool newHasPhotos =
-                        (newItem.customizationJson?['photo_url'] != null) ||
-                            (newItem.customizationJson?['photo_urls'] !=
-                                null) ||
-                            (newItem.localFile != null);
-
-                    final resolvedCustomization = newHasPhotos
-                        ? newItem.customizationJson
-                        : existing.customizationJson;
-                    final resolvedLocalFile =
-                        newHasPhotos ? newItem.localFile : existing.localFile;
-
-                    pendingItems[existingIndex] = OrderItem(
-                      id: existing.id,
-                      name: existing.name,
-                      qty: newQty,
-                      basePrice: newBasePrice,
-                      adjustments: 0.0,
-                      customizationNotes: existing.customizationNotes,
-                      customizationJson: resolvedCustomization,
-                      localFile: resolvedLocalFile,
-                    );
-                  } else {
-                    pendingItems.add(newItem);
-                  }
+                  // --- SMART MERGE LOGIC (Using new Helper) ---
+                  _smartMergeItem(pendingItems, newItem);
+                  // --- MERGE LOGIC END ---
                   // --- MERGE LOGIC END ---
                   // Resetear formulario para siguiente item
                   qtyController.text = '1';
@@ -3031,8 +2982,23 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             }
 
             return AlertDialog(
-              title: Text(
-                isEditing ? 'Editar Item Mesa Dulce' : 'Mesa Dulce (Carrito)',
+              title: Row(
+                children: [
+                  if (!isEditing)
+                    IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                          _addItemDialog();
+                        }),
+                  Expanded(
+                    child: Text(
+                      isEditing
+                          ? 'Editar Item Mesa Dulce'
+                          : 'Mesa Dulce (Carrito)',
+                    ),
+                  ),
+                ],
               ),
               content: SizedBox(
                 width: double.maxFinite,
@@ -3056,6 +3022,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 const Divider(height: 1),
                             itemBuilder: (ctx, idx) {
                               final it = pendingItems[idx];
+                              // Fallback variant name logic
                               final vName =
                                   it.customizationJson?['variant_name'] ??
                                       (it.customizationJson?['is_half_dozen'] ==
@@ -3066,49 +3033,76 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               final formattedVName = vName.startsWith('size')
                                   ? vName.replaceAll('size', '')
                                   : vName;
-                              return ListTile(
-                                dense: true,
-                                contentPadding: const EdgeInsets.symmetric(
+
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                   vertical: 4,
                                 ),
-                                leading: (it.localFile != null &&
-                                        (it.localFile as List).isNotEmpty)
-                                    ? GestureDetector(
-                                        onTap: () => _showImagePreview(
-                                          context,
-                                          (it.localFile as List).first,
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                          child: Image.file(
-                                            File(
-                                              ((it.localFile as List).first
-                                                      as XFile)
-                                                  .path,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          // --- COLUMNA DE FOTOS ---
+                                          if (it.localFile != null &&
+                                              (it.localFile as List).isNotEmpty)
+                                            Container(
+                                              margin: const EdgeInsets.only(
+                                                  right: 8),
+                                              constraints: const BoxConstraints(
+                                                  maxWidth: 130),
+                                              child: Wrap(
+                                                spacing: 4,
+                                                runSpacing: 4,
+                                                children: _buildCompactImageRow(
+                                                  context,
+                                                  it.localFile as List<Object>,
+                                                ),
+                                              ),
                                             ),
-                                            width: 40,
-                                            height: 40,
-                                            fit: BoxFit.cover,
+                                          // --- DETALLES ---
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  '${it.name} ($formattedVName)',
+                                                  style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 13),
+                                                ),
+                                                Text(
+                                                  '${it.qty} x \$${it.basePrice.toStringAsFixed(0)}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[700],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                      )
-                                    : null,
-                                title: Text('${it.name} ($formattedVName)'),
-                                subtitle: Text(
-                                  '${it.qty} x \$${it.basePrice.toStringAsFixed(0)}',
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(
-                                    Icons.delete,
-                                    size: 20,
-                                    color: Colors.red,
-                                  ),
-                                  onPressed: () => setDialogState(
-                                    () => pendingItems.removeAt(idx),
-                                  ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        size: 20,
+                                        color: Colors.red,
+                                      ),
+                                      onPressed: () {
+                                        setDialogState(() {
+                                          pendingItems.removeAt(idx);
+                                        });
+                                      },
+                                    ),
+                                  ],
                                 ),
                               );
                             },
@@ -3117,7 +3111,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: Padding(
-                          padding: const EdgeInsets.only(top: 5, bottom: 5),
+                          padding: const EdgeInsets.only(top: 2, bottom: 2),
                           child: Text(
                             'Total Carrito: \$${pendingItems.fold<double>(0, (sum, item) => sum + (item.basePrice * item.qty) + item.adjustments).toStringAsFixed(0)}',
                             style: const TextStyle(
@@ -3134,6 +3128,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     // --- FORMULARIO DE SELECCIÓN ---
                     Flexible(
                       child: SingleChildScrollView(
+                        padding: const EdgeInsets.only(top: 8),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -3161,6 +3156,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               }),
                               decoration: const InputDecoration(
                                 labelText: 'Producto',
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                  vertical: 8,
+                                  horizontal: 10,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -3186,25 +3186,49 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                     labelText: 'Variante',
                                   ),
                                 )
-                              else if (selectedProduct!.allowHalfDozen)
-                                SwitchListTile(
-                                  title: const Text('Media Docena'),
-                                  value: isHalfDozen,
-                                  onChanged: (v) => setDialogState(() {
-                                    isHalfDozen = v;
-                                    if (v) isUnitSaleForDozen = false;
-                                    calculateCurrentItemPrice();
-                                  }),
-                                ),
-                              if (selectedProduct!.unit == ProductUnit.dozen &&
-                                  !isHalfDozen)
-                                SwitchListTile(
-                                  title: const Text('Venta por Unidad'),
-                                  value: isUnitSaleForDozen,
-                                  onChanged: (v) => setDialogState(() {
-                                    isUnitSaleForDozen = v;
-                                    calculateCurrentItemPrice();
-                                  }),
+                              else if (selectedProduct!.allowHalfDozen ||
+                                  selectedProduct!.unit == ProductUnit.dozen)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 8.0),
+                                  child: Row(
+                                    children: [
+                                      if (selectedProduct!.allowHalfDozen) ...[
+                                        const Text('Media Doc.',
+                                            style: TextStyle(fontSize: 14)),
+                                        Transform.scale(
+                                          scale: 0.8,
+                                          child: Switch(
+                                            value: isHalfDozen,
+                                            onChanged: (v) =>
+                                                setDialogState(() {
+                                              isHalfDozen = v;
+                                              if (v) isUnitSaleForDozen = false;
+                                              calculateCurrentItemPrice();
+                                            }),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      if (selectedProduct!.unit ==
+                                              ProductUnit.dozen &&
+                                          !isHalfDozen) ...[
+                                        const Text('Unidad',
+                                            style: TextStyle(fontSize: 14)),
+                                        Transform.scale(
+                                          scale: 0.8,
+                                          child: Switch(
+                                            value: isUnitSaleForDozen,
+                                            onChanged: (v) =>
+                                                setDialogState(() {
+                                              isUnitSaleForDozen = v;
+                                              calculateCurrentItemPrice();
+                                            }),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
                                 ),
                             ],
                             Row(
@@ -3380,54 +3404,41 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             if (newItem.localFile != null &&
                                 (newItem.localFile as List).isNotEmpty) {
                               final files = newItem.localFile as List<XFile>;
-                              // Usamos la primera foto como la principal para 'photo_url'
-                              final file = files.first;
-                              final String key =
-                                  'photo_${DateTime.now().microsecondsSinceEpoch}';
+                              final List<String> placeholderKeys = [];
 
-                              _filesToUpload[key] = file;
+                              for (var file in files) {
+                                // FIX: Prefijo correcto 'placeholder_' para que el backend lo detecte
+                                final String key =
+                                    'placeholder_${DateTime.now().microsecondsSinceEpoch}_${file.name}';
+                                _filesToUpload[key] = file;
+                                placeholderKeys.add(key);
+                              }
 
-                              // Actualizar el JSON del item para incluir la referencia
+                              // Actualizar el JSON del item para incluir la referencia (ARRAY)
                               if (newItem.customizationJson != null) {
-                                newItem.customizationJson!['photo_url'] = key;
+                                // Preservar URLs remotas existentes si las hubiera
+                                final existingUrls =
+                                    newItem.customizationJson!['photo_urls'];
+                                List<String> currentList = [];
+                                if (existingUrls is List) {
+                                  currentList = List<String>.from(existingUrls);
+                                }
+
+                                currentList.addAll(placeholderKeys);
+
+                                // Guardar como 'photo_urls' (plural, array)
+                                newItem.customizationJson!['photo_urls'] =
+                                    currentList;
+
+                                // Legado: mantener photo_url singular con la primera para compatibilidad si fuera necesario
+                                if (currentList.isNotEmpty) {
+                                  newItem.customizationJson!['photo_url'] =
+                                      currentList.first;
+                                }
                               }
                             }
-
-                            // Buscar si ya existe un item idéntico en la lista principal
-                            final existingIndex = _items.indexWhere((existing) {
-                              final bool nameMatch =
-                                  existing.name == newItem.name;
-                              final bool priceMatch =
-                                  existing.basePrice == newItem.basePrice;
-                              // Comparar notas y ajustes
-                              final bool notesMatch =
-                                  existing.customizationNotes ==
-                                      newItem.customizationNotes;
-                              // Comparar JSON (IMPORTANTE: ahora incluye photo_url si tiene foto)
-                              final bool jsonMatch = mapEquals(
-                                existing.customizationJson,
-                                newItem.customizationJson,
-                              );
-                              final bool adjMatch =
-                                  existing.adjustments == newItem.adjustments;
-
-                              return nameMatch &&
-                                  priceMatch &&
-                                  notesMatch &&
-                                  adjMatch &&
-                                  jsonMatch;
-                            });
-
-                            if (existingIndex != -1) {
-                              // MERGE: Sumar cantidad al existente
-                              final existing = _items[existingIndex];
-                              _items[existingIndex] = existing.copyWith(
-                                qty: existing.qty + newItem.qty,
-                              );
-                            } else {
-                              // ADD: Agregar nuevo
-                              _items.add(newItem);
-                            }
+                            // 4. Agregar usando Smart Merge para evitar duplicados en la lista general
+                            _smartMergeItem(_items, newItem);
                           }
                         });
                         Navigator.pop(context);
@@ -3471,18 +3482,31 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
       );
     } else {
-      // FIX: Cast correcto a XFile y uso de File(path)
-      // Soporta tanto File como XFile para evitar errores
-      final String path = imageSource is XFile
-          ? imageSource.path
-          : (imageSource is File ? imageSource.path : imageSource.toString());
-
-      imageWidget = Image.file(
-        File(path),
-        height: 80,
-        width: 80,
-        fit: BoxFit.cover,
-      );
+      // FIX: Web Compatibility Check
+      if (kIsWeb) {
+        // En Web, transformamos el XFile (o File path) a network image (Blob URL)
+        final String path = imageSource is XFile
+            ? imageSource.path
+            : (imageSource is File ? imageSource.path : imageSource.toString());
+        imageWidget = Image.network(
+          path,
+          height: 80,
+          width: 80,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
+        );
+      } else {
+        // En Móvil/Desktop, usamos File IO
+        final String path = imageSource is XFile
+            ? imageSource.path
+            : (imageSource is File ? imageSource.path : imageSource.toString());
+        imageWidget = Image.file(
+          File(path),
+          height: 80,
+          width: 80,
+          fit: BoxFit.cover,
+        );
+      }
     }
 
     return Stack(
@@ -3528,15 +3552,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           alignment: Alignment.center,
           children: [
             InteractiveViewer(
-              child: (imageSource is XFile || imageSource is File)
-                  ? Image.file(
-                      File(
-                        imageSource is XFile
-                            ? imageSource.path
-                            : (imageSource as File).path,
-                      ),
-                    )
-                  : Image.network(imageSource as String),
+              child: _buildPreviewImage(imageSource),
             ),
             Positioned(
               top: 40,
@@ -3553,6 +3569,22 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ),
       ),
     );
+  }
+
+  Widget _buildPreviewImage(dynamic imageSource) {
+    // 1. Si es XFile o File (Local)
+    if (imageSource is XFile || imageSource is File) {
+      final String path =
+          imageSource is XFile ? imageSource.path : (imageSource as File).path;
+
+      if (kIsWeb) {
+        return Image.network(path);
+      } else {
+        return Image.file(File(path));
+      }
+    }
+    // 2. Si es String (URL Remota)
+    return Image.network(imageSource as String);
   }
 
   // --- FUNCIÓN EDITAR ITEM ROUTER (sin cambios) ---
@@ -4166,123 +4198,255 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 4),
                         elevation: 1,
-                        child: ListTile(
-                          leading: (custom['photo_url'] != null ||
-                                  (item.localFile != null &&
-                                      (item.localFile as List).isNotEmpty))
-                              ? GestureDetector(
-                                  onTap: () {
-                                    // Determinar fuente de imagen para preview
-                                    dynamic imageSource;
-                                    if (item.localFile != null &&
-                                        (item.localFile as List).isNotEmpty) {
-                                      // Prioridad a local
-                                      imageSource =
-                                          (item.localFile as List).first;
-                                    } else {
-                                      // Fallback a URL
-                                      imageSource = custom['photo_url'];
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // --- COLUMNA DE IMÁGENES (Apiladas verticalmente) ---
+                              Builder(
+                                builder: (context) {
+                                  // 1. Recolectar todas las fuentes de imagen
+                                  final List<dynamic> allImages = [];
+
+                                  // Prioridad: Archivos locales
+                                  if (item.localFile != null &&
+                                      (item.localFile as List).isNotEmpty) {
+                                    allImages.addAll(item.localFile as List);
+                                  }
+
+                                  // Secundario: URL remota (si existe)
+                                  if (custom['photo_url'] != null) {
+                                    final url = custom['photo_url'];
+                                    // Ignore placeholders as they are local files
+                                    if (!url.startsWith('placeholder_')) {
+                                      allImages.add(url);
                                     }
-                                    if (imageSource != null) {
-                                      _showImagePreview(context, imageSource);
-                                    }
-                                  },
-                                  child: Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(4),
-                                        child: (item.localFile != null &&
-                                                (item.localFile as List)
-                                                    .isNotEmpty)
-                                            ? Image.file(
-                                                File(
-                                                  ((item.localFile as List)
-                                                          .first as XFile)
-                                                      .path,
-                                                ),
-                                                width: 50,
-                                                height: 50,
-                                                fit: BoxFit.cover,
-                                              )
-                                            : Image.network(
-                                                custom['photo_url'],
-                                                width: 50,
-                                                height: 50,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) =>
-                                                    const Icon(Icons.image),
-                                              ),
-                                      ),
-                                      Positioned(
-                                        bottom: -6,
-                                        right: -6,
-                                        child: CircleAvatar(
-                                          radius: 10,
-                                          backgroundColor: Theme.of(
-                                            context,
-                                          ).colorScheme.tertiary,
-                                          child: Text(
-                                            '${item.qty}',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.onTertiary,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
+                                  }
+
+                                  // CASO A: No hay imágenes -> Mostrar Avatar con Cantidad
+                                  if (allImages.isEmpty) {
+                                    return CircleAvatar(
+                                      backgroundColor: Theme.of(context)
+                                          .colorScheme
+                                          .tertiaryContainer,
+                                      child: Text(
+                                        '${item.qty}',
+                                        style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onTertiaryContainer,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
+                                    );
+                                  }
+
+                                  // CASO B: Hay imágenes -> Mostrar FILA horizontal (Max 3)
+                                  // para evitar altura excesiva.
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      for (int i = 0;
+                                          i < allImages.length && i < 3;
+                                          i++) ...[
+                                        if (i > 0)
+                                          const SizedBox(
+                                              width: 4), // Espacio horizontal
+
+                                        GestureDetector(
+                                          onTap: () => _showImagePreview(
+                                              context, allImages[i]),
+                                          child: Stack(
+                                            children: [
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                                child: (allImages[i] is XFile ||
+                                                        allImages[i] is File)
+                                                    ? (kIsWeb
+                                                        ? Image.network(
+                                                            (allImages[i]
+                                                                    is XFile)
+                                                                ? (allImages[i]
+                                                                        as XFile)
+                                                                    .path
+                                                                : (allImages[i]
+                                                                        as File)
+                                                                    .path,
+                                                            width: 50,
+                                                            height: 50,
+                                                            fit: BoxFit.cover,
+                                                            errorBuilder: (_,
+                                                                    __, ___) =>
+                                                                const Icon(Icons
+                                                                    .broken_image),
+                                                          )
+                                                        : Image.file(
+                                                            File((allImages[i]
+                                                                    is XFile
+                                                                ? (allImages[i]
+                                                                        as XFile)
+                                                                    .path
+                                                                : (allImages[i]
+                                                                        as File)
+                                                                    .path)),
+                                                            width: 50,
+                                                            height: 50,
+                                                            fit: BoxFit.cover,
+                                                          ))
+                                                    : Image.network(
+                                                        allImages[i] as String,
+                                                        width: 50,
+                                                        height: 50,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (_, __,
+                                                                ___) =>
+                                                            const Icon(Icons
+                                                                .broken_image),
+                                                      ),
+                                              ),
+                                              // Cantidad Batch (solo en la primera)
+                                              if (i == 0 && item.qty > 1)
+                                                Positioned(
+                                                  bottom: 0,
+                                                  right: 0,
+                                                  child: Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 4,
+                                                        vertical: 1),
+                                                    decoration: BoxDecoration(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .secondary,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              4),
+                                                    ),
+                                                    child: Text(
+                                                      'x${item.qty}',
+                                                      style: TextStyle(
+                                                        color: Theme.of(context)
+                                                            .colorScheme
+                                                            .onSecondary,
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              // Overlay "+N" si es la 3ra imagen y hay más
+                                              if (i == 2 &&
+                                                  allImages.length > 3)
+                                                Positioned.fill(
+                                                  child: Container(
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black
+                                                          .withOpacity(0.5),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              4),
+                                                    ),
+                                                    alignment: Alignment.center,
+                                                    child: Text(
+                                                      '+${allImages.length - 2}', // Muestra +X (restando las 2 primeras visibles)
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 12),
+                              // --- DETALLES DEL ITEM ---
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => _editItemDialogRouter(index),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.name,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                      if (details.isNotEmpty)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 4.0),
+                                          child: Text(
+                                            details,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                          ),
+                                        )
+                                      else
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 4.0),
+                                          child: Text(
+                                            'Precio Base: ${_currencyFormat.format(item.basePrice)}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                          ),
+                                        ),
                                     ],
                                   ),
-                                )
-                              : CircleAvatar(
-                                  backgroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.tertiaryContainer,
-                                  child: Text(
-                                    '${item.qty}',
-                                    style: TextStyle(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onTertiaryContainer,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                          title: Text(item.name),
-                          subtitle: Text(
-                            details.isNotEmpty
-                                ? details
-                                : 'Precio Base: ${_currencyFormat.format(item.basePrice)}',
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _currencyFormat.format(
-                                  item.finalUnitPrice * item.qty,
-                                ),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.redAccent,
-                                ),
-                                onPressed: () => _updateItemsAndRecalculate(
-                                  () => _items.removeAt(index),
-                                ),
-                                tooltip: 'Eliminar item',
+                              // --- PRECIO Y BOTÓN ELIMINAR ---
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    _currencyFormat.format(
+                                      item.finalUnitPrice * item.qty,
+                                    ),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.redAccent,
+                                    ),
+                                    onPressed: () => _updateItemsAndRecalculate(
+                                      () => _items.removeAt(index),
+                                    ),
+                                    tooltip: 'Eliminar item',
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                          onTap: () => _editItemDialogRouter(index),
-                          dense: true,
                         ),
                       );
                     },
@@ -4416,29 +4580,53 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   }
 
   // --- 12. FUNCIÓN NUEVA: MOSTRAR MODAL DE DIRECCIONES ---
-  void _showAddAddressDialog() {
+  Future<void> _showAddAddressDialog() async {
     if (_selectedClient == null) return;
 
-    showModalBottomSheet(
+    final int clientId = _selectedClient!.id;
+
+    await showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Permite que el modal sea alto
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
-        // Usamos el widget que ya creamos y probamos
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom,
           ),
-          // Envuelve el diálogo en un contenedor con bordes redondeados
           child: ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: AddressFormDialog(clientId: _selectedClient!.id),
+            child: AddressFormDialog(clientId: clientId),
           ),
         );
       },
     );
+
+    // Al cerrar el modal, refrescar los datos del cliente para ver la nueva dirección
+    if (!mounted) return;
+
+    // Invalida el provider global para asegurar que futuros usos traigan data fresca
+    ref.invalidate(clientDetailsProvider(clientId));
+
+    // Trae la data fresca manualmente para actualizar el estado local
+    try {
+      final refreshed =
+          await ref.read(clientsRepoProvider).getClientById(clientId);
+      if (refreshed != null && mounted) {
+        setState(() {
+          _selectedClient = refreshed;
+          // Opcional: Auto-seleccionar la última dirección agregada
+          if (refreshed.addresses.isNotEmpty) {
+            // Podríamos buscar la de ID más alto o similar
+            // _selectedAddressId = refreshed.addresses.last.id;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error refrescando cliente: $e');
+    }
   }
 
   // --- WIDGET RESUMEN Y GUARDAR (sin cambios) ---
@@ -4620,6 +4808,247 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         _selectedClient = null;
         _selectedAddressId = null; // <-- 14. LIMPIAR DIRECCIÓN
       });
+    }
+  }
+
+  // --- HELPER DE UI: FILA DE IMAGENES COMPACTA (Para Pending List) ---
+  List<Widget> _buildCompactImageRow(
+      BuildContext context, List<Object> images) {
+    // Máximo 3 elementos visibles (2 fotos + 1 indicador, o 3 fotos)
+    const int maxVisible = 3;
+    final int totalCount = images.length;
+    final List<Widget> widgets = [];
+
+    for (int i = 0; i < totalCount; i++) {
+      if (widgets.length >= maxVisible) break;
+
+      // Si es el último slot y quedan más imágenes, mostrar +N
+      if (widgets.length == maxVisible - 1 && totalCount > maxVisible) {
+        final remaining = totalCount - (maxVisible - 1);
+        widgets.add(
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Center(
+              child: Text(
+                '+$remaining',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+        );
+      } else {
+        // Mostrar imagen normal
+        final imageSource = images[i];
+        widgets.add(
+          GestureDetector(
+            onTap: () => _showImagePreview(context, imageSource),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: _buildSafeImageWidget(imageSource, 40, 40),
+            ),
+          ),
+        );
+      }
+    }
+    return widgets;
+  }
+
+  // --- SMART MERGE LOGIC (Centralized) ---
+  // Returns TRUE if merged, FALSE if added as new (caller might not care, but useful)
+  // This modifies 'targetList' in place.
+  bool _smartMergeItem(List<OrderItem> targetList, OrderItem newItem) {
+    int existingIndex = targetList.indexWhere((item) {
+      // 1. Core Identity (Name & Variant)
+      if (item.name != newItem.name) return false;
+      if (item.customizationJson?['variant_id'] !=
+          newItem.customizationJson?['variant_id']) return false;
+
+      // 2. Adjustments & Price (Must match exactly to merge)
+      // Check if Unit Price is effectively the same
+      double itemUnit = item.qty > 0 ? item.basePrice / item.qty : 0;
+      double newUnit = newItem.qty > 0 ? newItem.basePrice / newItem.qty : 0;
+      if ((itemUnit - newUnit).abs() > 0.01) return false;
+
+      if (item.adjustments != newItem.adjustments) return false;
+
+      // 3. Deep check of crucial Customization Fields (Fillings, Sizes, etc.)
+      final c1 = item.customizationJson ?? {};
+      final c2 = newItem.customizationJson ?? {};
+
+      // Helper to compare lists (like fillings) regardless of order
+      // FIX: Treat null and empty list as equivalent
+      bool listEquals(List? l1, List? l2) {
+        final list1 = l1 ?? [];
+        final list2 = l2 ?? [];
+        if (list1.isEmpty && list2.isEmpty) return true;
+
+        if (list1.length != list2.length) return false;
+        final s1 = list1.map((e) => e.toString()).toSet();
+        final s2 = list2.map((e) => e.toString()).toSet();
+        return s1.containsAll(s2) && s2.containsAll(s1);
+      }
+
+      if (!listEquals(c1['selected_fillings'], c2['selected_fillings']))
+        return false;
+      if (!listEquals(
+          c1['selected_extra_fillings'], c2['selected_extra_fillings']))
+        return false;
+      if (!listEquals(c1['selected_extras_kg'], c2['selected_extras_kg']))
+        return false;
+      if (!listEquals(c1['selected_extras_unit'], c2['selected_extras_unit']))
+        return false;
+      if (!listEquals(
+          c1['selected_mesa_dulce_items'], c2['selected_mesa_dulce_items']))
+        return false;
+
+      // is_half_dozen check (FIX: Safe boolean compare)
+      if ((c1['is_half_dozen'] ?? false) != (c2['is_half_dozen'] ?? false))
+        return false;
+
+      // unit_adjustment check (FIX: Prevent merging if unit adjustment differs)
+      final u1 = c1['unit_adjustment'] ?? 0.0;
+      final u2 = c2['unit_adjustment'] ?? 0.0;
+      if (u1 != u2) return false;
+
+      return true;
+    });
+
+    if (existingIndex != -1) {
+      // --- MERGE ---
+      final existing = targetList[existingIndex];
+      final newQty = existing.qty + newItem.qty;
+      // Recalculate total base price (Unit * NewQty)
+      double itemUnit =
+          existing.qty > 0 ? existing.basePrice / existing.qty : 0;
+      final newBasePrice = itemUnit * newQty;
+
+      // Merge Notes (Concatenate if different)
+      String? mergedNotes = existing.customizationNotes;
+      if (newItem.customizationNotes != null &&
+          newItem.customizationNotes!.isNotEmpty) {
+        if (mergedNotes == null || mergedNotes.isEmpty) {
+          mergedNotes = newItem.customizationNotes;
+        } else if (mergedNotes != newItem.customizationNotes) {
+          mergedNotes = '$mergedNotes | ${newItem.customizationNotes}';
+        }
+      }
+
+      // Merge Item Notes (Concatenate if different)
+      final c1 = Map<String, dynamic>.from(existing.customizationJson ?? {});
+      final c2 = newItem.customizationJson ?? {};
+      String? note1 = c1['item_notes'];
+      String? note2 = c2['item_notes'];
+      if (note2 != null && note2.isNotEmpty) {
+        if (note1 == null || note1.isEmpty) {
+          c1['item_notes'] = note2;
+        } else if (note1 != note2) {
+          c1['item_notes'] = '$note1 | $note2';
+        }
+      }
+
+      // Merge Local Files (Unify lists)
+      List<dynamic> mergedLocalFiles = [];
+      if (existing.localFile != null && existing.localFile is List) {
+        mergedLocalFiles.addAll(existing.localFile as List);
+      }
+      if (newItem.localFile != null && newItem.localFile is List) {
+        // Add only if not effectively same path (basic dedup)
+        for (var f in (newItem.localFile as List)) {
+          // Simplistic dedup by path if XFile/File
+          String path =
+              (f is XFile) ? f.path : (f is File ? f.path : f.toString());
+          bool exists = mergedLocalFiles.any((e) {
+            String ePath =
+                (e is XFile) ? e.path : (e is File ? e.path : e.toString());
+            return ePath == path;
+          });
+          if (!exists) mergedLocalFiles.add(f);
+        }
+      }
+
+      // Merge Photo URLs (Unify lists)
+      List<String> mergedUrls = [];
+      if (c1['photo_urls'] != null && c1['photo_urls'] is List) {
+        mergedUrls.addAll(List<String>.from(c1['photo_urls']));
+      } else if (c1['photo_url'] != null) {
+        mergedUrls.add(c1['photo_url']); // Migration from old single field
+      }
+
+      List<String> newUrls = [];
+      if (c2['photo_urls'] != null && c2['photo_urls'] is List) {
+        newUrls.addAll(List<String>.from(c2['photo_urls']));
+      } else if (c2['photo_url'] != null) {
+        newUrls.add(c2['photo_url']);
+      }
+
+      for (var url in newUrls) {
+        if (!mergedUrls.contains(url)) {
+          mergedUrls.add(url);
+        }
+      }
+      if (mergedUrls.isNotEmpty) {
+        c1['photo_urls'] = mergedUrls;
+        // Keep 'photo_url' as the first one for backwards compat if needed, or just rely on list
+        c1['photo_url'] = mergedUrls.first;
+      }
+
+      targetList[existingIndex] = OrderItem(
+        id: existing.id, // Keep existing ID
+        name: existing.name,
+        qty: newQty,
+        basePrice: newBasePrice,
+        adjustments: existing
+            .adjustments, // Assuming fixed manual adjustment stays? Or should imply per-unit? Users request implies "same product".
+        // Usually "Adjustments" in this app logic are manual fixed additions.
+        // If we merge, we actually KEEP the existing adjustment and DO NOT add the new one?
+        // Or if they are identical (checked in comparator), it doesn't matter.
+        // The comparator checks: item.adjustments != newItem.adjustments => return false.
+        // So they are equal.
+        customizationNotes: mergedNotes,
+        customizationJson: c1,
+        localFile: mergedLocalFiles.isNotEmpty ? mergedLocalFiles : null,
+      );
+      return true; // Merged
+    } else {
+      // --- ADD NEW ---
+      targetList.add(newItem);
+      return false; // Added new
+    }
+  }
+
+  // Helper interno para crear imagen segura (web/no-web) sin padding ni remove button
+
+  Widget _buildSafeImageWidget(dynamic source, double w, double h) {
+    if (kIsWeb) {
+      final String path = source is XFile
+          ? source.path
+          : (source is File ? source.path : source.toString());
+      return Image.network(
+        path,
+        width: w,
+        height: h,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 20),
+      );
+    } else {
+      final String path = source is XFile
+          ? source.path
+          : (source is File ? source.path : source.toString());
+      return Image.file(
+        File(path),
+        width: w,
+        height: h,
+        fit: BoxFit.cover,
+      );
     }
   }
 }

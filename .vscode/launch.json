@@ -2,73 +2,51 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Pastelería · Chrome (Debug)",
+      "name": "Local · Chrome",
       "type": "dart",
       "request": "launch",
       "flutterMode": "debug",
       "deviceId": "chrome",
       "args": [
-        "--flavor", "dev",
+        "--flavor",
+        "dev",
         "--dart-define=FLAVOR=dev",
-        "--dart-define=API_BASE=https://one80-api.onrender.com/api"
+        "--dart-define=API_BASE=http://localhost:8000/api"
       ]
     },
     {
-      "name": "Pastelería · Chrome (Profile)",
-      "type": "dart",
-      "request": "launch",
-      "flutterMode": "profile",
-      "deviceId": "chrome",
-      "args": [
-        "--flavor", "dev",
-        "--dart-define=FLAVOR=dev",
-        "--dart-define=API_BASE=https://one80-api.onrender.com/api"
-      ]
-    },
-    {
-      "name": "Pastelería · Chrome (Release)",
-      "type": "dart",
-      "request": "launch",
-      "flutterMode": "release",
-      "deviceId": "chrome",
-      "args": [
-        "--flavor", "dev",
-        "--dart-define=FLAVOR=dev",
-        "--dart-define=API_BASE=https://one80-api.onrender.com/api"
-      ]
-    },
-    {
-      "name": "Pastelería · Android (Debug)",
+      "name": "Local · Android",
       "type": "dart",
       "request": "launch",
       "flutterMode": "debug",
-      "deviceId": "a74b009a",
       "args": [
-        "--flavor", "dev",
+        "--flavor",
+        "dev",
+        "--dart-define=FLAVOR=dev",
+        "--dart-define=API_BASE=http://10.0.2.2:8000/api"
+      ]
+    },
+    {
+      "name": "Prod · Chrome (Debug)",
+      "type": "dart",
+      "request": "launch",
+      "flutterMode": "debug",
+      "deviceId": "chrome",
+      "args": [
+        "--flavor",
+        "dev",
         "--dart-define=FLAVOR=dev",
         "--dart-define=API_BASE=https://one80-api.onrender.com/api"
       ]
     },
     {
-      "name": "Pastelería · Android (Profile)",
+      "name": "Prod · Android (Debug)",
       "type": "dart",
       "request": "launch",
-      "flutterMode": "profile",
-      "deviceId": "a74b009a",
+      "flutterMode": "debug",
       "args": [
-        "--flavor", "dev",
-        "--dart-define=FLAVOR=dev",
-        "--dart-define=API_BASE=https://one80-api.onrender.com/api"
-      ]
-    },
-    {
-      "name": "Pastelería · Android (Release)",
-      "type": "dart",
-      "request": "launch",
-      "flutterMode": "release",
-      "deviceId": "a74b009a",
-      "args": [
-        "--flavor", "dev",
+        "--flavor",
+        "dev",
         "--dart-define=FLAVOR=dev",
         "--dart-define=API_BASE=https://one80-api.onrender.com/api"
       ]

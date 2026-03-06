@@ -11,6 +11,7 @@ const _kInkSand = Color(0xFFC9B99A);
 
 // Fondos pastel por estado (SIN CAMBIOS)
 const _statusPastelBg = <String, Color>{
+  'pending': Color(0xFFFFF9C4), // Amarillo muy claro
   'confirmed': _kPastelMint,
   'ready': Color(0xFFFFE6EF),
   'delivered': _kPastelBabyBlue,
@@ -19,6 +20,7 @@ const _statusPastelBg = <String, Color>{
 
 // Acento/borde por estado (SIN CAMBIOS)
 const _statusInk = <String, Color>{
+  'pending': Color(0xFFFBC02D), // Amarillo mostaza oscuro
   'confirmed': _kInkMint,
   'ready': Color(0xFFF3A9B9),
   'delivered': _kInkBabyBlue,
@@ -27,6 +29,7 @@ const _statusInk = <String, Color>{
 
 // Traducciones visibles (SIN CAMBIOS)
 const _statusTranslations = {
+  'pending': 'Pendiente',
   'confirmed': 'Confirmado',
   'ready': 'Listo',
   'delivered': 'Entregado',

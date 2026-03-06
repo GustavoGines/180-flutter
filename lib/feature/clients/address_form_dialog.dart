@@ -140,7 +140,11 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
   }
 
   Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    print('DEBUG: _submit called');
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      print('DEBUG: Form validation failed');
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -155,28 +159,43 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
       'longitude': longitude,
       'google_maps_url': _gmapsController.text.trim(),
     };
+    print('DEBUG: Payload to send: $payload');
 
     try {
       final repo = ref.read(clientsRepoProvider);
       if (isEditMode) {
+        print('DEBUG: Updating address');
         await repo.updateAddress(
           widget.clientId,
           widget.addressToEdit!.id,
           payload,
         );
       } else {
+        print('DEBUG: Creating address');
         await repo.createAddress(widget.clientId, payload);
       }
+      print('DEBUG: Address operation successful');
 
       ref.invalidate(clientDetailsProvider(widget.clientId));
 
       if (mounted) {
-        _showSnackbar(
-          isEditMode ? 'Dirección actualizada' : 'Dirección añadida con éxito',
-        );
-        Navigator.of(context).pop();
+        try {
+          _showSnackbar(
+            isEditMode
+                ? 'Dirección actualizada'
+                : 'Dirección añadida con éxito',
+          );
+        } catch (e) {
+          debugPrint('Error mostrando snackbar: $e');
+        }
+        if (mounted) {
+          print('DEBUG: Popping dialog');
+          Navigator.of(context).pop();
+        }
       }
-    } catch (e) {
+    } catch (e, stack) {
+      print('DEBUG: Error in _submit: $e');
+      print('DEBUG: Stack trace: $stack');
       _showSnackbar('Error al guardar: $e', isError: true);
     } finally {
       if (mounted) {
