@@ -42,6 +42,7 @@ class OrderDetailPage extends ConsumerWidget {
   static const _kPastelBabyBlue = Color(0xFFDFF1FF);
 
   static const Map<String, String> statusTranslations = {
+    'pending': 'Pendiente',
     'confirmed': 'Confirmado',
     'ready': 'Listo',
     'delivered': 'Entregado',
@@ -49,6 +50,7 @@ class OrderDetailPage extends ConsumerWidget {
     'unknown': 'Desconocido',
   };
   static const Map<String, Color> _statusPastelBg = {
+    'pending': Color(0xFFFFF9C4), // Amarillo clarito
     'confirmed': _kPastelMint,
     'ready': Color(0xFFFFE6EF),
     'delivered': _kPastelBabyBlue,
@@ -56,6 +58,7 @@ class OrderDetailPage extends ConsumerWidget {
     'unknown': Colors.grey,
   };
   static const Map<String, Color> _statusInk = {
+    'pending': Color(0xFFFBC02D), // Amarillo mostaza
     'confirmed': Color(0xFF83D1B9),
     'ready': _kInkRose,
     'delivered': Color(0xFF8CC5F5),
