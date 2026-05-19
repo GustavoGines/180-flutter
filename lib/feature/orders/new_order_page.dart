@@ -596,7 +596,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             _selectedClient = null;
                           });
                         }
-                        return ref.watch(clientsListProvider(pattern).future);
+                        return ref.read(clientsListProvider(pattern).future);
                       },
                       itemBuilder: (context, client) => ListTile(
                         leading: const Icon(Icons.person),

@@ -128,7 +128,7 @@ class OrdersRepository {
       return Order.fromJson(_parseOrderData(response.data));
     } catch (e) {
       if (kDebugMode) {
-        print('Error al actualizar estado: $e');
+        debugPrint('Error al actualizar estado: $e');
       }
       return null;
     }
@@ -140,7 +140,7 @@ class OrdersRepository {
       return Order.fromJson(_parseOrderData(response.data));
     } on DioException catch (e) {
       if (kDebugMode) {
-        print('Error al marcar como pagado: $e');
+        debugPrint('Error al marcar como pagado: $e');
       }
       rethrow;
     }
@@ -152,7 +152,7 @@ class OrdersRepository {
       return Order.fromJson(_parseOrderData(response.data));
     } on DioException catch (e) {
       if (kDebugMode) {
-        print('Error al desmarcar como pagado: $e');
+        debugPrint('Error al desmarcar como pagado: $e');
       }
       rethrow;
     }
@@ -199,7 +199,7 @@ class OrdersRepository {
         return Order.fromJson(_parseOrderData(body));
       } else {
         if (kDebugMode) {
-          print('Error createOrderWithFiles: ${response.body}');
+          debugPrint('Error createOrderWithFiles: ${response.body}');
         }
         throw Exception(
           'Error al crear pedido: ${response.statusCode} ${response.body}',
@@ -259,7 +259,7 @@ class OrdersRepository {
         return Order.fromJson(_parseOrderData(body));
       } else {
         if (kDebugMode) {
-          print('Error updateOrderWithFiles: ${response.body}');
+          debugPrint('Error updateOrderWithFiles: ${response.body}');
         }
         throw Exception(
           'Error al actualizar pedido: ${response.statusCode} ${response.body}',
