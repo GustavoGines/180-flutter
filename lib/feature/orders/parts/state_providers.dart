@@ -52,29 +52,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
 
     final orders = await repository.getOrders(from: from, to: to);
 
-    // Tu lógica de sort (sin cambios)
-    const statusOrder = {
-      'pending': 0, // 'pending' aparece primero
-      'confirmed': 1,
-      'ready': 2,
-      'delivered': 3,
-      'canceled': 4,
-    };
-    orders.sort((a, b) {
-      final dayCmp = DateTime(
-        a.eventDate.year,
-        a.eventDate.month,
-        a.eventDate.day,
-      ).compareTo(
-        DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
-      );
-      if (dayCmp != 0) return dayCmp;
-      final timeCmp = a.startTime.compareTo(b.startTime);
-      if (timeCmp != 0) return timeCmp;
-      final pa = statusOrder[a.status] ?? 99;
-      final pb = statusOrder[b.status] ?? 99;
-      return pa.compareTo(pb);
-    });
+    orders.sortedByDateAndStatus();
 
     return orders;
   }
@@ -133,29 +111,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
     final previousState = await future;
     final newList = [...previousState, newOrder];
 
-    // Lógica de sort (copiada de tu 'build')
-    const statusOrder = {
-      'pending': 0,
-      'confirmed': 1,
-      'ready': 2,
-      'delivered': 3,
-      'canceled': 4,
-    };
-    newList.sort((a, b) {
-      final dayCmp = DateTime(
-        a.eventDate.year,
-        a.eventDate.month,
-        a.eventDate.day,
-      ).compareTo(
-        DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
-      );
-      if (dayCmp != 0) return dayCmp;
-      final timeCmp = a.startTime.compareTo(b.startTime);
-      if (timeCmp != 0) return timeCmp;
-      final pa = statusOrder[a.status] ?? 99;
-      final pb = statusOrder[b.status] ?? 99;
-      return pa.compareTo(pb);
-    });
+    newList.sortedByDateAndStatus();
 
     state = AsyncData(newList);
   }
@@ -169,29 +125,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
       return order.id == updatedOrder.id ? updatedOrder : order;
     }).toList();
 
-    // Lógica de sort (copiada de tu 'build')
-    const statusOrder = {
-      'pending': 0,
-      'confirmed': 1,
-      'ready': 2,
-      'delivered': 3,
-      'canceled': 4,
-    };
-    newList.sort((a, b) {
-      final dayCmp = DateTime(
-        a.eventDate.year,
-        a.eventDate.month,
-        a.eventDate.day,
-      ).compareTo(
-        DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
-      );
-      if (dayCmp != 0) return dayCmp;
-      final timeCmp = a.startTime.compareTo(b.startTime);
-      if (timeCmp != 0) return timeCmp;
-      final pa = statusOrder[a.status] ?? 99;
-      final pb = statusOrder[b.status] ?? 99;
-      return pa.compareTo(pb);
-    });
+    newList.sortedByDateAndStatus();
 
     state = AsyncData(newList);
   }

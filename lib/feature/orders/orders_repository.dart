@@ -1,17 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:http/http.dart' as http;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/models/order.dart';
-import '../../core/config.dart';
-import '../auth/auth_state.dart';
 
 final ordersRepoProvider = Provider<OrdersRepository>(
   (ref) => OrdersRepository(ref),
@@ -19,9 +15,8 @@ final ordersRepoProvider = Provider<OrdersRepository>(
 
 class OrdersRepository {
   final Dio _dio = DioClient().dio;
-  final Ref _ref;
 
-  OrdersRepository(this._ref);
+  OrdersRepository(Ref ref);
 
   Future<String> _compressImage(XFile originalFile) async {
     final tempDir = await getTemporaryDirectory();
@@ -162,13 +157,9 @@ class OrdersRepository {
     Map<String, dynamic> payload,
     Map<String, XFile> files,
   ) async {
-    final token = await _ref.read(authTokenProvider.future);
-    final uri = Uri.parse('$kApiBase/orders');
-    final request = http.MultipartRequest('POST', uri);
-
-    request.headers['Authorization'] = 'Bearer $token';
-    request.headers['Accept'] = 'application/json';
-    request.fields['order_payload'] = jsonEncode(payload);
+    final Map<String, dynamic> formDataMap = {
+      'order_payload': jsonEncode(payload),
+    };
 
     final List<String> tempPaths = [];
 
@@ -182,29 +173,25 @@ class OrdersRepository {
           tempPaths.add(pathToSend);
         }
 
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            'files[$placeholderId]',
-            pathToSend,
-            filename: file.name,
-          ),
+        formDataMap['files[$placeholderId]'] = await MultipartFile.fromFile(
+          pathToSend,
+          filename: file.name,
         );
       }
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final formData = FormData.fromMap(formDataMap);
 
-      if (response.statusCode == 201) {
-        final body = jsonDecode(response.body);
-        return Order.fromJson(_parseOrderData(body));
-      } else {
-        if (kDebugMode) {
-          debugPrint('Error createOrderWithFiles: ${response.body}');
-        }
-        throw Exception(
-          'Error al crear pedido: ${response.statusCode} ${response.body}',
-        );
+      final response = await _dio.post(
+        '/orders',
+        data: formData,
+      );
+
+      return Order.fromJson(_parseOrderData(response.data));
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Error createOrderWithFiles: $e');
       }
+      rethrow;
     } finally {
       for (var path in tempPaths) {
         try {
@@ -221,14 +208,10 @@ class OrdersRepository {
     Map<String, dynamic> payload,
     Map<String, XFile> files,
   ) async {
-    final token = await _ref.read(authTokenProvider.future);
-    final uri = Uri.parse('$kApiBase/orders/$orderId');
-    final request = http.MultipartRequest('POST', uri);
-    request.fields['_method'] = 'PUT';
-
-    request.headers['Authorization'] = 'Bearer $token';
-    request.headers['Accept'] = 'application/json';
-    request.fields['order_payload'] = jsonEncode(payload);
+    final Map<String, dynamic> formDataMap = {
+      '_method': 'PUT',
+      'order_payload': jsonEncode(payload),
+    };
 
     final List<String> tempPaths = [];
 
@@ -242,29 +225,25 @@ class OrdersRepository {
           tempPaths.add(pathToSend);
         }
 
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            'files[$placeholderId]',
-            pathToSend,
-            filename: file.name,
-          ),
+        formDataMap['files[$placeholderId]'] = await MultipartFile.fromFile(
+          pathToSend,
+          filename: file.name,
         );
       }
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final formData = FormData.fromMap(formDataMap);
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        return Order.fromJson(_parseOrderData(body));
-      } else {
-        if (kDebugMode) {
-          debugPrint('Error updateOrderWithFiles: ${response.body}');
-        }
-        throw Exception(
-          'Error al actualizar pedido: ${response.statusCode} ${response.body}',
-        );
+      final response = await _dio.post(
+        '/orders/$orderId',
+        data: formData,
+      );
+
+      return Order.fromJson(_parseOrderData(response.data));
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Error updateOrderWithFiles: $e');
       }
+      rethrow;
     } finally {
       for (var path in tempPaths) {
         try {
