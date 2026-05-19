@@ -56,9 +56,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
     setState(() => _isLoading = true);
 
     // Llama al método resetPassword que deberías tener en tu AuthRepository
-    final success = await ref
-        .read(authRepoProvider)
-        .resetPassword(
+    final success = await ref.read(authRepoProvider).resetPassword(
           token: widget.token,
           email: widget.email,
           password: _passwordController.text,
@@ -158,25 +156,25 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                 controller: _passwordConfirmationController,
                 obscureText:
                     !_passwordConfirmationVisible, // <-- 3. USA LA OTRA VARIABLE
-                decoration: _buildInputDecoration('Confirmar Contraseña')
-                    .copyWith(
-                      // <-- 4. USA .copyWith()
-                      // --- AÑADE EL OTRO ICONO SUFIJO ---
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _passwordConfirmationVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: lightBrownText,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _passwordConfirmationVisible =
-                                !_passwordConfirmationVisible;
-                          });
-                        },
-                      ),
+                decoration:
+                    _buildInputDecoration('Confirmar Contraseña').copyWith(
+                  // <-- 4. USA .copyWith()
+                  // --- AÑADE EL OTRO ICONO SUFIJO ---
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _passwordConfirmationVisible
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                      color: lightBrownText,
                     ),
+                    onPressed: () {
+                      setState(() {
+                        _passwordConfirmationVisible =
+                            !_passwordConfirmationVisible;
+                      });
+                    },
+                  ),
+                ),
                 style: const TextStyle(color: darkBrown),
                 validator: (value) {
                   if (value == null || value.isEmpty) {

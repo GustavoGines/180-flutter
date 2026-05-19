@@ -12,9 +12,9 @@ class AuthState {
   bool get isAuthenticated => user != null;
 
   AuthState copyWith({AppUser? user, bool? initialLoading}) => AuthState(
-    user: user ?? this.user,
-    initialLoading: initialLoading ?? this.initialLoading,
-  );
+        user: user ?? this.user,
+        initialLoading: initialLoading ?? this.initialLoading,
+      );
 }
 
 class AuthController extends Notifier<AuthState> {

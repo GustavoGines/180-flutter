@@ -263,9 +263,7 @@ class _FillingList extends ConsumerWidget {
 
                     if (confirm == true) {
                       try {
-                        await ref
-                            .read(catalogRepoProvider)
-                            .deleteFilling(f.id);
+                        await ref.read(catalogRepoProvider).deleteFilling(f.id);
                         ref.invalidate(catalogProvider);
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(

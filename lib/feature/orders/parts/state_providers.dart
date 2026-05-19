@@ -58,7 +58,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
   }
 
   // 👇 2. MÉTODO PÚBLICO para actualizar un estado
-  Future<void> updateOrderStatus(int orderId, String newStatus) async {
+  Future<void> updateOrderStatus(int orderId, OrderStatus newStatus) async {
     // Obtenemos el repositorio
     final repository = ref.read(ordersRepoProvider);
 
@@ -68,7 +68,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
 
     try {
       // 1. Llamamos a la API/DB
-      await repository.updateStatus(orderId, newStatus);
+      await repository.updateStatus(orderId, newStatus.name);
 
       // 2. Si la API tuvo éxito, actualizamos el estado local
       state = AsyncData(
@@ -184,7 +184,9 @@ final monthlyIncomeProvider = rp.Provider.autoDispose<double>((ref) {
   for (final o in monthOrders) {
     // CONDICIÓN: Status NO cancelado AND isPaid == true
     // (Abarca confirmed, ready, delivered si están pagados)
-    if (o.status != 'canceled' && o.status != 'unknown' && o.isPaid) {
+    if (o.status != OrderStatus.canceled &&
+        o.status != OrderStatus.unknown &&
+        o.isPaid) {
       final v = o.total ?? 0;
       if (v >= 0) {
         ingresosMes += v;
@@ -206,8 +208,10 @@ final monthlyPendingIncomeProvider = rp.Provider.autoDispose<double>((ref) {
     final s = o.status;
     // CONDICIÓN: Confirmed OR Ready OR Delivered AND !isPaid (Según feedback usuario)
     // "pending, confirmed, ready, delivered que NO están pagados son Pendientes"
-    final isRelevantStatus =
-        s == 'pending' || s == 'confirmed' || s == 'ready' || s == 'delivered';
+    final isRelevantStatus = s == OrderStatus.pending ||
+        s == OrderStatus.confirmed ||
+        s == OrderStatus.ready ||
+        s == OrderStatus.delivered;
     if (isRelevantStatus && !o.isPaid) {
       final v = o.total ?? 0;
       if (v >= 0) {
@@ -228,7 +232,7 @@ final monthlyOrdersCountProvider = rp.Provider.autoDispose<int>((ref) {
 
   int count = 0;
   for (final o in monthOrders) {
-    if (o.status != 'canceled' && o.status != 'unknown') {
+    if (o.status != OrderStatus.canceled && o.status != OrderStatus.unknown) {
       count++;
     }
   }

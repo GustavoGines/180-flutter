@@ -96,12 +96,11 @@ Future<bool> maybeShowTesterExplainerOnce(BuildContext context) async {
         text: TextSpan(
           // 1. Usa el estilo del tema del diálogo
           style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-            height: 1.4, // Ajusta el interlineado si lo deseas
-          ),
+                height: 1.4, // Ajusta el interlineado si lo deseas
+              ),
           children: const [
             TextSpan(
-              text:
-                  'Bienvenido/a a la versión de pruebas de 180° App.\n\n'
+              text: 'Bienvenido/a a la versión de pruebas de 180° App.\n\n'
                   'Para recibir actualizaciones automáticas y avisos de nuevas '
                   'versiones, es necesario habilitar el ',
             ),
@@ -111,8 +110,7 @@ Future<bool> maybeShowTesterExplainerOnce(BuildContext context) async {
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             TextSpan(
-              text:
-                  ' por única vez.\n\n'
+              text: ' por única vez.\n\n'
                   'Se te pedirá iniciar sesión con tu cuenta de Google y aceptar '
                   'las notificaciones de la app.',
             ),

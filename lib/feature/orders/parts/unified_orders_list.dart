@@ -296,7 +296,7 @@ class _FlatListBuilder {
                 weekHasOrdersInThisMonth = true;
                 for (final order in ordersForThisDay) {
                   // Suma solo si cumple la lógica de "Ingreso Real" (Entregado y Pagado)
-                  if (order.status == 'delivered' && order.isPaid) {
+                  if (order.status == OrderStatus.delivered && order.isPaid) {
                     final v = order.total ?? 0;
                     if (v >= 0) {
                       weekTotalForThisMonth += v;

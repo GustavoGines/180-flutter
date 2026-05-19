@@ -10,10 +10,10 @@ final clientsRepoProvider = Provider<ClientsRepository>(
 );
 
 // Provider para la lista de clientes (con búsqueda)
-final clientsListProvider = FutureProvider.autoDispose
-    .family<List<Client>, String>((ref, query) {
-      return ref.watch(clientsRepoProvider).searchClients(query: query);
-    });
+final clientsListProvider =
+    FutureProvider.autoDispose.family<List<Client>, String>((ref, query) {
+  return ref.watch(clientsRepoProvider).searchClients(query: query);
+});
 
 // Provider para los detalles de UN cliente
 final clientDetailsProvider = FutureProvider.autoDispose.family<Client?, int>((
@@ -33,7 +33,7 @@ class ClientsRepository {
 
   /// GET /clients?query=
   /// Busca clientes por nombre o teléfono
- Future<List<Client>> searchClients({String query = ''}) async {
+  Future<List<Client>> searchClients({String query = ''}) async {
     final res = await _dio.get('/clients', queryParameters: {'query': query});
     final body = res.data;
 

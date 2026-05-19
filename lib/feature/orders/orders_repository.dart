@@ -76,9 +76,8 @@ class OrdersRepository {
           .map((j) => Order.fromJson(j as Map<String, dynamic>))
           .toList();
     } else if (data is List<dynamic>) {
-      orders = data
-          .map((j) => Order.fromJson(j as Map<String, dynamic>))
-          .toList();
+      orders =
+          data.map((j) => Order.fromJson(j as Map<String, dynamic>)).toList();
     } else {
       orders = [];
     }

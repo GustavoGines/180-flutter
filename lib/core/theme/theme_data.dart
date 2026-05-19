@@ -61,7 +61,7 @@ final ThemeData lightTheme = ThemeData(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: _primaryPink.withAlpha(128)),
     ),
-    focusedBorder:  OutlineInputBorder(
+    focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: _darkBrown, width: 2),
     ),
@@ -95,13 +95,12 @@ final ThemeData darkTheme = ThemeData(
   ),
   scaffoldBackgroundColor: _darkBackground,
   appBarTheme: _appBarThemeDark,
-
   inputDecorationTheme: InputDecorationTheme(
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: _primaryPink.withAlpha(51)),
     ),
-    focusedBorder:  OutlineInputBorder(
+    focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(
         color: _primaryPink,
@@ -117,6 +116,5 @@ final ThemeData darkTheme = ThemeData(
     fillColor: _darkSurface,
     filled: true,
   ),
-
   useMaterial3: true,
 );

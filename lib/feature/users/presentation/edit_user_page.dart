@@ -72,9 +72,8 @@ class _EditUserFormState extends ConsumerState<_EditUserForm> {
     };
 
     try {
-      final updatedUser = await ref
-          .read(usersRepoProvider)
-          .updateUser(widget.user.id, payload);
+      final updatedUser =
+          await ref.read(usersRepoProvider).updateUser(widget.user.id, payload);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

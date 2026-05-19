@@ -1,13 +1,14 @@
 import 'package:pasteleria_180_flutter/core/models/order.dart';
+import 'package:pasteleria_180_flutter/core/enums/order_status.dart';
 
 extension OrderListExtension on List<Order> {
   void sortedByDateAndStatus() {
     const statusOrder = {
-      'pending': 0,
-      'confirmed': 1,
-      'ready': 2,
-      'delivered': 3,
-      'canceled': 4,
+      OrderStatus.pending: 0,
+      OrderStatus.confirmed: 1,
+      OrderStatus.ready: 2,
+      OrderStatus.delivered: 3,
+      OrderStatus.canceled: 4,
     };
     sort((a, b) {
       final dayCmp = DateTime(

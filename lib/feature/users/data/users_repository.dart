@@ -10,14 +10,14 @@ final usersRepoProvider = Provider<UsersRepository>((ref) => UsersRepository());
 
 // Provider para obtener la lista de usuarios (para el panel de admin)
 // AHORA ES UN .family para poder pasar un query de búsqueda
-final usersListProvider = FutureProvider.autoDispose
-    .family<List<AppUser>, String>((ref, query) {
-      // Si el query está vacío, usamos el provider sin query
-      // Si tiene algo, lo pasamos al método
-      return ref
-          .watch(usersRepoProvider)
-          .getUsers(query: query.isEmpty ? null : query);
-    });
+final usersListProvider =
+    FutureProvider.autoDispose.family<List<AppUser>, String>((ref, query) {
+  // Si el query está vacío, usamos el provider sin query
+  // Si tiene algo, lo pasamos al método
+  return ref
+      .watch(usersRepoProvider)
+      .getUsers(query: query.isEmpty ? null : query);
+});
 
 // NUEVO: Provider para obtener los detalles de UN solo usuario
 final userDetailsProvider = FutureProvider.autoDispose.family<AppUser, int>((

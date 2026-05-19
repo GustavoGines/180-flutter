@@ -94,7 +94,7 @@ class _DateHeader extends StatelessWidget {
       double dayTotal = 0;
       for (final order in orders) {
         // Solo sumamos si es un Ingreso Real (Entregado y Pagado)
-        if (order.status == 'delivered' && order.isPaid) {
+        if (order.status == OrderStatus.delivered && order.isPaid) {
           final v = order.total ?? 0;
           if (v >= 0) {
             dayTotal += v;
@@ -176,13 +176,11 @@ class _WeekSeparator extends StatelessWidget {
       0,
     );
 
-    final DateTime displayStartDate = weekStart.isBefore(firstDayOfMonth)
-        ? firstDayOfMonth
-        : weekStart;
+    final DateTime displayStartDate =
+        weekStart.isBefore(firstDayOfMonth) ? firstDayOfMonth : weekStart;
 
-    final DateTime displayEndDate = weekEnd.isAfter(lastDayOfMonth)
-        ? lastDayOfMonth
-        : weekEnd;
+    final DateTime displayEndDate =
+        weekEnd.isAfter(lastDayOfMonth) ? lastDayOfMonth : weekEnd;
 
     final startDayStr = displayStartDate.day.toString().padLeft(2);
     final endDayStr = displayEndDate.day.toString().padLeft(2);
@@ -190,9 +188,8 @@ class _WeekSeparator extends StatelessWidget {
 
     final cs = Theme.of(context).colorScheme;
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      color: muted
-          ? cs.outline.withOpacity(0.6)
-          : cs.onSurface.withOpacity(0.7),
+      color:
+          muted ? cs.outline.withOpacity(0.6) : cs.onSurface.withOpacity(0.7),
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     final verticalPadding = muted ? 4.0 : 16.0;
@@ -423,12 +420,10 @@ class _EmptyMonthPlaceholder extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: weeksInMonth.map((weekStart) {
           final weekEnd = _weekEndSunday(weekStart);
-          final displayStartDate = weekStart.isBefore(firstDayOfMonth)
-              ? firstDayOfMonth
-              : weekStart;
-          final displayEndDate = weekEnd.isAfter(lastDayOfMonth)
-              ? lastDayOfMonth
-              : weekEnd;
+          final displayStartDate =
+              weekStart.isBefore(firstDayOfMonth) ? firstDayOfMonth : weekStart;
+          final displayEndDate =
+              weekEnd.isAfter(lastDayOfMonth) ? lastDayOfMonth : weekEnd;
 
           final startDayStr = displayStartDate.day.toString();
           final endDayStr = displayEndDate.day.toString();

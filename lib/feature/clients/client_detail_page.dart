@@ -9,6 +9,7 @@ import 'package:pasteleria_180_flutter/feature/clients/address_form_dialog.dart'
 
 // Repositorios
 import 'package:pasteleria_180_flutter/core/models/order.dart';
+import 'package:pasteleria_180_flutter/core/enums/order_status.dart';
 import 'package:pasteleria_180_flutter/feature/orders/orders_repository.dart';
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 
@@ -108,14 +109,12 @@ class ClientDetailPage extends ConsumerWidget {
 
         if (e.response?.statusCode == 409) {
           // Error de conflicto (Dirección en uso)
-          final message =
-              e.response?.data['message'] as String? ??
+          final message = e.response?.data['message'] as String? ??
               'Conflicto desconocido. La dirección podría estar asociada a un pedido.';
           _showAddressInUseDialog(context, message);
         } else {
           // Otro error de API
-          final message =
-              e.response?.data['message'] as String? ??
+          final message = e.response?.data['message'] as String? ??
               'Error al eliminar dirección. Intenta de nuevo.';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -472,29 +471,26 @@ class ClientDetailPage extends ConsumerWidget {
         ); // Asumiendo que tienes este provider
 
         // Helper para traducir y dar color a los estados (AHORA USA EL TEMA)
-        (String, Color) getStatusStyle(String status) {
-          final statusLower = status.toLowerCase();
+        (String, Color) getStatusStyle(OrderStatus status) {
           // Colores del tema
           final Color deliveredColor = cs.primary; // Verde/Principal
           final Color pendingColor = cs.tertiary; // Naranja/Terciario
           final Color cancelledColor = cs.error; // Rojo/Error
           final Color defaultColor = cs.onSurfaceVariant; // Gris/Neutral
 
-          switch (statusLower) {
-            case 'pending':
+          switch (status) {
+            case OrderStatus.pending:
               return ('Pendiente', pendingColor);
-            case 'confirmed':
+            case OrderStatus.confirmed:
               return ('Confirmado', defaultColor);
-            case 'delivered':
+            case OrderStatus.ready:
+              return ('Listo', defaultColor);
+            case OrderStatus.delivered:
               return ('Entregado', deliveredColor);
-            case 'cancelled':
+            case OrderStatus.canceled:
               return ('Cancelado', cancelledColor);
             default:
-              // Capitalizar el estado si no lo conocemos
-              final capitalized = status.isNotEmpty
-                  ? status[0].toUpperCase() + status.substring(1)
-                  : 'Desconocido';
-              return (capitalized, defaultColor);
+              return ('Desconocido', defaultColor);
           }
         }
 
@@ -523,9 +519,8 @@ class ClientDetailPage extends ConsumerWidget {
             }
 
             final allOrders = snap.data ?? [];
-            final clientOrders = allOrders
-                .where((o) => o.clientId == clientId)
-                .toList();
+            final clientOrders =
+                allOrders.where((o) => o.clientId == clientId).toList();
 
             if (clientOrders.isEmpty) {
               return const Card(
