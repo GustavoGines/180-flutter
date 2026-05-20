@@ -1813,7 +1813,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         : cakeProducts.first;
 
     const miniCakeName = 'Mini Torta Personalizada (Base)';
-    const microCakeName = 'Micro Torta (Base)';
 
     final weightController = TextEditingController(
       text: existingItem?.name == miniCakeName
@@ -4028,33 +4027,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       height: height,
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
-    );
-  }
-
-  Widget _buildSummaryRow(
-    String label,
-    double amount, {
-    bool isTotal = false,
-    bool highlight = false,
-  }) {
-    final style = TextStyle(
-      fontSize: isTotal ? 16 : 14,
-      fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-      color: highlight
-          ? Theme.of(context).colorScheme.error
-          : (isTotal
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.onSurface),
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: style),
-          Text(_currencyFormat.format(amount), style: style),
-        ],
-      ),
     );
   }
 
