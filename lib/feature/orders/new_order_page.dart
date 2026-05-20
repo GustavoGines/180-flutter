@@ -1,40 +1,39 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Para input formatters
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:collection/collection.dart'; // Para .firstWhereOrNull
+import 'package:collection/collection.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter/foundation.dart'; // Para mapEquals
+import 'package:flutter/foundation.dart';
 
-// --- AÑADIDOS PARA COMPRESIÓN ---
 import 'package:pasteleria_180_flutter/core/json_utils.dart';
 import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
-// --- FIN DE AÑADIDOS ---
 
-// --- IMPORTAR EL CATÁLOGO ---
 import 'product_catalog.dart';
-// --- FIN IMPORTAR CATÁLOGO ---
 import '../../core/models/client.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../clients/clients_repository.dart';
-import '../clients/address_form_dialog.dart'; // <-- 2. IMPORTAR DIÁLOGO
-import 'catalog_repository.dart'; // Importar repositorio
+import '../clients/address_form_dialog.dart';
+import 'catalog_repository.dart';
 import 'orders_repository.dart';
 import 'order_detail_page.dart';
-import 'home_page.dart'; // Para invalidar ordersByFilterProvider
+import 'home_page.dart';
 
-// La página principal ahora es un ConsumerWidget simple que decide si crear o editar
+import 'new_order/widgets/date_time_picker_row.dart';
+import 'new_order/widgets/delivery_section.dart';
+import 'new_order/widgets/order_totals_card.dart';
+
 class NewOrderPage extends ConsumerWidget {
-  final int? orderId; // Recibe el ID, o nulo si es un pedido nuevo
+  final int? orderId;
   const NewOrderPage({super.key, this.orderId});
 
   @override
@@ -60,7 +59,6 @@ class NewOrderPage extends ConsumerWidget {
         error: (err, stack) =>
             Center(child: Text('Error cargando catálogo: $err')),
         data: (catalogData) {
-          // Si estamos editando, buscamos also el pedido
           if (isEditMode) {
             return ref.watch(orderByIdProvider(orderId!)).when(
                   loading: () => Center(
@@ -75,7 +73,6 @@ class NewOrderPage extends ConsumerWidget {
                   },
                 );
           }
-          // Si es nuevo
           return _OrderForm(catalog: catalogData);
         },
       ),
@@ -83,12 +80,9 @@ class NewOrderPage extends ConsumerWidget {
   }
 }
 
-// (Clase auxiliar para productos del Box)
 class BoxMesaDulceSelection {
   final Product product;
   int quantity;
-
-  // Para productos con variantes (ej. tamaños 20cm, 24cm, o Pan Dulce 500g)
   ProductVariant? selectedVariant;
 
   BoxMesaDulceSelection({
@@ -98,7 +92,6 @@ class BoxMesaDulceSelection {
   });
 }
 
-// --- CLASE AUXILIAR PARA EXTRAS POR UNIDAD ---
 class UnitExtraSelection {
   final CakeExtra extra;
   int quantity;
@@ -106,9 +99,8 @@ class UnitExtraSelection {
   UnitExtraSelection({required this.extra, this.quantity = 1});
 }
 
-// Widget interno que contiene TODA la lógica y estado del formulario
 class _OrderForm extends ConsumerStatefulWidget {
-  final Order? order; // El pedido a editar (puede ser nulo)
+  final Order? order;
   final CatalogResponse? catalog;
   const _OrderForm({this.order, this.catalog});
 
@@ -122,10 +114,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   final _clientNameController = TextEditingController();
   Client? _selectedClient;
 
-  // --- 3. NUEVOS ESTADOS PARA DIRECCIÓN ---
-  int? _selectedAddressId; // El ID de la dirección de entrega
-  bool _isPaid = false; // Estado local de pagado
-  // ------------------------------------
+  int? _selectedAddressId;
+  bool _isPaid = false;
 
   late DateTime _date;
   late TimeOfDay _start;
@@ -135,39 +125,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   final _notesController = TextEditingController();
   final List<OrderItem> _items = [];
 
-  // Listas locales derivadas del catálogo
   List<Product> get boxProducts =>
       widget.catalog?.products
           .where((p) => p.category == ProductCategory.box)
           .toList() ??
       [];
-  List<Product> get smallCakeProducts =>
-      widget.catalog?.products
-          .where(
-            (p) =>
-                p.category == ProductCategory.torta && p.name.contains('Base'),
-          )
-          .toList() ??
-      []; // Ajustar filtro si es necesario
-  // Nota: smallCakeProducts en el código original eran tortas "Base" específicas.
-  // Aquí asumo que son las que tienen 'Base' en el nombre o son de cierta categoría.
-  // Si smallCakeProducts eran las de 'torta' en general, usaremos eso.
-  // Revisando original: smallCakeProducts eran 'Micro Torta', 'Mini Torta', 'Torta Base 1kg'.
-  // Y 'cakeProducts' eran las decoradas.
-  // Podríamos diferenciar por un flag o convención de nombres. O simplemente usar todas las tortas en ambos si no hay distinción clara en backend.
-  // Por ahora filtro por nombre 'Base' para smallCakes y todas para cakeProducts?
-  // O mejor:
+
   List<Product> get cakeProducts =>
       widget.catalog?.products
           .where((p) => p.category == ProductCategory.torta)
           .toList() ??
       [];
 
-  // Re-definir smallCakeProducts como subset de cakeProducts si es necesario, o simplemente usar cakeProducts.
-  // En el original 'smallCakeProducts' se usaba para seleccionar la base en Box.
-  // Voy a usar las que digan "Base" o sean baratas?
-  // Hack temporal: Filtro por precio < 16000 o nombre contiene "Base".
-  // Mejor: Filtro por nombre.
   List<Product> get _derivedSmallCakeProducts => cakeProducts
       .where(
         (p) =>
@@ -199,8 +168,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   );
 
   bool get isEditMode => widget.order != null;
-  // La Key será un ID temporal (ej: "placeholder_12345"),
-  // el Value será el archivo a subir.
   final Map<String, XFile> _filesToUpload = {};
 
   @override
@@ -218,14 +185,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           order.deliveryCost?.toStringAsFixed(0) ?? '0';
       _notesController.text = order.notes ?? '';
       _items.addAll(order.items);
-      _isPaid = order.isPaid; // Inicializar estado pagado
+      _isPaid = order.isPaid;
 
-      // --- 4. CARGAR DATOS DE DIRECCIÓN EN MODO EDICIÓN ---
       _selectedAddressId = order.clientAddressId;
-      // Cargar las direcciones del cliente en modo edición
       if (_selectedClient != null) {
-        // Usamos ref.read().future para cargar los datos iniciales
-        // El widget _buildAddressSelector usará ref.watch() para reactividad
         ref.read(clientDetailsProvider(_selectedClient!.id).future).then((
           client,
         ) {
@@ -234,9 +197,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           }
         });
       }
-      // ------------------------------------------------
     } else {
-      // Valores por defecto para un pedido nuevo
       _date = DateTime.now();
       _start = const TimeOfDay(hour: 9, minute: 0);
       _end = const TimeOfDay(hour: 10, minute: 0);
@@ -244,7 +205,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       _deliveryCostController.text = '0';
     }
 
-    // Listener para recalcular totales si cambia el costo de envío
     _deliveryCostController.addListener(_recalculateTotals);
     _clientNameController.addListener(_onClientNameChanged);
   }
@@ -261,7 +221,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     super.dispose();
   }
 
-  // --- CÁLCULO DE TOTALES (sin cambios) ---
   double _itemsSubtotal = 0.0;
   double _deliveryCost = 0.0;
   double _grandTotal = 0.0;
@@ -302,7 +261,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     });
   }
 
-  // --- PICKERS DE FECHA Y HORA (sin cambios) ---
   Future<void> _pickDate() async {
     final d = await showDatePicker(
       context: context,
@@ -311,13 +269,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       lastDate: DateTime.now().add(const Duration(days: 730)),
       initialDate: _date,
       builder: (context, child) {
-        // Obtenemos el tema actual
         final theme = Theme.of(context);
         return Theme(
-          // Usamos la base del tema (light o dark)
           data: theme.copyWith(
             textButtonTheme: TextButtonThemeData(
-              // Hacemos que los botones usen el color primary del tema
               style: TextButton.styleFrom(
                 foregroundColor: theme.colorScheme.primary,
               ),
@@ -336,16 +291,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       initialTime: isStart ? _start : _end,
       initialEntryMode: TimePickerEntryMode.input,
       builder: (context, child) {
-        // Obtenemos el tema actual
         final theme = Theme.of(context);
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
           child: Theme(
-            // Usamos la base del tema (light o dark)
             data: theme.copyWith(
-              // ¡No sobrescribimos 'primary'!
               textButtonTheme: TextButtonThemeData(
-                // Hacemos que los botones usen el color primary del tema
                 style: TextButton.styleFrom(
                   foregroundColor: theme.colorScheme.primary,
                 ),
@@ -382,13 +333,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
-  // =========================================================================
-  // === INICIO DE MÉTODOS DEL SPEED DIAL (Reemplazan _addClientDialog) =======
-  // =========================================================================
-
-  // --- Función para obtener Cliente desde Contactos ---
   Future<void> _selectClientFromContacts() async {
-    // 1. Pedir Permiso de Contactos
     if (!await FlutterContacts.requestPermission(readonly: true)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -396,15 +341,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
         ),
       );
-      await openAppSettings(); // Sugerir abrir configuración
+      await openAppSettings();
       return;
     }
 
-    // 2. Abrir Selector Nativo
     final Contact? contact = await FlutterContacts.openExternalPick();
 
     if (contact != null) {
-      // 3. Extraer datos y normalizar
       final String name = contact.displayName;
       final String? phone =
           contact.phones.isNotEmpty ? contact.phones.first.number : null;
@@ -415,7 +358,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             content: Text(
               'El contacto no tiene número de teléfono.',
               style: TextStyle(
-                // Color de texto sobre el contenedor secundario
                 color: Theme.of(context).colorScheme.onSecondaryContainer,
               ),
             ),
@@ -425,8 +367,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         return;
       }
 
-      // 4. Intentar buscar si el cliente ya existe por teléfono
-      // NOTA: Tu API debe tener una búsqueda por teléfono implementada en searchClients
       final existingClients =
           await ref.read(clientsRepoProvider).searchClients(query: phone);
       final existingClient = existingClients.firstWhereOrNull(
@@ -434,7 +374,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       );
 
       if (existingClient != null) {
-        // 5. Cliente ya existe: simplemente seleccionarlo
         setState(() {
           _selectedClient = existingClient;
           _clientNameController.text = existingClient.name;
@@ -447,18 +386,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           ),
         );
       } else {
-        // 6. Cliente no existe: crear el nuevo cliente directamente
         _createClientFromData(name: name, phone: phone);
       }
     }
   }
 
-  // --- Helper: Crear Cliente desde Contacto/Manual ---
   Future<void> _createClientFromData({
     required String name,
     String? phone,
   }) async {
-    // Simula el flujo de _addClientDialog, pero sin el formulario modal
     if (name.trim().isEmpty) return;
 
     showDialog(
@@ -476,16 +412,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         'phone': phone?.trim(),
       });
     } on DioException catch (e) {
-      // Si es 409 (cliente borrado), lo manejamos con el diálogo de restauración
       if (e.response?.statusCode == 409 && e.response?.data['client'] != null) {
-        // Cierra el loader primero
         if (context.mounted) Navigator.pop(context);
         final clientData = e.response?.data['client'];
         final clientToRestore = Client.fromJson(
           (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
         );
         _showRestoreDialog(clientToRestore);
-        return; // Sale del try/catch
+        return;
       }
       errorMessage =
           e.response?.data['message'] as String? ?? 'Error al crear cliente.';
@@ -493,7 +427,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       errorMessage = e.toString();
     }
 
-    // Cerrar loader
     if (context.mounted) Navigator.pop(context);
 
     if (newClient != null && mounted) {
@@ -520,7 +453,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
-  // --- Diálogo Manual (Versión simplificada) ---
   void _addClientManuallyDialog() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
@@ -553,10 +485,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(),
             onPressed: () {
               if (nameController.text.trim().isNotEmpty) {
-                Navigator.pop(dialogContext); // Cierra el diálogo manual
+                Navigator.pop(dialogContext);
                 _createClientFromData(
                   name: nameController.text,
                   phone: phoneController.text.trim().isNotEmpty
@@ -572,7 +503,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- Selector de Cliente Completo con SpeedDial ---
   Widget _buildClientSelector(BuildContext context) {
     return Builder(
       builder: (context) {
@@ -586,11 +516,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   Expanded(
                     child: TypeAheadField<Client>(
                       controller: _clientNameController,
-                      // Permite buscar con 0 caracteres (al hacer click/foco)
                       debounceDuration: const Duration(milliseconds: 500),
                       suggestionsCallback: (pattern) async {
-                        // Eliminada la restricción de 2 caracteres.
-                        // Si pattern es vacío, traerá los default (paginados) del backend.
                         if (_selectedClient != null) {
                           setState(() {
                             _selectedClient = null;
@@ -636,33 +563,19 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   const SizedBox(width: 8),
                   SpeedDial(
                     icon: Icons.add,
-
                     activeIcon: Icons.close,
-
                     foregroundColor: Theme.of(context).colorScheme.onPrimary,
-
                     spacing: 5,
-
-                    buttonSize: const Size(
-                      56,
-                      56,
-                    ), // Mismo tamaño que un FAB estándar
-
+                    buttonSize: const Size(56, 56),
                     childrenButtonSize: const Size(56, 56),
-
                     direction: SpeedDialDirection.down,
-
                     curve: Curves.easeInOut,
-
                     children: [
-                      // Opción 1: Seleccionar desde Contactos
                       SpeedDialChild(
                         child: const Icon(Icons.contact_phone_outlined),
                         label: 'Desde Contactos',
                         onTap: _selectClientFromContacts,
                       ),
-
-                      // Opción 2: Agregar Nuevo Manualmente
                       SpeedDialChild(
                         child: const Icon(Icons.person_add_alt_1),
                         label: 'Nuevo Manualmente',
@@ -741,7 +654,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- DIÁLOGO RESTAURAR CLIENTE (sin cambios) ---
   Future<void> _showRestoreDialog(Client clientToRestore) async {
     final didConfirm = await showDialog<bool>(
       context: context,
@@ -770,14 +682,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       final restoredClient =
           await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
 
-      ref.invalidate(clientsListProvider('')); // Invalida búsqueda
+      ref.invalidate(clientsListProvider(''));
       ref.invalidate(trashedClientsProvider);
 
       if (mounted) {
         setState(() {
           _selectedClient = restoredClient;
           _clientNameController.text = restoredClient.name;
-          _selectedAddressId = null; // Resetear dirección
+          _selectedAddressId = null;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -803,8 +715,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
-  // --- DIÁLOGOS DE ITEMS (MiniTorta, Torta, MesaDulce) ---
-  // (Sin cambios en la lógica interna de estos diálogos)
   void _addItemDialog() {
     showDialog(
       context: context,
@@ -815,15 +725,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           children: [
             ListTile(
               leading: Icon(
-                Icons.card_giftcard, // ⬅️ CAMBIO: Ícono para Box
-                color: Theme.of(
-                  context,
-                ).colorScheme.tertiary, // ⬅️ CAMBIO: Color
+                Icons.card_giftcard,
+                color: Theme.of(context).colorScheme.tertiary,
               ),
-              title: const Text('Box Dulce'), // ⬅️ CAMBIO: Nuevo texto
+              title: const Text('Box Dulce'),
               onTap: () {
                 Navigator.of(context).pop();
-                _addBoxDialog(); // ⬅️ CAMBIO: Llamada a _addBoxDialog
+                _addBoxDialog();
               },
             ),
             ListTile(
@@ -873,14 +781,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     double basePrice =
         isEditing ? existingItem.basePrice : selectedProduct?.price ?? 0.0;
-    // 🎯 Paso 1: Leer el Ajuste Manual Puro del JSON si existe
     double manualAdjustmentValue = isEditing
         ? (customData['manual_adjustment_value'] is num
             ? (customData['manual_adjustment_value'] as num).toDouble()
             : 0.0)
         : 0.0;
 
-    // La variable 'adjustments' DEBE reflejar el valor inicial del controlador (el ajuste manual puro)
     double adjustments = manualAdjustmentValue;
 
     final qtyController = TextEditingController(
@@ -888,9 +794,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
 
     final adjustmentsController = TextEditingController(
-      text: adjustments.toStringAsFixed(
-        0,
-      ), // ⬅️ Inicializado con el ajuste MANUAL PURO o 0
+      text: adjustments.toStringAsFixed(0),
     );
 
     final adjustmentNotesController = TextEditingController(
@@ -900,7 +804,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       text: customData['item_notes'] as String? ?? '',
     );
 
-    // --- Control de ítems seleccionados para Box Personalizado (Mesa Dulce) ---
     List<BoxMesaDulceSelection> selectedMesaDulceItems = [];
     if (isEditing && existingItem.name == personalizedBoxName) {
       final List<dynamic> itemsData =
@@ -909,8 +812,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         final name = itemData['name'];
         final qty = itemData['quantity'] ?? 1;
 
-        final variantId = itemData['variant_id']; // Si guardaste ID
-        final variantName = itemData['variant_name']; // O nombre
+        final variantId = itemData['variant_id'];
+        final variantName = itemData['variant_name'];
 
         final product = mesaDulceProducts.firstWhereOrNull(
           (p) => p.name == name,
@@ -923,7 +826,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 (v) => v.id == variantId,
               );
             }
-            // Fallback por nombre si no hay ID o no se encontró
             variant ??= product.variants.firstWhereOrNull(
               (v) => v.variantName == variantName,
             );
@@ -940,18 +842,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
     }
 
-    // 🎯 NUEVO: Inicialización de Torta Base solo si estamos editando un Box Predeterminado
-    // O si es un Box Personalizado que ya tenía una torta base seleccionada.
-    // Esto es para mantener la selección al editar.
     Product? selectedBaseCake = customData['selected_base_cake'] != null
         ? _derivedSmallCakeProducts.firstWhereOrNull(
             (p) => p.name == (customData['selected_base_cake'] as String?),
           )
         : _derivedSmallCakeProducts.firstWhereOrNull(
             (p) => p.name == 'Mini Torta Personalizada (Base)',
-          ); // Default: Mini Torta
+          );
 
-    // Para Boxes predefinidos (que contienen Mini Torta) o si se selecciona una en el Box Personalizado
     List<Filling> selectedFillings =
         (customData['selected_fillings'] as List<dynamic>? ?? [])
             .map(
@@ -964,7 +862,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     List<Filling> selectedExtraFillings =
         (customData['selected_extra_fillings'] as List<dynamic>? ?? [])
             .map((data) {
-              // --- INICIO CORRECCIÓN LECTURA ---
               if (data is Map) {
                 final name = data['name']?.toString();
                 return extraCostFillings.firstWhereOrNull(
@@ -972,20 +869,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 );
               }
               if (data is String) {
-                // Compatibilidad con datos viejos
                 return extraCostFillings.firstWhereOrNull(
                   (f) => f.name == data,
                 );
               }
               return null;
-              // --- FIN CORRECCIÓN LECTURA ---
             })
             .whereType<Filling>()
             .toList();
     List<CakeExtra> selectedExtrasKg =
         (customData['selected_extras_kg'] as List<dynamic>? ?? [])
             .map((data) {
-              // --- INICIO CORRECCIÓN LECTURA ---
               if (data is Map) {
                 final name = data['name']?.toString();
                 return cakeExtras.firstWhereOrNull(
@@ -993,13 +887,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 );
               }
               if (data is String) {
-                // Compatibilidad con datos viejos
                 return cakeExtras.firstWhereOrNull(
                   (ex) => ex.name == data && !ex.isPerUnit,
                 );
               }
               return null;
-              // --- FIN CORRECCIÓN LECTURA ---
             })
             .whereType<CakeExtra>()
             .toList();
@@ -1023,7 +915,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             })
             .whereType<UnitExtraSelection>()
             .toList();
-    // ------------------------------------------------
 
     final ImagePicker picker = ImagePicker();
     List<String> existingImageUrls = List<String>.from(
@@ -1032,10 +923,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     final finalPriceController = TextEditingController();
 
-    // -------------------------------------------------------------
-    // 🚨 CÁLCULO SÍNCRONO DEL PRECIO BASE CALCULADO (Para el prefixText)
-    // Se necesita para que el prefixText muestre el valor antes del postFrameCallback.
-    // -------------------------------------------------------------
     double calculatedTotalBasePrice = basePrice;
 
     final isPersonalizedBox = selectedProduct?.name == personalizedBoxName;
@@ -1045,7 +932,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     if (isPersonalizedBox) {
       calculatedTotalBasePrice = selectedBaseCake?.price ?? 0.0;
 
-      // Sumar Mesa Dulce (sólo si se está editando un box personalizado)
       for (var sel in selectedMesaDulceItems) {
         double unitPrice = 0.0;
         if (sel.product.variants.isNotEmpty) {
@@ -1055,7 +941,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         } else if (sel.product.unit == ProductUnit.unit) {
           unitPrice = sel.product.price;
         } else {
-          // Fallback
           unitPrice = sel.product.price;
         }
         calculatedSubItemsCost += unitPrice * sel.quantity;
@@ -1063,31 +948,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       calculatedTotalBasePrice += calculatedSubItemsCost;
     }
 
-    // Sumar extras de Torta (rellenos/extras por unidad/kg)
     if (selectedBaseCake != null || !isPersonalizedBox) {
       const miniCakeName = 'Mini Torta Personalizada (Base)';
-      const microCakeName = 'Micro Torta'; // <-- CONFIRMA ESTE NOMBRE
+      const microCakeName = 'Micro Torta';
 
       bool isSmallCake = false;
       if (isPersonalizedBox) {
-        // Si es personalizado, chequea la torta base seleccionada
         isSmallCake = selectedBaseCake?.name == miniCakeName ||
             selectedBaseCake?.name == microCakeName;
       } else {
-        // Si es predefinido, asumimos que SIEMPRE usa la lógica de mini torta
         isSmallCake = true;
       }
 
-      // Define el multiplicador de costo (0.5 para chicas, 1.0 para tortas de 1kg si las agregaras)
       final double costMultiplier = isSmallCake ? 0.5 : 1.0;
-      // Suma Extras (rellenos, kg, unit)
       calculatedExtrasCost += selectedExtraFillings.fold(
         0.0,
-        (sum, f) => sum + (f.extraCostPerKg * costMultiplier), // <-- CORREGIDO
+        (sum, f) => sum + (f.extraCostPerKg * costMultiplier),
       );
       calculatedExtrasCost += selectedExtrasKg.fold(
         0.0,
-        (sum, ex) => sum + (ex.costPerKg * costMultiplier), // <-- CORREGIDO
+        (sum, ex) => sum + (ex.costPerKg * costMultiplier),
       );
       calculatedExtrasCost += selectedExtrasUnit.fold(
         0.0,
@@ -1095,33 +975,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       );
       calculatedTotalBasePrice += calculatedExtrasCost;
     }
-    // -------------------------------------------------------------
 
-    // -------------------------------------------------------------
-    // FUNCIÓN calculatePrice (Ajustada para usar currentAdjustments y actualizar 'adjustments')
-    // -------------------------------------------------------------
     void calculatePrice() {
       final qty = int.tryParse(qtyController.text) ?? 0;
-      // 🚨 CRÍTICO: La función asíncrona DEBE leer el valor actualizado del controlador
       final currentAdjustments =
           double.tryParse(adjustmentsController.text) ?? 0.0;
 
-      // **Nota:** No necesitamos recalcular calculatedTotalBasePrice aquí si las selecciones
-      // no cambian; si cambian (ej. un checkbox), se debe hacer la re-evaluación completa.
-      // Asumiendo que los cambios en la UI (checkboxes, dropdowns) llaman a setDialogState(calculatePrice),
-      // este cálculo se realiza correctamente:
-
-      // Si hay cambios de selección en la UI, el cálculo de calculatedTotalBasePrice
-      // necesita ser re-ejecutado. Por seguridad, volvemos a calcular el costo base aquí.
-
-      // [INICIO RE-CÁLCULO DENTRO DE calculatePrice]
       calculatedTotalBasePrice = basePrice;
       calculatedSubItemsCost = 0.0;
       calculatedExtrasCost = 0.0;
 
       if (isPersonalizedBox) {
         calculatedTotalBasePrice = selectedBaseCake?.price ?? 0.0;
-        // Suma Mesa Dulce
         for (var sel in selectedMesaDulceItems) {
           double unitPrice = 0.0;
           if (sel.product.variants.isNotEmpty) {
@@ -1131,7 +996,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           } else if (sel.product.unit == ProductUnit.unit) {
             unitPrice = sel.product.price;
           } else {
-            // Fallback o precio base si no tiene variantes ni unidad especial
             unitPrice = sel.product.price;
           }
           calculatedSubItemsCost += unitPrice * sel.quantity;
@@ -1140,34 +1004,26 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
 
       if (selectedBaseCake != null || !isPersonalizedBox) {
-        // --- INICIO CORRECCIÓN ---
-        // (Copiar la misma lógica de cálculo de multiplicador de arriba)
         const miniCakeName = 'Mini Torta Personalizada (Base)';
-        const microCakeName = 'Micro Torta'; // <-- CONFIRMA ESTE NOMBRE
+        const microCakeName = 'Micro Torta';
 
         bool isSmallCake = false;
         if (isPersonalizedBox) {
-          // Si es personalizado, chequea la torta base seleccionada
           isSmallCake = selectedBaseCake?.name == miniCakeName ||
               selectedBaseCake?.name == microCakeName;
         } else {
-          // Si es predefinido, asumimos que SIEMPRE usa la lógica de mini torta
           isSmallCake = true;
         }
 
-        // Define el multiplicador de costo (0.5 para chicas, 1.0 para tortas de 1kg si las agregaras)
         final double costMultiplier = isSmallCake ? 0.5 : 1.0;
-        // --- FIN CORRECCIÓN ---
 
-        // Suma Extras (rellenos, kg, unit)
         calculatedExtrasCost += selectedExtraFillings.fold(
           0.0,
-          (sum, f) =>
-              sum + (f.extraCostPerKg * costMultiplier), // <-- CORREGIDO
+          (sum, f) => sum + (f.extraCostPerKg * costMultiplier),
         );
         calculatedExtrasCost += selectedExtrasKg.fold(
           0.0,
-          (sum, ex) => sum + (ex.costPerKg * costMultiplier), // <-- CORREGIDO
+          (sum, ex) => sum + (ex.costPerKg * costMultiplier),
         );
         calculatedExtrasCost += selectedExtrasUnit.fold(
           0.0,
@@ -1175,7 +1031,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         );
         calculatedTotalBasePrice += calculatedExtrasCost;
       }
-      // [FIN RE-CÁLCULO DENTRO DE calculatePrice]
 
       if (qty > 0) {
         final finalUnitPrice = calculatedTotalBasePrice + currentAdjustments;
@@ -1184,10 +1039,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         finalPriceController.text = 'N/A';
       }
 
-      // 🚨 CRÍTICO: Actualizar la variable de alcance superior 'adjustments' para el onPressed
       adjustments = currentAdjustments;
     }
-    // ------------------------------------------------
 
     WidgetsBinding.instance.addPostFrameCallback((_) => calculatePrice());
 
@@ -1198,9 +1051,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           builder: (context, setDialogState) {
             final isCurrentPersonalizedBox =
                 selectedProduct?.name == personalizedBoxName;
-
-            // --- HELPER WIDGETS (Rellenos/Extras Predefinidos) ---
-            // (Los builders son los mismos que en la respuesta anterior, se mantienen)
 
             Widget buildFillingCheckbox(Filling filling, bool isExtraCost) {
               bool isSelected = isExtraCost
@@ -1314,28 +1164,23 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               );
             }
 
-            // --- HELPER WIDGET PARA ITEM DE MESA DULCE UNITARIO/POR TAMAÑO ---
             Widget buildMesaDulceItemSelector(Product product) {
               BoxMesaDulceSelection? selection = selectedMesaDulceItems
                   .firstWhereOrNull((sel) => sel.product == product);
               bool isSelected = selection != null;
 
-              // Determinar el precio unitario base a mostrar
               String basePriceText;
               if (product.pricesBySize != null) {
                 basePriceText = '(Tamaños)';
               } else if (product.unit == ProductUnit.dozen) {
-                // Muestra precio por unidad, dividiendo por 12
                 basePriceText =
                     '(~\$${(product.price / 12).toStringAsFixed(0)} c/u)';
               } else if (product.unit == ProductUnit.unit) {
-                // Muestra precio por unidad
                 basePriceText = '(+\$${product.price.toStringAsFixed(0)} c/u)';
               } else {
                 basePriceText = '(Error de unidad)';
               }
 
-              // Función centralizada para la selección
               void toggleSelection(bool? value) {
                 setDialogState(() {
                   if (value == true) {
@@ -1360,7 +1205,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 });
               }
 
-              // Si el producto tiene VARIANTES
               if (product.variants.isNotEmpty) {
                 return Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1404,9 +1248,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       ),
                   ],
                 );
-              }
-              // Si el producto se cuenta por unidad (Docena o Unidad simple)
-              else {
+              } else {
                 return ListTile(
                   leading: Checkbox(
                     value: isSelected,
@@ -1415,18 +1257,16 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   title: Text('${product.name} $basePriceText'),
                   onTap: () => toggleSelection(
                     !isSelected,
-                  ), // Permite seleccionar al tocar la fila
+                  ),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  // 🎯 TRAILING: El campo de cantidad compacto
                   trailing: isSelected
                       ? SizedBox(
-                          width: 60, // Ancho pequeño para el campo de número
+                          width: 60,
                           child: TextFormField(
-                            // Usamos TextFormField sin controller
                             key: ValueKey(
                               product.name,
-                            ), // Clave única para evitar errores de renderizado
+                            ),
                             initialValue: selection.quantity.toString(),
                             keyboardType: TextInputType.number,
                             inputFormatters: [
@@ -1443,17 +1283,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               ),
                               isDense: true,
                             ),
-                            // Aquí actualizamos el modelo de datos directamente
                             onChanged: (value) {
                               int qty = int.tryParse(value) ?? 1;
                               if (qty < 1) {
                                 qty = 1;
                               }
 
-                              // 1. Actualizar el modelo de datos
                               selection.quantity = qty;
 
-                              // 2. Notificar al StatefulBuilder más cercano (el del AlertDialog)
                               setDialogState(() {
                                 calculatePrice();
                               });
@@ -1464,7 +1301,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 );
               }
             }
-            // -----------------------------------------------------
 
             return AlertDialog(
               title: Row(
@@ -1487,9 +1323,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // SELECTOR DE PRODUCTO/BOX
                     DropdownButtonFormField<Product>(
-                      initialValue: selectedProduct,
+                      value: selectedProduct,
                       items: boxProducts.map((Product product) {
                         return DropdownMenuItem<Product>(
                           value: product,
@@ -1502,22 +1337,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         setDialogState(() {
                           selectedProduct = newValue;
                           basePrice = newValue?.price ?? 0.0;
-                          // Si cambia a/desde personalizado, ajusta la cantidad
                           if (newValue?.name == personalizedBoxName) {
                             qtyController.text = '1';
                           }
-                          // 🎯 Limpiar selecciones de extras/rellenos si cambiamos de Box
                           selectedFillings = [];
                           selectedExtraFillings = [];
                           selectedExtrasKg = [];
                           selectedExtrasUnit = [];
                           selectedMesaDulceItems = [];
-                          // 🎯 En Box Personalizado, el costo base empieza en 0.0, y en el predefinido se mantiene.
                           if (newValue?.name == personalizedBoxName) {
                             basePrice = 0.0;
                           } else {
                             basePrice = newValue?.price ?? 0.0;
-                            // Opcional: Re-seleccionar la torta base por defecto para el Box predefinido
                             selectedBaseCake =
                                 _derivedSmallCakeProducts.firstWhereOrNull(
                               (p) =>
@@ -1531,8 +1362,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       decoration: const InputDecoration(labelText: 'Producto'),
                       isExpanded: true,
                     ),
-
-                    // CAMPO DE CANTIDAD (OCULTAR SI ES PERSONALIZADO)
                     if (!isCurrentPersonalizedBox)
                       TextFormField(
                         controller: qtyController,
@@ -1545,16 +1374,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         ],
                         onChanged: (_) => setDialogState(calculatePrice),
                       ),
-
                     const SizedBox(height: 16),
                     const Divider(),
-
-                    // --- SECCIÓN DE SELECCIÓN DE PRODUCTOS Y OPCIONES (SOLO PARA BOX PERSONALIZADO) ---
                     if (isCurrentPersonalizedBox)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ⬅️ NUEVO: SELECTOR DE TORTA BASE
                           Text(
                             'Base de Torta para el Box Personalizado (Opcional):',
                             style: Theme.of(context)
@@ -1566,14 +1391,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           DropdownButtonFormField<Product>(
                             value: selectedBaseCake,
                             items: [
-                              // Opción para no incluir ninguna torta
                               const DropdownMenuItem<Product>(
                                 value: null,
                                 child: Text(
                                   'No Incluir Torta Base (Solo Mesa Dulce)',
                                 ),
                               ),
-                              // Opciones de tortas
                               ..._derivedSmallCakeProducts.map((
                                 Product product,
                               ) {
@@ -1588,7 +1411,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             onChanged: (Product? newValue) {
                               setDialogState(() {
                                 selectedBaseCake = newValue;
-                                // Limpiar rellenos/extras si se deselecciona la torta base
                                 if (newValue == null) {
                                   selectedFillings = [];
                                   selectedExtraFillings = [];
@@ -1604,8 +1426,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             isExpanded: true,
                           ),
                           const SizedBox(height: 16),
-
-                          // Opciones de Rellenos/Extras solo si hay Torta Base seleccionada
                           if (selectedBaseCake != null) ...[
                             Text(
                               'Personalización de Torta Base:',
@@ -1615,7 +1435,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
-                            // Rellenos Incluidos (Mini Torta)
                             Text(
                               'Rellenos Incluidos (Mini Torta)',
                               style: Theme.of(context).textTheme.titleSmall,
@@ -1624,7 +1443,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               (f) => buildFillingCheckbox(f, false),
                             ),
                             const SizedBox(height: 8),
-                            // Rellenos con Costo Extra (Mini Torta)
                             Text(
                               'Rellenos con Costo Extra (Mini Torta)',
                               style: Theme.of(context).textTheme.titleSmall,
@@ -1633,7 +1451,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               (f) => buildFillingCheckbox(f, true),
                             ),
                             const SizedBox(height: 8),
-                            // Extras por Peso
                             Text(
                               'Extras por Peso (Costo Fijo/Box)',
                               style: Theme.of(context).textTheme.titleSmall,
@@ -1642,7 +1459,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 .where((ex) => !ex.isPerUnit)
                                 .map(buildExtraKgCheckbox),
                             const SizedBox(height: 8),
-                            // Extras por Unidad
                             Text(
                               'Extras por Unidad (Costo por Unidad/Box)',
                               style: Theme.of(context).textTheme.titleSmall,
@@ -1652,8 +1468,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 .map(buildExtraUnitSelector),
                             const SizedBox(height: 16),
                           ],
-
-                          // Selector de Productos de Mesa Dulce
                           Text(
                             'Productos de Mesa Dulce a Incluir:',
                             style: Theme.of(context)
@@ -1662,14 +1476,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
-                          // Lista de productos de Mesa Dulce para seleccionar
                           ...mesaDulceProducts
                               .map(buildMesaDulceItemSelector)
                               .toList(),
                           const SizedBox(height: 16),
                         ],
                       )
-                    // --- SECCIÓN DE PERSONALIZACIÓN (SOLO PARA BOX PREDEFINIDO) ---
                     else
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1682,8 +1494,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
-                          // 🎯 MANTENEMOS la lógica de Extras/Rellenos para el Box Predeterminado
-                          // Rellenos Incluidos (Mini Torta)
                           Text(
                             'Rellenos Incluidos (Mini Torta)',
                             style: Theme.of(context).textTheme.titleSmall,
@@ -1692,7 +1502,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             (f) => buildFillingCheckbox(f, false),
                           ),
                           const SizedBox(height: 8),
-                          // Rellenos con Costo Extra (Mini Torta)
                           Text(
                             'Rellenos con Costo Extra (Mini Torta)',
                             style: Theme.of(context).textTheme.titleSmall,
@@ -1701,27 +1510,23 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             (f) => buildFillingCheckbox(f, true),
                           ),
                           const SizedBox(height: 8),
-                          // Extras por Peso
                           Text(
                             'Extras por Peso (Costo Fijo/Box)',
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                           ...cakeExtras
-                              .where((ex) => !ex.isPerUnit)
-                              .map(buildExtraKgCheckbox),
+                                .where((ex) => !ex.isPerUnit)
+                                .map(buildExtraKgCheckbox),
                           const SizedBox(height: 8),
-                          // Extras por Unidad
                           Text(
                             'Extras por Unidad (Costo por Unidad/Box)',
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                           ...cakeExtras
-                              .where((ex) => ex.isPerUnit)
-                              .map(buildExtraUnitSelector),
+                                .where((ex) => ex.isPerUnit)
+                                .map(buildExtraUnitSelector),
                         ],
                       ),
-
-                    // NOTAS Y AJUSTES MANUALES (Visibles siempre)
                     TextFormField(
                       controller: itemNotesController,
                       decoration: InputDecoration(
@@ -1735,7 +1540,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       textCapitalization: TextCapitalization.sentences,
                     ),
                     const SizedBox(height: 16),
-
                     TextFormField(
                       controller: adjustmentsController,
                       decoration: InputDecoration(
@@ -1764,7 +1568,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       textCapitalization: TextCapitalization.sentences,
                     ),
                     const Divider(),
-
                     TextFormField(
                       controller: finalPriceController,
                       readOnly: true,
@@ -1779,7 +1582,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       'Fotos de Referencia (Opcional)',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    // ... (Sección de fotos)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Wrap(
@@ -1832,7 +1634,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(),
                   onPressed: () {
                     if (selectedProduct == null) return;
 
@@ -1856,7 +1657,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       );
                       return;
                     }
-                    // Si es Box Personalizado, al menos un sub-item o la torta base debe estar seleccionada
                     if (isCurrentPersonalizedBox &&
                         selectedMesaDulceItems.isEmpty &&
                         selectedBaseCake == null) {
@@ -1871,26 +1671,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     }
 
                     final allImageUrls = existingImageUrls;
-
-                    // 1. Calcular el Costo de los Extras (Costo calculado total - Precio Base original del Box).
                     final costOfExtras = calculatedTotalBasePrice - basePrice;
-
-                    // 2. El totalAdjustment debe ser la SUMA de los extras (costOfExtras) + el ajuste manual (variable 'adjustments').
-                    // 🚨 CORRECCIÓN DEL CÁLCULO DE TOTAL ADJUSTMENT:
                     final totalAdjustment = costOfExtras + adjustments;
-                    // ⬆️ 'adjustments' es la variable del scope superior que fue actualizada en calculatePrice() con el valor del controlador.
 
                     final customization = {
                       'product_category': ProductCategory.box.name,
                       'box_type': selectedProduct!.name,
                       'manual_adjustment_value': adjustments,
-
-                      // Personalización para Box Predefinido
                       if (!isCurrentPersonalizedBox) ...{
-                        // 🎯 NO se guarda 'selected_base_cake' aquí para boxes predefinidos,
-                        // ya que el precio ya lo incluye, pero se mantiene la info de rellenos/extras
-                        // si el Box tiene una mini torta.
-                        // Solo guardamos los extras de la Mini Torta:
                         'selected_extra_fillings': selectedExtraFillings
                             .map(
                               (f) => {
@@ -1909,18 +1697,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               (sel) => {
                                 'name': sel.extra.name,
                                 'quantity': sel.quantity,
-                                'price':
-                                    sel.extra.costPerUnit, // <-- Agregar precio
+                                'price': sel.extra.costPerUnit,
                               },
                             )
                             .toList(),
                       },
-                      // Personalización para Box Armado
                       if (isCurrentPersonalizedBox) ...{
-                        // 🎯 NUEVO: Guardar la torta base si fue seleccionada
                         if (selectedBaseCake != null)
                           'selected_base_cake': selectedBaseCake?.name,
-                        // Guardar la personalización de la torta base si existe
                         if (selectedBaseCake != null) ...{
                           'selected_fillings':
                               selectedFillings.map((f) => f.name).toList(),
@@ -1945,13 +1729,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 (sel) => {
                                   'name': sel.extra.name,
                                   'quantity': sel.quantity,
-                                  'price': sel
-                                      .extra.costPerUnit, // <-- Agregar precio
+                                  'price': sel.extra.costPerUnit,
                                 },
                               )
                               .toList(),
                         },
-                        // Guardar los ítems de Mesa Dulce
                         'selected_mesa_dulce_items': selectedMesaDulceItems
                             .map(
                               (sel) => {
@@ -1966,12 +1748,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             )
                             .toList(),
                       },
-
                       if (itemNotes.isNotEmpty) 'item_notes': itemNotes,
                       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
                     };
 
-                    // --- LOGIC FIX: Gather ALL local files for Smart Merge ---
                     List<Object> finalLocalFiles = [];
                     if (allImageUrls.isNotEmpty) {
                       for (var url in allImageUrls) {
@@ -1983,9 +1763,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         }
                       }
                     }
-
-                    // Primary URL logic (for backward compat) handled above in loop or primarily via photo_urls
-                    // (Smart merge handles both)
 
                     customization.removeWhere(
                       (key, value) => (value is List && value.isEmpty),
@@ -2008,7 +1785,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       if (isEditing) {
                         _items[itemIndex!] = newItem;
                       } else {
-                        // --- SMART MERGE ---
                         _smartMergeItem(_items, newItem);
                       }
                     });
@@ -2036,11 +1812,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ? cakeProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : cakeProducts.first;
 
-    // Bandera para identificar la Mini Torta
     const miniCakeName = 'Mini Torta Personalizada (Base)';
+    const microCakeName = 'Micro Torta (Base)';
 
     final weightController = TextEditingController(
-      // Si se está editando una mini torta, forzar a '1.0' para el cálculo interno.
       text: existingItem?.name == miniCakeName
           ? '1.0'
           : customData['weight_kg']?.toString() ?? '1.0',
@@ -2049,7 +1824,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       text: isEditing ? existingItem.adjustments.toStringAsFixed(0) : '0',
     );
     final multiplierAdjustmentController = TextEditingController(
-      // Si se está editando una mini torta, forzar a '0'
       text: existingItem?.name == miniCakeName
           ? '0'
           : customData['multiplier_adjustment_per_kg']?.toStringAsFixed(0) ??
@@ -2080,7 +1854,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   (f) => f.name == name,
                 );
               }
-              // Lógica anterior para (data is String)
               if (data is String) {
                 return extraCostFillings.firstWhereOrNull(
                   (f) => f.name == data,
@@ -2099,7 +1872,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   (ex) => ex.name == name && !ex.isPerUnit,
                 );
               }
-              // Lógica anterior para (data is String)
               if (data is String) {
                 return cakeExtras.firstWhereOrNull(
                   (ex) => ex.name == data && !ex.isPerUnit,
@@ -2149,50 +1921,38 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         return;
       }
 
-      // --- 1. DEFINIR CONSTANTES PRIMERO ---
-      // (Si ya tenés estas constantes definidas AFUERA de la función, podés borrar estas 2 líneas)
       const miniCakeName = 'Mini Torta Personalizada (Base)';
-      const microCakeName = 'Micro Torta (Base)'; // <-- CONFIRMA ESTE NOMBRE
+      const microCakeName = 'Micro Torta (Base)';
 
-      // --- 2. USAR LAS CONSTANTES PARA TODO ---
-      final bool isMiniCake = selectedCakeType?.name == miniCakeName;
-      final bool isMicroCake = selectedCakeType?.name == microCakeName;
-      final bool isSmallCake = isMiniCake ||
-          isMicroCake; // <-- Esta es la única variable que importa
+      final bool isSmallCake =
+          selectedCakeType?.name == miniCakeName ||
+          selectedCakeType?.name == microCakeName;
 
-      // --- Lógica de Peso y Multiplicador (AHORA USA isSmallCake) ---
-      double weight = isSmallCake // <-- Corregido
-          ? 1.0 // Fuerza el peso a 1.0 si es Torta Chica
+      double weight = isSmallCake
+          ? 1.0
           : double.tryParse(weightController.text.replaceAll(',', '.')) ?? 0.0;
 
       manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
 
-      multiplierAdjustment = isSmallCake // <-- Corregido
-          ? 0.0 // Fuerza el multiplicador a 0 si es Torta Chica
+      multiplierAdjustment = isSmallCake
+          ? 0.0
           : double.tryParse(multiplierAdjustmentController.text) ?? 0.0;
 
       if (weight <= 0 && !isSmallCake) {
-        // <-- Corregido
-        // Solo valida peso > 0 si NO es Torta Chica
         calculatedBasePriceController.text = 'N/A';
         finalPriceController.text = 'N/A';
         return;
       }
 
-      // El 'base' ya está bien porque 'weight' y 'multiplierAdjustment' son correctos
       double base = (selectedCakeType!.price + multiplierAdjustment) * weight;
 
-      // Multiplicador para Extras y Rellenos por KG
       double multiplier;
       if (isSmallCake) {
-        // Si es Torta Chica, el multiplicador es 0.5 (mitad de precio)
         multiplier = 0.5;
       } else {
-        // Si es Torta normal, el multiplicador es el peso en KG
         multiplier = weight;
       }
 
-      // (El resto de tu lógica de cálculo de precios ya estaba perfecta)
       double extraFillingsPrice = selectedExtraFillings.fold(
         0.0,
         (sum, f) => sum + (f.extraCostPerKg * multiplier),
@@ -2202,7 +1962,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         (sum, ex) => sum + (ex.costPerKg * multiplier),
       );
 
-      // Extras por Unidad (no dependen del peso)
       double extrasUnitPrice = selectedExtrasUnit.fold(
         0.0,
         (sum, sel) => sum + (sel.extra.costPerUnit * sel.quantity),
@@ -2224,21 +1983,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
-          // --- CORRECCIÓN AQUÍ ---
           builder: (context, setDialogState) {
-            // 1. Definir las constantes y la variable de estado AQUÍ
-            // (Si ya las tenés definidas afuera, podés borrarlas de calculateCakePrice)
             const miniCakeName = 'Mini Torta Personalizada (Base)';
-            const microCakeName =
-                'Micro Torta (Base)'; // <-- Revisa este nombre
+            const microCakeName = 'Micro Torta (Base)';
 
             final bool isMiniCake = selectedCakeType?.name == miniCakeName;
             final bool isMicroCake = selectedCakeType?.name == microCakeName;
-            // ESTA ES LA VARIABLE CORRECTA que se actualiza en cada setDialogState
             final bool isSmallCake = isMiniCake || isMicroCake;
-
-            // --- Re-definimos los helpers DENTRO del builder ---
-            // (para que tengan acceso al 'setDialogState' y a 'isSmallCake')
 
             Widget buildFillingCheckbox(Filling filling, bool isExtraCost) {
               bool isSelected = isExtraCost
@@ -2247,7 +1998,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               return CheckboxListTile(
                 title: Text(filling.name),
                 subtitle: Text(
-                  // --- CORREGIDO: Usar isSmallCake ---
                   isSmallCake
                       ? (filling.extraCostPerKg > 0
                           ? '(+\$${filling.extraCostPerKg.toStringAsFixed(0)})'
@@ -2285,7 +2035,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               bool isSelected = selectedExtrasKg.contains(extra);
               return CheckboxListTile(
                 title: Text(extra.name),
-                // --- CORREGIDO: Usar isSmallCake ---
                 subtitle: Text(
                   isSmallCake
                       ? '(+\$${extra.costPerKg.toStringAsFixed(0)})'
@@ -2363,7 +2112,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 contentPadding: EdgeInsets.zero,
               );
             }
-            // --- Fin de re-definición de helpers ---
 
             return AlertDialog(
               title: Row(
@@ -2385,9 +2133,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<Product>(
-                      initialValue: selectedCakeType,
+                      value: selectedCakeType,
                       items: cakeProducts.map((Product product) {
-                        // --- CORREGIDO: Usar las constantes locales ---
                         final isCurrentProductMiniCake =
                             product.name == miniCakeName ||
                                 product.name == microCakeName;
@@ -2401,22 +2148,16 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       }).toList(),
                       onChanged: (Product? newValue) {
                         setDialogState(() {
-                          // Guardar el estado ANTES de cambiarlo
                           final bool eraTortaChica = isSmallCake;
-
                           selectedCakeType = newValue;
-
-                          // Calcular el NUEVO estado (esto no es necesario si 'isSmallCake' está arriba)
                           final bool esTortaChicaNueva =
                               newValue?.name == miniCakeName ||
                                   newValue?.name == microCakeName;
 
                           if (esTortaChicaNueva) {
-                            // Si es Mini Torta, forzar valores
                             weightController.text = '1.0';
                             multiplierAdjustmentController.text = '0';
                           } else if (eraTortaChica) {
-                            // Si veníamos de Mini Torta y cambiamos a Torta KG
                             weightController.text = '1.0';
                             multiplierAdjustmentController.text = '0';
                           }
@@ -2430,8 +2171,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       isExpanded: true,
                     ),
                     const SizedBox(height: 16),
-
-                    // --- PESO ESTIMADO (CORREGIDO: Usar isSmallCake) ---
                     if (!isSmallCake)
                       Column(
                         children: [
@@ -2455,8 +2194,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           const SizedBox(height: 16),
                         ],
                       ),
-
-                    // --- AJUSTE MULTIPLICADOR (CORREGIDO: Usar isSmallCake) ---
                     if (!isSmallCake)
                       Column(
                         children: [
@@ -2484,8 +2221,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           const SizedBox(height: 16),
                         ],
                       ),
-
-                    // ... (El resto del contenido: Rellenos, Extras, Notas, Fotos, Precios) ...
                     Text(
                       'Rellenos Incluidos (Seleccionar)',
                       style: Theme.of(context).textTheme.titleSmall,
@@ -2630,11 +2365,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(),
                   onPressed: () {
                     if (selectedCakeType == null) return;
 
-                    // --- CORRECCIÓN: Usar la variable 'isSmallCake' del builder ---
                     final weight = isSmallCake
                         ? 1.0
                         : double.tryParse(
@@ -2648,13 +2381,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               multiplierAdjustmentController.text,
                             ) ??
                             0.0;
-                    // --- FIN CORRECCIÓN ---
 
                     final adjustmentNotes =
                         adjustmentNotesController.text.trim();
 
                     if (weight <= 0 && !isSmallCake) {
-                      // <-- CORREGIDO
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('El peso debe ser mayor a 0.'),
@@ -2669,7 +2400,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       'product_category': selectedCakeType!.category.name,
                       'cake_type': selectedCakeType!.name,
                       'weight_kg': weight,
-                      if (!isSmallCake) // <-- CORREGIDO
+                      if (!isSmallCake)
                         'multiplier_adjustment_per_kg':
                             multiplierAdjustmentValue,
                       'selected_fillings':
@@ -2696,7 +2427,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
                     };
 
-                    // --- LOGIC FIX: Gather ALL local files for Smart Merge ---
                     List<Object> finalLocalFiles = [];
                     if (allImageUrls.isNotEmpty) {
                       for (var url in allImageUrls) {
@@ -2708,9 +2438,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         }
                       }
                     }
-
-                    // Primary URL for single-field backward compatibility (if needed)
-                    // (Smart merge handles photo_urls list primarily)
 
                     customization.removeWhere(
                       (key, value) => (value is List && value.isEmpty),
@@ -2731,11 +2458,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                     _updateItemsAndRecalculate(() {
                       if (isEditing) {
-                        // Editing specific item -> Replace directly (no merge usually, or maybe yes?)
-                        // Usually edit replaces that specific slot. Merge is for ADD new.
                         _items[itemIndex!] = newItem;
                       } else {
-                        // Add New -> Attempt Smart Merge
                         _smartMergeItem(_items, newItem);
                       }
                     });
@@ -2757,16 +2481,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   void _addMesaDulceDialog({OrderItem? existingItem, int? itemIndex}) {
     final bool isEditing = existingItem != null;
 
-    // --- ESTADO LOCAL DEL CARRITO ---
     List<OrderItem> pendingItems = [];
-    if (isEditing) {
-      // Si editamos, iniciamos con ese item en la lista (aunque la UX de editar múltiple es rara,
-      // asumiremos que si edita, edita ESE item. Pero para mantener consistencia,
-      // el modo edición podría mantenerse simple o permitir agregar más).
-      // SIMPLIFICACIÓN: SI EDITA, ES SOLO ESE ITEM.
-    }
 
-    // Estado del formulario de selección actual
     Product? selectedProduct = isEditing
         ? mesaDulceProducts.firstWhereOrNull((p) => p.name == existingItem.name)
         : mesaDulceProducts.firstWhereOrNull(
@@ -2789,7 +2505,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
     }
 
-    // Controladores
     final qtyController = TextEditingController(
       text: isEditing ? existingItem.qty.toString() : '1',
     );
@@ -2810,27 +2525,19 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               '0')
           : '0',
     );
-    // Removed duplicate declaration
     final finalPriceController = TextEditingController();
     bool isUnitSaleForDozen = isEditing
         ? (existingItem.customizationJson?['is_unit_sale_for_dozen'] == true)
         : false;
 
-    // Imagenes (Simplificación: Por ahora no implementaremos carga de fotos múltiple por item en esta refactorización masiva,
-    // o se aplicará al item que se está creando).
-    // Mantenemos la lógica de imagen para el item ACTUAL que se está configurando.
     final ImagePicker picker = ImagePicker();
-    // Variables de estado para FOTOS locales en el diálogo
     List<XFile> _selectedFiles = [];
     String? _existingRemoteUrl;
 
     if (isEditing) {
-      // 1. Cargar locales
       if (existingItem.localFile != null &&
           (existingItem.localFile is List) &&
           (existingItem.localFile as List).isNotEmpty) {
-        // Asumiendo que son XFile o File, lo convertimos a XFile si es necesario
-        // Para simplificar, si ya está en memoria, lo usamos.
         final files = existingItem.localFile as List;
         for (var f in files) {
           if (f is XFile) {
@@ -2841,12 +2548,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         }
       }
 
-      // 2. Cargar remota (Si no hay locales nuevas que la reemplacen, o para mostrarla)
-      // La lógica actual de Mesa Dulce es "Una sola foto" (o al menos UX para una).
-      // Si hay URL remota y no hay local, la mostramos.
       if (existingItem.customizationJson?['photo_url'] != null) {
         final url = existingItem.customizationJson!['photo_url'];
-        // Ignore placeholders as they are local files
         if (!url.startsWith('placeholder_')) {
           _existingRemoteUrl = url;
         }
@@ -2858,7 +2561,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            // --- CÁLCULO DE PRECIO DEL ITEM ACTUAL ---
             void calculateCurrentItemPrice() {
               if (selectedProduct == null) {
                 finalPriceController.text = '0';
@@ -2867,7 +2569,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               int qty = int.tryParse(qtyController.text) ?? 0;
               double manualAdj =
                   double.tryParse(adjustmentsController.text) ?? 0.0;
-              // Ajuste Unitario
               double unitAdj =
                   double.tryParse(unitAdjustmentsController.text) ?? 0.0;
 
@@ -2879,27 +2580,22 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     (selectedProduct!.price / 2);
               } else if (selectedProduct!.unit == ProductUnit.dozen &&
                   isUnitSaleForDozen) {
-                // Lógica de venta por unidad suelta para docenas
                 unitBasePrice = selectedProduct!.price / 12;
               } else {
                 unitBasePrice = selectedProduct!.price;
               }
 
-              // Precio unitario efectivo = precio base + ajuste unitario
               double effectiveUnitDetailPrice = unitBasePrice + unitAdj;
               basePrice = effectiveUnitDetailPrice;
 
-              // Total = (Effective Unit * Qty) + Manual Adjustment (Fixed)
               double total = (effectiveUnitDetailPrice * qty) + manualAdj;
               finalPriceController.text = total.toStringAsFixed(0);
             }
 
-            // Forzamos un cálculo inicial al construir si el controlador está vacío
             if (finalPriceController.text.isEmpty) {
               calculateCurrentItemPrice();
             }
 
-            // --- FUNCIÓN PARA AGREGAR A LA LISTA TEMPORAL ---
             void addToPendingList() {
               if (selectedProduct == null) return;
               int qty = int.tryParse(qtyController.text) ?? 0;
@@ -2907,20 +2603,16 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               if (selectedProduct!.variants.isNotEmpty &&
                   selectedVariant == null) return;
 
-              // --- LOGIC FIX: Photo Handling for Mesa Dulce Edit/Add ---
               List<XFile> finalLocalFiles = [];
               String? finalPhotoUrl;
 
-              // 1. Si hay locales nuevas, toman precedencia para la preview
               if (_selectedFiles.isNotEmpty) {
                 finalLocalFiles.addAll(_selectedFiles);
               }
-              // 2. Si quedó la remota y no se borró
               if (_existingRemoteUrl != null) {
                 finalPhotoUrl = _existingRemoteUrl;
               }
 
-              // Construir Customization
               final customization = {
                 'product_category': selectedProduct!.category.name,
                 'product_unit': selectedProduct!.unit.name,
@@ -2957,26 +2649,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
               setDialogState(() {
                 if (isEditing) {
-                  // Si estamos en modo edición, reemplazar y cerrar
                   _updateItemsAndRecalculate(() {
                     _items[itemIndex!] = newItem;
                   });
                   Navigator.pop(context);
                 } else {
-                  // --- MERGE LOGIC START ---
-                  // Check if identical exists
-                  // --- SMART MERGE LOGIC (Using new Helper) ---
                   _smartMergeItem(pendingItems, newItem);
-                  // --- MERGE LOGIC END ---
-                  // --- MERGE LOGIC END ---
-                  // Resetear formulario para siguiente item
                   qtyController.text = '1';
                   adjustmentsController.text = '0';
                   notesController.clear();
                   itemNotesController.clear();
                   unitAdjustmentsController.text = '0';
                   _selectedFiles.clear();
-                  // No agregamos a _filesToUpload todavía, lo hacemos al dar "Agregar Todo"
                 }
               });
             }
@@ -3006,7 +2690,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (!isEditing) ...[
-                      // --- LISTA DE PROVISORIOS ---
                       if (pendingItems.isNotEmpty)
                         Container(
                           constraints: const BoxConstraints(maxHeight: 150),
@@ -3022,14 +2705,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 const Divider(height: 1),
                             itemBuilder: (ctx, idx) {
                               final it = pendingItems[idx];
-                              // Fallback variant name logic
                               final vName =
                                   it.customizationJson?['variant_name'] ??
                                       (it.customizationJson?['is_half_dozen'] ==
                                               true
                                           ? 'Media Docena'
                                           : 'Unidad');
-                              // Limpieza visual del nombre de variante (ej: size20cm -> 20cm)
                               final formattedVName = vName.startsWith('size')
                                   ? vName.replaceAll('size', '')
                                   : vName;
@@ -3047,7 +2728,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          // --- COLUMNA DE FOTOS ---
                                           if (it.localFile != null &&
                                               (it.localFile as List).isNotEmpty)
                                             Container(
@@ -3064,7 +2744,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                                 ),
                                               ),
                                             ),
-                                          // --- DETALLES ---
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment:
@@ -3124,8 +2803,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       ),
                       const Divider(thickness: 2),
                     ],
-
-                    // --- FORMULARIO DE SELECCIÓN ---
                     Flexible(
                       child: SingleChildScrollView(
                         padding: const EdgeInsets.only(top: 8),
@@ -3299,9 +2976,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               maxLines: 2,
                             ),
                             const SizedBox(height: 10),
-
-                            // --- SECCIÓN FOTOS (Mejorada) ---
-                            // --- SECCIÓN FOTOS (Mejorada) ---
                             if (_selectedFiles.isNotEmpty ||
                                 _existingRemoteUrl != null)
                               Container(
@@ -3317,7 +2991,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                         ),
                                         child: _buildImageThumbnail(
                                           _existingRemoteUrl!,
-                                          true, // isNetwork? No, isNetwork url string
+                                          true,
                                           () => setDialogState(() {
                                             _existingRemoteUrl = null;
                                           }),
@@ -3330,7 +3004,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                         ),
                                         child: _buildImageThumbnail(
                                           file,
-                                          false, // isNetwork
+                                          false,
                                           () => setDialogState(() {
                                             _selectedFiles.remove(file);
                                           }),
@@ -3355,7 +3029,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                             ),
                             const Divider(),
                             const SizedBox(height: 10),
-                            // Visualización Precio Actual
                             Align(
                               alignment: Alignment.centerRight,
                               child: Text(
@@ -3368,7 +3041,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                               ),
                             ),
                             const SizedBox(height: 10),
-                            // Botón Agregar a Lista (Solo si no es editing, o si se quiere permitir)
                             if (!isEditing)
                               SizedBox(
                                 width: double.infinity,
@@ -3394,29 +3066,23 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   FilledButton(
                     onPressed: () {
                       if (isEditing) {
-                        addToPendingList(); // Trigger save logic logic inside
+                        addToPendingList();
                       } else {
-                        // Agregar todos los pendientes
-                        // Agregar todos los pendientes con lógica de merge
                         _updateItemsAndRecalculate(() {
                           for (var newItem in pendingItems) {
-                            // Procesar fotos si existen
                             if (newItem.localFile != null &&
                                 (newItem.localFile as List).isNotEmpty) {
                               final files = newItem.localFile as List<XFile>;
                               final List<String> placeholderKeys = [];
 
                               for (var file in files) {
-                                // FIX: Prefijo correcto 'placeholder_' para que el backend lo detecte
                                 final String key =
                                     'placeholder_${DateTime.now().microsecondsSinceEpoch}_${file.name}';
                                 _filesToUpload[key] = file;
                                 placeholderKeys.add(key);
                               }
 
-                              // Actualizar el JSON del item para incluir la referencia (ARRAY)
                               if (newItem.customizationJson != null) {
-                                // Preservar URLs remotas existentes si las hubiera
                                 final existingUrls =
                                     newItem.customizationJson!['photo_urls'];
                                 List<String> currentList = [];
@@ -3426,18 +3092,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
                                 currentList.addAll(placeholderKeys);
 
-                                // Guardar como 'photo_urls' (plural, array)
                                 newItem.customizationJson!['photo_urls'] =
                                     currentList;
 
-                                // Legado: mantener photo_url singular con la primera para compatibilidad si fuera necesario
                                 if (currentList.isNotEmpty) {
                                   newItem.customizationJson!['photo_url'] =
                                       currentList.first;
                                 }
                               }
                             }
-                            // 4. Agregar usando Smart Merge para evitar duplicados en la lista general
                             _smartMergeItem(_items, newItem);
                           }
                         });
@@ -3482,9 +3145,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
       );
     } else {
-      // FIX: Web Compatibility Check
       if (kIsWeb) {
-        // En Web, transformamos el XFile (o File path) a network image (Blob URL)
         final String path = imageSource is XFile
             ? imageSource.path
             : (imageSource is File ? imageSource.path : imageSource.toString());
@@ -3496,7 +3157,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
         );
       } else {
-        // En Móvil/Desktop, usamos File IO
         final String path = imageSource is XFile
             ? imageSource.path
             : (imageSource is File ? imageSource.path : imageSource.toString());
@@ -3541,7 +3201,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  // --- HELPER: VISTA PREVIA DE IMAGEN ---
   void _showImagePreview(BuildContext context, dynamic imageSource) {
     showDialog(
       context: context,
@@ -3572,7 +3231,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   }
 
   Widget _buildPreviewImage(dynamic imageSource) {
-    // 1. Si es XFile o File (Local)
     if (imageSource is XFile || imageSource is File) {
       final String path =
           imageSource is XFile ? imageSource.path : (imageSource as File).path;
@@ -3583,11 +3241,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         return Image.file(File(path));
       }
     }
-    // 2. Si es String (URL Remota)
     return Image.network(imageSource as String);
   }
 
-  // --- FUNCIÓN EDITAR ITEM ROUTER (sin cambios) ---
   void _editItemDialogRouter(int index) {
     final item = _items[index];
     final custom = item.customizationJson ?? {};
@@ -3622,7 +3278,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           content: Text(
             'No se puede editar (Categoría desconocida: "${item.name}")',
             style: TextStyle(
-              // Color de texto sobre el contenedor secundario
               color: Theme.of(context).colorScheme.onSecondaryContainer,
             ),
           ),
@@ -3632,7 +3287,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
-  // --- 6. FUNCIÓN SUBMIT (MODIFICADA) ---
   Future<void> _submit() async {
     final valid = _formKey.currentState?.validate() ?? false;
     _recalculateTotals();
@@ -3710,16 +3364,12 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           ? null
           : _notesController.text.trim(),
       'client_address_id': _selectedAddressId,
-      'is_paid': _isPaid, // Enviar estado pagado
+      'is_paid': _isPaid,
       'items': _items.map((item) => item.toJson()).toList(),
     };
 
-    debugPrint('--- Payload a Enviar ---');
-    debugPrint(payload.toString());
-
     try {
       if (isEditMode) {
-        // 1. Llama a la API y captura la orden actualizada
         final Order updatedOrder = await ref
             .read(ordersRepoProvider)
             .updateOrderWithFiles(widget.order!.id, payload, _filesToUpload);
@@ -3737,17 +3387,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             ),
           );
 
-          // 2. 🔥 ACTUALIZA LA LISTA LOCAL (en vez de invalidate)
           await ref
               .read(ordersWindowProvider.notifier)
               .updateOrder(updatedOrder);
 
-          // 3. Invalida solo el detalle (para la pág de detalle)
           ref.invalidate(orderByIdProvider(widget.order!.id));
           context.pop();
         }
       } else {
-        // 1. Llama a la API y captura la orden creada
         final Order createdOrder = await ref
             .read(ordersRepoProvider)
             .createOrderWithFiles(payload, _filesToUpload);
@@ -3765,7 +3412,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             ),
           );
 
-          // 2. 🔥 AÑADE A LA LISTA LOCAL (en vez de invalidate)
           await ref.read(ordersWindowProvider.notifier).addOrder(createdOrder);
 
           context.pop();
@@ -3787,8 +3433,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
-  /// Formatea una lista de extras (que puede ser List<Map> o List<String>)
-  /// para mostrar en el resumen del pedido.
   String _formatDetailsForList(List<dynamic>? rawList, double multiplier) {
     if (rawList == null || rawList.isEmpty) {
       return '';
@@ -3798,28 +3442,24 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     for (final e in rawList) {
       if (e is Map) {
-        // Formato Nuevo (con precio)
         final name = e['name'] ?? 'Extra';
         final qty = (e['quantity'] as num?) ?? 1;
         final price = (e['price'] as num?)?.toDouble() ?? 0.0;
 
-        // Aplicamos el multiplicador (0.5 o 1.0/peso)
         final totalCost = (price * qty) * multiplier;
 
         final priceText = (totalCost > 0)
-            ? ' (${_currencyFormat.format(totalCost)})' // Usa _currencyFormat
+            ? ' (${_currencyFormat.format(totalCost)})'
             : '';
 
         parts.add(qty > 1 ? '$name (x$qty)$priceText' : '$name$priceText');
       } else if (e is String) {
-        // Formato Viejo (solo nombre)
         parts.add(e);
       }
     }
     return parts.join(', ');
   }
 
-  // --- BUILD WIDGET (MODIFICADO PARA DIRECCIONES) ---
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) => _recalculateTotals());
@@ -3832,78 +3472,31 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               children: [
-                _buildClientSelector(context), // El buscador de clientes
-                // --- SECCIÓN DIRECCIÓN (NUEVA) ---
+                _buildClientSelector(context),
                 if (_selectedClient != null)
-                  _buildAddressSelector(context), // <-- AÑADIDO
-                const SizedBox(height: 16),
-
-                // --- SECCIÓN FECHA Y HORA (sin cambios) ---
-                Card(
-                  elevation: 0,
-                  // Un contenedor de superficie ligeramente tintado
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Column(
-                      children: [
-                        ListTile(
-                          dense: true,
-                          leading: Icon(
-                            Icons.calendar_today,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          title: Text(
-                            'Fecha Evento: ${DateFormat('EEEE d \'de\' MMMM, y', 'es_AR').format(_date)}',
-                          ),
-                          onTap: _pickDate,
-                        ),
-                        Divider(
-                          height: 1,
-                          indent: 16,
-                          endIndent: 16,
-                          color: Theme.of(context).colorScheme.surfaceContainer,
-                        ),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ListTile(
-                                dense: true,
-                                leading: Icon(
-                                  Icons.access_time,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                title: Text('Desde: ${_start.format(context)}'),
-                                onTap: () => _pickTime(true),
-                              ),
-                            ),
-                            Container(
-                              height: 30,
-                              width: 1,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainer,
-                            ),
-                            Expanded(
-                              child: ListTile(
-                                dense: true,
-                                leading: Icon(
-                                  Icons.update,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                title: Text('Hasta: ${_end.format(context)}'),
-                                onTap: () => _pickTime(false),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  DeliverySection(
+                    selectedClient: _selectedClient!,
+                    selectedAddressId: _selectedAddressId,
+                    onAddressSelected: (newId) {
+                      setState(() {
+                        _selectedAddressId = newId;
+                        if (newId == null) {
+                          _deliveryCostController.text = '0';
+                        }
+                      });
+                    },
+                    onAddAddress: _showAddAddressDialog,
                   ),
+                const SizedBox(height: 16),
+                DateTimePickerRow(
+                  date: _date,
+                  startTime: _start,
+                  endTime: _end,
+                  onPickDate: _pickDate,
+                  onPickStartTime: () => _pickTime(true),
+                  onPickEndTime: () => _pickTime(false),
                 ),
                 const SizedBox(height: 20),
-
-                // --- SECCIÓN NOTAS (sin cambios) ---
                 TextFormField(
                   controller: _notesController,
                   decoration: const InputDecoration(
@@ -3916,8 +3509,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                   textCapitalization: TextCapitalization.sentences,
                 ),
                 const SizedBox(height: 24),
-
-                // --- SECCIÓN PRODUCTOS (sin cambios) ---
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -3942,7 +3533,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       padding: EdgeInsets.symmetric(vertical: 24.0),
                       child: Text(
                         'Añade al menos un producto al pedido.',
-                        // Usa el color de texto "variante" (más sutil)
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -3955,21 +3545,17 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: _items.length,
                     itemBuilder: (context, index) {
-                      // (Reemplazo para el bloque anterior - Aprox. línea 894)
                       final item = _items[index];
                       final custom = item.customizationJson ?? {};
                       final category = ProductCategory.values.firstWhereOrNull(
                         (e) => e.name == custom['product_category'],
                       );
 
-                      // --- INICIO DE LA LÓGICA DE DETALLES ---
                       final parts = <String>[];
 
                       if (category == ProductCategory.torta) {
-                        // --- 1. Definir si es Torta Chica ---
                         const miniCakeName = 'Mini Torta Personalizada (Base)';
-                        const microCakeName =
-                            'Micro Torta (Base)'; // <-- Revisa este nombre
+                        const microCakeName = 'Micro Torta (Base)';
 
                         final bool isSmallCake = item.name == miniCakeName ||
                             item.name == microCakeName;
@@ -3977,12 +3563,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         final double weight =
                             (custom['weight_kg'] as num?)?.toDouble() ?? 1.0;
 
-                        // --- 2. Definir el multiplicador de extras ---
-                        // Usa 0.5 si es torta chica, si no, el peso
                         final double extraMultiplier =
                             isSmallCake ? 0.5 : weight;
 
-                        // --- 3. Calcular Precio Base (despejando) ---
                         final List<dynamic> extraFillingsRaw =
                             custom['selected_extra_fillings'] ?? [];
                         final List<dynamic> extrasKgRaw =
@@ -4031,12 +3614,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         final double precioCalculadoConAjusteKg =
                             item.basePrice - costoExtrasTotal;
 
-                        // --- 4. Construir 'parts' ---
                         parts.add(
                           'Precio Base: ${_currencyFormat.format(precioCalculadoConAjusteKg)}',
                         );
 
-                        // Muestra el peso solo si NO es una torta chica
                         if (!isSmallCake && custom['weight_kg'] != null) {
                           parts.add('Peso: ${custom['weight_kg']} kg');
                         }
@@ -4072,18 +3653,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           parts.add('Extras (x ud): $extrasUnit');
                         }
                       } else if (category == ProductCategory.mesaDulce) {
-                        // 1. Mostrar Variante (String) si existe (ej: "18 cm")
                         if (custom['variant_name'] != null &&
                             custom['variant_name'].toString().isNotEmpty) {
                           final vName = custom['variant_name'].toString();
-                          // Limpieza visual: si viene como "size24cm", lo dejamos como "24cm"
                           final formatted = vName.startsWith('size')
                               ? vName.replaceFirst('size', '')
                               : vName;
                           parts.add(formatted);
-                        }
-                        // 2. Mostrar Size (Enum) si existe (legacy/compatibility)
-                        else if (custom['selected_size'] != null) {
+                        } else if (custom['selected_size'] != null) {
                           parts.add(
                             getUnitText(
                               ProductUnit.values.byName(
@@ -4095,7 +3672,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           parts.add('Media Docena');
                         }
                       } else if (category == ProductCategory.box) {
-                        // Lógica de Box (replicando la de order_detail_page)
                         const miniCakeName = 'Mini Torta Personalizada (Base)';
                         const microCakeName = 'Micro Torta (Base)';
                         final String boxType = custom['box_type'] ?? '';
@@ -4107,7 +3683,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                         bool isSmallCake = isPersonalizado
                             ? (baseCakeName == miniCakeName ||
                                 baseCakeName == microCakeName)
-                            : true; // Predefinido siempre es torta chica
+                            : true;
 
                         final double costMultiplier = isSmallCake ? 0.5 : 1.0;
 
@@ -4163,21 +3739,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       double manualAdjustment = 0.0;
 
                       if (category == ProductCategory.box) {
-                        // En los Boxes, el ajuste manual PURO se guarda en el JSON
                         manualAdjustment =
                             (custom['manual_adjustment_value'] as num?)
                                     ?.toDouble() ??
                                 0.0;
                       } else {
-                        // En Tortas y Mesa Dulce, el 'adjustments' del item es el ajuste manual
                         manualAdjustment = item.adjustments;
                       }
 
-                      // Añadir la línea al desglose SOLAMENTE si es diferente de cero
                       if (manualAdjustment != 0) {
                         final sign = manualAdjustment > 0
                             ? '+'
-                            : ''; // Añade un '+' si es positivo
+                            : '';
                         parts.add(
                           'Ajuste Manual: $sign${_currencyFormat.format(manualAdjustment)}',
                         );
@@ -4203,19 +3776,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // --- COLUMNA DE IMÁGENES (Apiladas verticalmente) ---
                               Builder(
                                 builder: (context) {
-                                  // 1. Recolectar todas las fuentes de imagen
                                   final List<dynamic> allImages = [];
 
-                                  // Prioridad: Archivos locales
                                   if (item.localFile != null &&
                                       (item.localFile as List).isNotEmpty) {
                                     allImages.addAll(item.localFile as List);
                                   }
 
-                                  // Secundario: URL remota (si existe)
                                   if (custom['photo_urls'] != null && custom['photo_urls'] is List) {
                                     for (var url in custom['photo_urls'] as List) {
                                       if (!url.toString().startsWith('placeholder_')) {
@@ -4224,13 +3793,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                     }
                                   } else if (custom['photo_url'] != null) {
                                     final url = custom['photo_url'].toString();
-                                    // Ignore placeholders as they are local files
                                     if (!url.startsWith('placeholder_')) {
                                       allImages.add(url);
                                     }
                                   }
 
-                                  // CASO A: No hay imágenes -> Mostrar Avatar con Cantidad
                                   if (allImages.isEmpty) {
                                     return CircleAvatar(
                                       backgroundColor: Theme.of(context)
@@ -4248,8 +3815,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                     );
                                   }
 
-                                  // CASO B: Hay imágenes -> Mostrar FILA horizontal (Max 3)
-                                  // para evitar altura excesiva.
                                   return Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -4257,8 +3822,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                           i < allImages.length && i < 3;
                                           i++) ...[
                                         if (i > 0)
-                                          const SizedBox(
-                                              width: 4), // Espacio horizontal
+                                          const SizedBox(width: 4),
 
                                         GestureDetector(
                                           onTap: () => _showImagePreview(
@@ -4268,51 +3832,9 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                               ClipRRect(
                                                 borderRadius:
                                                     BorderRadius.circular(4),
-                                                child: (allImages[i] is XFile ||
-                                                        allImages[i] is File)
-                                                    ? (kIsWeb
-                                                        ? Image.network(
-                                                            (allImages[i]
-                                                                    is XFile)
-                                                                ? (allImages[i]
-                                                                        as XFile)
-                                                                    .path
-                                                                : (allImages[i]
-                                                                        as File)
-                                                                    .path,
-                                                            width: 50,
-                                                            height: 50,
-                                                            fit: BoxFit.cover,
-                                                            errorBuilder: (_,
-                                                                    __, ___) =>
-                                                                const Icon(Icons
-                                                                    .broken_image),
-                                                          )
-                                                        : Image.file(
-                                                            File((allImages[i]
-                                                                    is XFile
-                                                                ? (allImages[i]
-                                                                        as XFile)
-                                                                    .path
-                                                                : (allImages[i]
-                                                                        as File)
-                                                                    .path)),
-                                                            width: 50,
-                                                            height: 50,
-                                                            fit: BoxFit.cover,
-                                                          ))
-                                                    : Image.network(
-                                                        allImages[i] as String,
-                                                        width: 50,
-                                                        height: 50,
-                                                        fit: BoxFit.cover,
-                                                        errorBuilder: (_, __,
-                                                                ___) =>
-                                                            const Icon(Icons
-                                                                .broken_image),
-                                                      ),
+                                                child: _buildSafeImageWidget(
+                                                    allImages[i], 50, 50),
                                               ),
-                                              // Cantidad Batch (solo en la primera)
                                               if (i == 0 && item.qty > 1)
                                                 Positioned(
                                                   bottom: 0,
@@ -4343,7 +3865,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                                     ),
                                                   ),
                                                 ),
-                                              // Overlay "+N" si es la 3ra imagen y hay más
                                               if (i == 2 &&
                                                   allImages.length > 3)
                                                 Positioned.fill(
@@ -4357,7 +3878,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                                     ),
                                                     alignment: Alignment.center,
                                                     child: Text(
-                                                      '+${allImages.length - 2}', // Muestra +X (restando las 2 primeras visibles)
+                                                      '+${allImages.length - 2}',
                                                       style: const TextStyle(
                                                         color: Colors.white,
                                                         fontWeight:
@@ -4375,7 +3896,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                 },
                               ),
                               const SizedBox(width: 12),
-                              // --- DETALLES DEL ITEM ---
                               Expanded(
                                 child: InkWell(
                                   onTap: () => _editItemDialogRouter(index),
@@ -4425,7 +3945,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   ),
                                 ),
                               ),
-                              // --- PRECIO Y BOTÓN ELIMINAR ---
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
@@ -4457,328 +3976,61 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                       );
                     },
                   ),
-
                 const SizedBox(height: 100),
               ],
             ),
           ),
-
-          // --- SECCIÓN INFERIOR FIJA (sin cambios) ---
-          _buildSummaryAndSave(),
+          OrderTotalsCard(
+            depositController: _depositController,
+            deliveryCostController: _deliveryCostController,
+            isPaid: _isPaid,
+            onPaidChanged: (val) {
+              setState(() => _isPaid = val);
+              _recalculateTotals();
+            },
+            onTotalsChanged: _recalculateTotals,
+            itemsSubtotal: _itemsSubtotal,
+            deliveryCost: _deliveryCost,
+            grandTotal: _grandTotal,
+            depositAmount: _depositAmount,
+            remainingBalance: _remainingBalance,
+            isLoading: _isLoading,
+            isEditMode: isEditMode,
+            onSubmit: _submit,
+          ),
         ],
       ),
     );
   }
 
-  // --- 11. WIDGET NUEVO: SELECCIÓN DE DIRECCIÓN ---
-  Widget _buildAddressSelector(BuildContext context) {
-    // Observamos el provider que trae los detalles (y direcciones) del cliente
-    final asyncClientDetails = ref.watch(
-      clientDetailsProvider(_selectedClient!.id),
-    );
-
-    return asyncClientDetails.when(
-      loading: () => Center(
-        child: Padding(
-          padding: EdgeInsets.all(8.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              SizedBox(width: 16),
-              Text(
-                'Cargando direcciones...',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      error: (err, stack) => Text(
-        'Error al cargar direcciones: $err',
-        style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
-      ),
-      data: (client) {
-        final addresses = client?.addresses ?? [];
-
-        // Asegurarse que el ID seleccionado sigue siendo válido
-        // Esto es útil si el usuario edita el pedido y la dirección fue borrada
-        if (_selectedAddressId != null &&
-            !addresses.any((a) => a.id == _selectedAddressId)) {
-          // El ID guardado ya no existe, resetear.
-          _selectedAddressId = null;
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DropdownButtonFormField<int?>(
-              initialValue: _selectedAddressId,
-              decoration: InputDecoration(
-                labelText: 'Dirección de Entrega',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(
-                  Icons.location_on_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              items: [
-                // Opción "Retira en local"
-                const DropdownMenuItem(
-                  value: null,
-                  child: Text(
-                    'Retira en local (o sin dirección)',
-                    style: TextStyle(fontStyle: FontStyle.italic),
-                  ),
-                ),
-                // Lista de direcciones del cliente
-                ...addresses.map((address) {
-                  return DropdownMenuItem(
-                    value: address.id,
-                    child: Text(
-                      address.displayAddress, // 'Casa', 'Oficina', etc.
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                }),
-              ],
-              onChanged: (int? newId) {
-                setState(() {
-                  _selectedAddressId = newId;
-                  // Si eligen "Retira en local", poner costo de envío en 0
-                  if (newId == null) {
-                    _deliveryCostController.text = '0';
-                  }
-                  // Si eligen una dirección, ¿poner costo de envío?
-                  // Mejor dejar que el usuario lo ponga manualmente.
-                });
-              },
-              validator: (value) {
-                // Es válido que sea nulo (retira en local)
-                return null;
-              },
-            ),
-            const SizedBox(height: 8),
-            // Botón para añadir nueva dirección
-            Center(
-              child: TextButton.icon(
-                icon: const Icon(Icons.add_location_alt_outlined, size: 20),
-                label: const Text('Añadir nueva dirección al cliente'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.primary,
-                ),
-                onPressed: _showAddAddressDialog,
-              ),
-            ),
-          ],
+  Widget _buildSafeImageWidget(dynamic imageSource, double width, double height) {
+    if (imageSource is XFile || imageSource is File) {
+      if (kIsWeb) {
+        return Image.network(
+          (imageSource is XFile) ? imageSource.path : (imageSource as File).path,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
         );
-      },
-    );
-  }
-
-  // --- 12. FUNCIÓN NUEVA: MOSTRAR MODAL DE DIRECCIONES ---
-  Future<void> _showAddAddressDialog() async {
-    if (_selectedClient == null) return;
-
-    final int clientId = _selectedClient!.id;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: AddressFormDialog(clientId: clientId),
-          ),
+      } else {
+        return Image.file(
+          File(imageSource is XFile ? imageSource.path : (imageSource as File).path),
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
         );
-      },
-    );
-
-    // Al cerrar el modal, refrescar los datos del cliente para ver la nueva dirección
-    if (!mounted) return;
-
-    // Invalida el provider global para asegurar que futuros usos traigan data fresca
-    ref.invalidate(clientDetailsProvider(clientId));
-
-    // Trae la data fresca manualmente para actualizar el estado local
-    try {
-      final refreshed =
-          await ref.read(clientsRepoProvider).getClientById(clientId);
-      if (refreshed != null && mounted) {
-        setState(() {
-          _selectedClient = refreshed;
-          // Opcional: Auto-seleccionar la última dirección agregada
-          if (refreshed.addresses.isNotEmpty) {
-            // Podríamos buscar la de ID más alto o similar
-            // _selectedAddressId = refreshed.addresses.last.id;
-          }
-        });
       }
-    } catch (e) {
-      debugPrint('Error refrescando cliente: $e');
     }
-  }
-
-  // --- WIDGET RESUMEN Y GUARDAR (sin cambios) ---
-  Widget _buildSummaryAndSave() {
-    return Material(
-      elevation: 8.0,
-      // Usar 'surface' en lugar de 'surfaceContainer' para que se sienta menos "pesado/marrón"
-      color: Theme.of(context).colorScheme.surface,
-      // Contenedor con borde superior sutil
-      shape: Border(
-        top: BorderSide(
-          color: Theme.of(context).colorScheme.outlineVariant,
-          width: 0.5,
-        ),
-      ),
-      child: Padding(
-        // Reducir padding vertical
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // (Switch y Divider eliminados para ahorrar espacio)
-
-            // Fila de Entradas + Check Pagado
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: TextFormField(
-                    controller: _depositController,
-                    decoration: const InputDecoration(
-                      labelText: 'Seña Recibida (\$)',
-                      prefixText: '\$',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 12,
-                      ),
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: false,
-                    ),
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    onChanged: (_) => _recalculateTotals(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 3,
-                  child: TextFormField(
-                    controller: _deliveryCostController,
-                    decoration: const InputDecoration(
-                      labelText: 'Envío (\$)',
-                      prefixText: '\$',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 12,
-                      ),
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: false,
-                    ),
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Switch Pagado Compacto
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Pagado?',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    SizedBox(
-                      height: 30, // Forzar altura pequeña
-                      child: Transform.scale(
-                        scale: 0.8,
-                        child: Switch(
-                          value: _isPaid,
-                          activeColor: Colors.green,
-                          onChanged: (val) {
-                            setState(() => _isPaid = val);
-                            _recalculateTotals();
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _buildSummaryRow('Subtotal Productos:', _itemsSubtotal),
-            if (_deliveryCost > 0)
-              _buildSummaryRow('Costo Envío:', _deliveryCost),
-
-            _buildSummaryRow('TOTAL PEDIDO:', _grandTotal, isTotal: true),
-            if (_depositAmount > 0)
-              _buildSummaryRow('Seña Recibida:', -_depositAmount),
-            if (_grandTotal > 0)
-              _buildSummaryRow(
-                'Saldo Pendiente:',
-                _remainingBalance,
-                isTotal: true,
-                highlight: _remainingBalance > 0,
-              ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _isLoading ? null : _submit,
-                icon: _isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                        ),
-                      )
-                    : const Icon(Icons.save),
-                label: Text(isEditMode ? 'Guardar Cambios' : 'Guardar Pedido'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  textStyle: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return Image.network(
+      imageSource as String,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image),
     );
   }
 
-  // --- WIDGET HELPER RESUMEN (sin cambios) ---
   Widget _buildSummaryRow(
     String label,
     double amount, {
@@ -5031,30 +4283,52 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     }
   }
 
-  // Helper interno para crear imagen segura (web/no-web) sin padding ni remove button
+  // --- FUNCIÓN NUEVA: MOSTRAR MODAL DE DIRECCIONES ---
+  Future<void> _showAddAddressDialog() async {
+    if (_selectedClient == null) return;
 
-  Widget _buildSafeImageWidget(dynamic source, double w, double h) {
-    if (kIsWeb) {
-      final String path = source is XFile
-          ? source.path
-          : (source is File ? source.path : source.toString());
-      return Image.network(
-        path,
-        width: w,
-        height: h,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 20),
-      );
-    } else {
-      final String path = source is XFile
-          ? source.path
-          : (source is File ? source.path : source.toString());
-      return Image.file(
-        File(path),
-        width: w,
-        height: h,
-        fit: BoxFit.cover,
-      );
+    final int clientId = _selectedClient!.id;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: AddressFormDialog(clientId: clientId),
+          ),
+        );
+      },
+    );
+
+    // Al cerrar el modal, refrescar los datos del cliente para ver la nueva dirección
+    if (!mounted) return;
+
+    // Invalida el provider global para asegurar que futuros usos traigan data fresca
+    ref.invalidate(clientDetailsProvider(clientId));
+
+    // Trae la data fresca manualmente para actualizar el estado local
+    try {
+      final refreshed =
+          await ref.read(clientsRepoProvider).getClientById(clientId);
+      if (refreshed != null && mounted) {
+        setState(() {
+          _selectedClient = refreshed;
+          // Opcional: Auto-seleccionar la última dirección agregada
+          if (refreshed.addresses.isNotEmpty) {
+            // _selectedAddressId = refreshed.addresses.last.id;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error refrescando cliente: $e');
     }
   }
 }
