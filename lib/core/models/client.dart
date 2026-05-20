@@ -65,15 +65,15 @@ class Client {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'phone': phone,
-    'email': email,
-    'notes': notes,
-    // No incluimos 'addresses' aquí,
-    // ya que probablemente se gestionen en su propio endpoint
-    // (ej: POST /api/clients/1/addresses)
-  };
+        'id': id,
+        'name': name,
+        'phone': phone,
+        'email': email,
+        'notes': notes,
+        // No incluimos 'addresses' aquí,
+        // ya que probablemente se gestionen en su propio endpoint
+        // (ej: POST /api/clients/1/addresses)
+      };
 
   // copyWith para inmutabilidad (¡muy buena práctica!)
   Client copyWith({

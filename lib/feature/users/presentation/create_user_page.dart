@@ -93,9 +93,7 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
     setState(() => _loading = true);
 
     try {
-      final newUser = await ref
-          .read(usersRepoProvider)
-          .createUser(
+      final newUser = await ref.read(usersRepoProvider).createUser(
             name: _name.text.trim(),
             email: _email.text.trim(),
             password: _pass.text,

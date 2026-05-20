@@ -45,7 +45,8 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Si el correo existe, recibirás un enlace de recuperación.'),
+            content: Text(
+                'Si el correo existe, recibirás un enlace de recuperación.'),
             backgroundColor: Colors.green,
           ),
         );
@@ -54,7 +55,8 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No se pudo procesar la solicitud. Inténtalo de nuevo.'),
+            content:
+                Text('No se pudo procesar la solicitud. Inténtalo de nuevo.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -67,7 +69,8 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Recuperar Contraseña', style: TextStyle(color: darkBrown)),
+        title: const Text('Recuperar Contraseña',
+            style: TextStyle(color: darkBrown)),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: darkBrown),
@@ -140,7 +143,8 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
                         )
                       : const Text(
                           'Enviar Enlace',

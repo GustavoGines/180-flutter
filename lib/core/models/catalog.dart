@@ -28,12 +28,10 @@ class CatalogResponse {
   factory CatalogResponse.fromJson(Map<String, dynamic> json) {
     final data = json['data'] as Map<String, dynamic>;
     return CatalogResponse(
-      products: (data['products'] as List)
-          .map((e) => Product.fromJson(e))
-          .toList(),
-      fillings: (data['fillings'] as List)
-          .map((e) => Filling.fromJson(e))
-          .toList(),
+      products:
+          (data['products'] as List).map((e) => Product.fromJson(e)).toList(),
+      fillings:
+          (data['fillings'] as List).map((e) => Filling.fromJson(e)).toList(),
       extras: (data['extras'] as List).map((e) => Extra.fromJson(e)).toList(),
     );
   }
@@ -127,7 +125,7 @@ class Product {
           : null,
       multiplierAdjustmentPerKg:
           double.tryParse(json['multiplier_adjustment_per_kg'].toString()) ??
-          0.0,
+              0.0,
       variants: variantsList,
       pricesBySize: pricesMap,
     );
@@ -192,7 +190,9 @@ class Filling {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Filling && runtimeType == other.runtimeType && id == other.id; // Use ID for equality
+      other is Filling &&
+          runtimeType == other.runtimeType &&
+          id == other.id; // Use ID for equality
 
   @override
   int get hashCode => id.hashCode;

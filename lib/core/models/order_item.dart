@@ -41,13 +41,13 @@ class OrderItem {
     // Intenta leer 'base_price'. Si no existe, usa 'unit_price' como fallback.
     double base =
         (j['base_price'] != null ? toNum(j['base_price']) : null)?.toDouble() ??
-        (j['unit_price'] != null ? toNum(j['unit_price']) : 0.0)
-            .toDouble(); // Fallback final a 0.0
+            (j['unit_price'] != null ? toNum(j['unit_price']) : 0.0)
+                .toDouble(); // Fallback final a 0.0
 
     // Si 'base_price' no existía pero 'unit_price' sí, asumimos que 'adjustments' es 0.
     // Si 'base_price' existía, leemos 'adjustments' o usamos 0.
-    double adjust = (j['adjustments'] != null ? toNum(j['adjustments']) : 0.0)
-        .toDouble();
+    double adjust =
+        (j['adjustments'] != null ? toNum(j['adjustments']) : 0.0).toDouble();
 
     // Si unit_price era la única fuente y base_price no existía,
     // podría ser que el unit_price ya incluía ajustes. En ese caso,
@@ -71,24 +71,24 @@ class OrderItem {
 
   // toJson actualizado
   Map<String, dynamic> toJson() => {
-    // Si el id existe (al editar), lo enviamos. Si no (al crear), no.
-    if (id != null) 'id': id,
-    'name': name,
-    'qty': qty,
-    // Decide qué enviar a tu API:
-    // Opción 1: Enviar base y ajustes separados (recomendado si controlas la API)
-    'base_price': basePrice,
-    'adjustments': adjustments,
-    // Opción 2: Enviar solo el precio final calculado (si la API solo espera 'unit_price')
-    // 'unit_price': finalUnitPrice,
-    'customization_notes': customizationNotes,
-    'customization_json': {
-      // Guarda detalles calculados DENTRO del JSON
-      ...?customizationJson,
-      // Es bueno guardar esto para referencia, pero no son campos principales
-      'calculated_final_unit_price': finalUnitPrice,
-    },
-  };
+        // Si el id existe (al editar), lo enviamos. Si no (al crear), no.
+        if (id != null) 'id': id,
+        'name': name,
+        'qty': qty,
+        // Decide qué enviar a tu API:
+        // Opción 1: Enviar base y ajustes separados (recomendado si controlas la API)
+        'base_price': basePrice,
+        'adjustments': adjustments,
+        // Opción 2: Enviar solo el precio final calculado (si la API solo espera 'unit_price')
+        // 'unit_price': finalUnitPrice,
+        'customization_notes': customizationNotes,
+        'customization_json': {
+          // Guarda detalles calculados DENTRO del JSON
+          ...?customizationJson,
+          // Es bueno guardar esto para referencia, pero no son campos principales
+          'calculated_final_unit_price': finalUnitPrice,
+        },
+      };
 
   // --- MÉTODO COPYWITH ---
   OrderItem copyWith({

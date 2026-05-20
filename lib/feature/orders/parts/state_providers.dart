@@ -52,35 +52,13 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
 
     final orders = await repository.getOrders(from: from, to: to);
 
-    // Tu lógica de sort (sin cambios)
-    const statusOrder = {
-      'pending': 0, // 'pending' aparece primero
-      'confirmed': 1,
-      'ready': 2,
-      'delivered': 3,
-      'canceled': 4,
-    };
-    orders.sort((a, b) {
-      final dayCmp = DateTime(
-        a.eventDate.year,
-        a.eventDate.month,
-        a.eventDate.day,
-      ).compareTo(
-        DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
-      );
-      if (dayCmp != 0) return dayCmp;
-      final timeCmp = a.startTime.compareTo(b.startTime);
-      if (timeCmp != 0) return timeCmp;
-      final pa = statusOrder[a.status] ?? 99;
-      final pb = statusOrder[b.status] ?? 99;
-      return pa.compareTo(pb);
-    });
+    orders.sortedByDateAndStatus();
 
     return orders;
   }
 
   // 👇 2. MÉTODO PÚBLICO para actualizar un estado
-  Future<void> updateOrderStatus(int orderId, String newStatus) async {
+  Future<void> updateOrderStatus(int orderId, OrderStatus newStatus) async {
     // Obtenemos el repositorio
     final repository = ref.read(ordersRepoProvider);
 
@@ -90,7 +68,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
 
     try {
       // 1. Llamamos a la API/DB
-      await repository.updateStatus(orderId, newStatus);
+      await repository.updateStatus(orderId, newStatus.name);
 
       // 2. Si la API tuvo éxito, actualizamos el estado local
       state = AsyncData(
@@ -133,29 +111,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
     final previousState = await future;
     final newList = [...previousState, newOrder];
 
-    // Lógica de sort (copiada de tu 'build')
-    const statusOrder = {
-      'pending': 0,
-      'confirmed': 1,
-      'ready': 2,
-      'delivered': 3,
-      'canceled': 4,
-    };
-    newList.sort((a, b) {
-      final dayCmp = DateTime(
-        a.eventDate.year,
-        a.eventDate.month,
-        a.eventDate.day,
-      ).compareTo(
-        DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
-      );
-      if (dayCmp != 0) return dayCmp;
-      final timeCmp = a.startTime.compareTo(b.startTime);
-      if (timeCmp != 0) return timeCmp;
-      final pa = statusOrder[a.status] ?? 99;
-      final pb = statusOrder[b.status] ?? 99;
-      return pa.compareTo(pb);
-    });
+    newList.sortedByDateAndStatus();
 
     state = AsyncData(newList);
   }
@@ -169,29 +125,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
       return order.id == updatedOrder.id ? updatedOrder : order;
     }).toList();
 
-    // Lógica de sort (copiada de tu 'build')
-    const statusOrder = {
-      'pending': 0,
-      'confirmed': 1,
-      'ready': 2,
-      'delivered': 3,
-      'canceled': 4,
-    };
-    newList.sort((a, b) {
-      final dayCmp = DateTime(
-        a.eventDate.year,
-        a.eventDate.month,
-        a.eventDate.day,
-      ).compareTo(
-        DateTime(b.eventDate.year, b.eventDate.month, b.eventDate.day),
-      );
-      if (dayCmp != 0) return dayCmp;
-      final timeCmp = a.startTime.compareTo(b.startTime);
-      if (timeCmp != 0) return timeCmp;
-      final pa = statusOrder[a.status] ?? 99;
-      final pb = statusOrder[b.status] ?? 99;
-      return pa.compareTo(pb);
-    });
+    newList.sortedByDateAndStatus();
 
     state = AsyncData(newList);
   }
@@ -250,7 +184,9 @@ final monthlyIncomeProvider = rp.Provider.autoDispose<double>((ref) {
   for (final o in monthOrders) {
     // CONDICIÓN: Status NO cancelado AND isPaid == true
     // (Abarca confirmed, ready, delivered si están pagados)
-    if (o.status != 'canceled' && o.status != 'unknown' && o.isPaid) {
+    if (o.status != OrderStatus.canceled &&
+        o.status != OrderStatus.unknown &&
+        o.isPaid) {
       final v = o.total ?? 0;
       if (v >= 0) {
         ingresosMes += v;
@@ -272,8 +208,10 @@ final monthlyPendingIncomeProvider = rp.Provider.autoDispose<double>((ref) {
     final s = o.status;
     // CONDICIÓN: Confirmed OR Ready OR Delivered AND !isPaid (Según feedback usuario)
     // "pending, confirmed, ready, delivered que NO están pagados son Pendientes"
-    final isRelevantStatus =
-        s == 'pending' || s == 'confirmed' || s == 'ready' || s == 'delivered';
+    final isRelevantStatus = s == OrderStatus.pending ||
+        s == OrderStatus.confirmed ||
+        s == OrderStatus.ready ||
+        s == OrderStatus.delivered;
     if (isRelevantStatus && !o.isPaid) {
       final v = o.total ?? 0;
       if (v >= 0) {
@@ -294,7 +232,7 @@ final monthlyOrdersCountProvider = rp.Provider.autoDispose<int>((ref) {
 
   int count = 0;
   for (final o in monthOrders) {
-    if (o.status != 'canceled' && o.status != 'unknown') {
+    if (o.status != OrderStatus.canceled && o.status != OrderStatus.unknown) {
       count++;
     }
   }

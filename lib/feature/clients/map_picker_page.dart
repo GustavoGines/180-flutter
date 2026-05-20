@@ -171,8 +171,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
-              padding:
-                  const EdgeInsets.all(24.0) +
+              padding: const EdgeInsets.all(24.0) +
                   EdgeInsets.only(
                     bottom: MediaQuery.of(context).padding.bottom,
                   ),

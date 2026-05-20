@@ -12,6 +12,7 @@ import 'package:pasteleria_180_flutter/feature/orders/home_page.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/models/client_address.dart'; // <-- IMPORTAR ClientAddress
+import '../../core/enums/order_status.dart';
 import '../auth/auth_state.dart';
 import 'orders_repository.dart';
 // import 'home_page.dart'; // No parece usarse aquí
@@ -41,29 +42,29 @@ class OrderDetailPage extends ConsumerWidget {
   static const _kPastelMint = Color(0xFFD8F6EC);
   static const _kPastelBabyBlue = Color(0xFFDFF1FF);
 
-  static const Map<String, String> statusTranslations = {
-    'pending': 'Pendiente',
-    'confirmed': 'Confirmado',
-    'ready': 'Listo',
-    'delivered': 'Entregado',
-    'canceled': 'Cancelado',
-    'unknown': 'Desconocido',
+  static const Map<OrderStatus, String> statusTranslations = {
+    OrderStatus.pending: 'Pendiente',
+    OrderStatus.confirmed: 'Confirmado',
+    OrderStatus.ready: 'Listo',
+    OrderStatus.delivered: 'Entregado',
+    OrderStatus.canceled: 'Cancelado',
+    OrderStatus.unknown: 'Desconocido',
   };
-  static const Map<String, Color> _statusPastelBg = {
-    'pending': Color(0xFFFFF9C4), // Amarillo clarito
-    'confirmed': _kPastelMint,
-    'ready': Color(0xFFFFE6EF),
-    'delivered': _kPastelBabyBlue,
-    'canceled': Color(0xFFFFE0E0),
-    'unknown': Colors.grey,
+  static const Map<OrderStatus, Color> _statusPastelBg = {
+    OrderStatus.pending: Color(0xFFFFF9C4), // Amarillo clarito
+    OrderStatus.confirmed: _kPastelMint,
+    OrderStatus.ready: Color(0xFFFFE6EF),
+    OrderStatus.delivered: _kPastelBabyBlue,
+    OrderStatus.canceled: Color(0xFFFFE0E0),
+    OrderStatus.unknown: Colors.grey,
   };
-  static const Map<String, Color> _statusInk = {
-    'pending': Color(0xFFFBC02D), // Amarillo mostaza
-    'confirmed': Color(0xFF83D1B9),
-    'ready': _kInkRose,
-    'delivered': Color(0xFF8CC5F5),
-    'canceled': accentRed,
-    'unknown': Colors.black54,
+  static const Map<OrderStatus, Color> _statusInk = {
+    OrderStatus.pending: Color(0xFFFBC02D), // Amarillo mostaza
+    OrderStatus.confirmed: Color(0xFF83D1B9),
+    OrderStatus.ready: _kInkRose,
+    OrderStatus.delivered: Color(0xFF8CC5F5),
+    OrderStatus.canceled: accentRed,
+    OrderStatus.unknown: Colors.black54,
   };
   // ======= Fin Paleta (Sin cambios) =======
 
@@ -233,7 +234,7 @@ class OrderDetailPage extends ConsumerWidget {
                                     ),
                                     // --- FIN ---
                                   ),
-                                  child: DropdownButton<String>(
+                                  child: DropdownButton<OrderStatus>(
                                     value: order.status,
                                     icon: canEdit
                                         ? Icon(
@@ -254,11 +255,11 @@ class OrderDetailPage extends ConsumerWidget {
                                     dropdownColor: cs.surfaceContainerHighest,
                                     // --- FIN ---
                                     items: statusTranslations.keys
-                                        .where((k) => k != 'unknown')
-                                        .map((String value) {
+                                        .where((k) => k != OrderStatus.unknown)
+                                        .map((OrderStatus value) {
                                       final Color optionColor =
                                           _statusInk[value] ?? Colors.grey;
-                                      return DropdownMenuItem<String>(
+                                      return DropdownMenuItem<OrderStatus>(
                                         value: value,
                                         child: Text(
                                           statusTranslations[value]!,
@@ -272,7 +273,7 @@ class OrderDetailPage extends ConsumerWidget {
                                     }).toList(),
                                     onChanged: !canEdit
                                         ? null
-                                        : (String? newStatus) {
+                                        : (OrderStatus? newStatus) {
                                             if (newStatus == null ||
                                                 newStatus == order.status) {
                                               return;
@@ -1587,12 +1588,11 @@ class OrderDetailPage extends ConsumerWidget {
     }
   }
 
-  // --- _handleChangeStatus (Adaptado al tema) ---
   Future<void> _handleChangeStatus(
     BuildContext context,
     WidgetRef ref,
     Order order,
-    String newStatus,
+    OrderStatus newStatus,
   ) async {
     // --- ADAPTADO AL TEMA ---
     final cs = Theme.of(context).colorScheme;
@@ -1602,8 +1602,9 @@ class OrderDetailPage extends ConsumerWidget {
       // 1. Capturamos la orden actualizada
       // (Tu repo devuelve Order? pero updateOrderStatus en el Notifier también lo hace)
       // (Asumimos que updateStatus no devuelve null si tiene éxito)
-      final Order? updatedOrder =
-          await ref.read(ordersRepoProvider).updateStatus(order.id, newStatus);
+      final Order? updatedOrder = await ref
+          .read(ordersRepoProvider)
+          .updateStatus(order.id, newStatus.name);
 
       if (updatedOrder != null) {
         // 2. 🔥 ACTUALIZA LA LISTA LOCAL (en vez de invalidate)

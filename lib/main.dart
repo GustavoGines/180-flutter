@@ -9,6 +9,7 @@ import 'package:pasteleria_180_flutter/core/network/dio_client.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 // ✅ 1. Importa el nuevo servicio
 import 'package:pasteleria_180_flutter/core/services/firebase_messaging_service.dart';
+import 'package:pasteleria_180_flutter/feature/auth/auth_state.dart';
 
 Future<void> pingApi() async {
   try {
@@ -27,17 +28,21 @@ Future<void> main() async {
 
   debugPrint('CONFIG → FLAVOR=$kFlavor  API_BASE=$kApiBase');
 
-  await DioClient().init();
+  // ✅ 2. Crear el Contenedor de Riverpod
+  // Esto nos da acceso a los providers ANTES de que los widgets se dibujen
+  final container = ProviderContainer();
+
+  // ✅ Inicializar DioClient pasándole el callback para 401
+  await DioClient().init(onUnauthorized: () {
+    // Si hay un error 401, forzamos el logout que limpiará el estado y GoRouter nos mandará al login
+    container.read(authStateProvider.notifier).logout();
+  });
   debugPrint('DIO baseUrl → ${DioClient().dio.options.baseUrl}');
 
   if (kFlavor == 'dev' && (kEnablePing || kDebugMode)) {
     // ignore: discarded_futures
     pingApi();
   }
-
-  // ✅ 2. Crear el Contenedor de Riverpod
-  // Esto nos da acceso a los providers ANTES de que los widgets se dibujen
-  final container = ProviderContainer();
 
   try {
     // ✅ 3. Inicializar el servicio de notificaciones

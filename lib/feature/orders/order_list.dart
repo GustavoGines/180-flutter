@@ -38,7 +38,7 @@ class OrderList extends ConsumerWidget {
           final o = orders[i];
           return ListTile(
             title: Text(
-              '${DateFormat.Hm().format(o.startTime)} – ${DateFormat.Hm().format(o.endTime)} • ${o.status.toUpperCase()}',
+              '${DateFormat.Hm().format(o.startTime)} – ${DateFormat.Hm().format(o.endTime)} • ${o.status.name.toUpperCase()}',
             ),
             subtitle: Text('Cliente #${o.clientId} • ${o.notes ?? ""}'),
             trailing: Text(NumberFormat(r"'$' #,##0", 'es_AR').format(o.total)),

@@ -175,14 +175,12 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
                   .toList(),
               onChanged: (v) => setState(() => _selectedUnit = v!),
             ),
-
             if (isUnitDozen)
               SwitchListTile(
                 title: const Text('Permitir Media Docena'),
                 value: _allowHalfDozen,
                 onChanged: (v) => setState(() => _allowHalfDozen = v),
               ),
-
             const SizedBox(height: 24),
             const Divider(),
             Row(
@@ -200,7 +198,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
             ),
             if (_variants.isEmpty)
               const Text('Sin variantes (Usa precio base)'),
-
             ..._variants.asMap().entries.map((entry) {
               final idx = entry.key;
               final variant = entry.value;
@@ -216,8 +213,8 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
                           decoration: const InputDecoration(
                             labelText: 'Nombre Variante',
                           ),
-                          onChanged: (v) => _variants[idx] = _variants[idx]
-                              .copyWith(variantName: v),
+                          onChanged: (v) => _variants[idx] =
+                              _variants[idx].copyWith(variantName: v),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -243,7 +240,6 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
                 ),
               );
             }),
-
             const SizedBox(height: 40),
             ElevatedButton(
               onPressed: _save,

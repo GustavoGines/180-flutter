@@ -24,11 +24,12 @@ class DioClient {
     );
   }
 
-  Future<void> init() async {
+  Future<void> init({Function()? onUnauthorized}) async {
     dio.interceptors.clear();
 
     // 1. Auth interceptor (SIEMPRE PRIMERO)
-    dio.interceptors.add(AuthInterceptor(storage));
+    dio.interceptors
+        .add(AuthInterceptor(storage, onUnauthorized: onUnauthorized));
 
     // 2. Logger (SOLO UNO)
     if (kLogHttp || kDebugMode) {

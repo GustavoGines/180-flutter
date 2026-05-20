@@ -5,7 +5,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthInterceptor extends Interceptor {
   final FlutterSecureStorage storage;
-  AuthInterceptor(this.storage);
+  final Function()? onUnauthorized;
+
+  AuthInterceptor(this.storage, {this.onUnauthorized});
 
   @override
   void onRequest(
@@ -32,6 +34,10 @@ class AuthInterceptor extends Interceptor {
         final token = await storage.read(key: 'auth_token');
         if (token != null && token.isNotEmpty) {
           await storage.delete(key: 'auth_token');
+          // Disparamos el callback para invalidar el provider y redirigir
+          if (onUnauthorized != null) {
+            onUnauthorized!();
+          }
         }
       }
     }

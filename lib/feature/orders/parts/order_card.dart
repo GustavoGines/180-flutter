@@ -10,30 +10,30 @@ const _kInkMint = Color(0xFF83D1B9);
 const _kInkSand = Color(0xFFC9B99A);
 
 // Fondos pastel por estado (SIN CAMBIOS)
-const _statusPastelBg = <String, Color>{
-  'pending': Color(0xFFFFF9C4), // Amarillo muy claro
-  'confirmed': _kPastelMint,
-  'ready': Color(0xFFFFE6EF),
-  'delivered': _kPastelBabyBlue,
-  'canceled': Color(0xFFFFE0E0),
+const _statusPastelBg = <OrderStatus, Color>{
+  OrderStatus.pending: Color(0xFFFFF9C4), // Amarillo muy claro
+  OrderStatus.confirmed: _kPastelMint,
+  OrderStatus.ready: Color(0xFFFFE6EF),
+  OrderStatus.delivered: _kPastelBabyBlue,
+  OrderStatus.canceled: Color(0xFFFFE0E0),
 };
 
 // Acento/borde por estado (SIN CAMBIOS)
-const _statusInk = <String, Color>{
-  'pending': Color(0xFFFBC02D), // Amarillo mostaza oscuro
-  'confirmed': _kInkMint,
-  'ready': Color(0xFFF3A9B9),
-  'delivered': _kInkBabyBlue,
-  'canceled': Color(0xFFE57373),
+const _statusInk = <OrderStatus, Color>{
+  OrderStatus.pending: Color(0xFFFBC02D), // Amarillo mostaza oscuro
+  OrderStatus.confirmed: _kInkMint,
+  OrderStatus.ready: Color(0xFFF3A9B9),
+  OrderStatus.delivered: _kInkBabyBlue,
+  OrderStatus.canceled: Color(0xFFE57373),
 };
 
 // Traducciones visibles (SIN CAMBIOS)
-const _statusTranslations = {
-  'pending': 'Pendiente',
-  'confirmed': 'Confirmado',
-  'ready': 'Listo',
-  'delivered': 'Entregado',
-  'canceled': 'Cancelado',
+const _statusTranslations = <OrderStatus, String>{
+  OrderStatus.pending: 'Pendiente',
+  OrderStatus.confirmed: 'Confirmado',
+  OrderStatus.ready: 'Listo',
+  OrderStatus.delivered: 'Entregado',
+  OrderStatus.canceled: 'Cancelado',
 };
 
 class OrderCard extends ConsumerWidget {
@@ -71,9 +71,8 @@ class OrderCard extends ConsumerWidget {
       elevation: 2.5,
       // --- 👇 ADAPTACIÓN TEMA 👇 ---
       // 4. La sombra solo se aplica en modo claro
-      shadowColor: isDarkMode
-          ? Colors.transparent
-          : Colors.black.withOpacity(0.50),
+      shadowColor:
+          isDarkMode ? Colors.transparent : Colors.black.withOpacity(0.50),
       // 5. El color de fondo de la tarjeta depende del tema
       color: isDarkMode
           ? cs.surface
@@ -131,8 +130,7 @@ class OrderCard extends ConsumerWidget {
                             Icons.monetization_on,
                             size: 16,
                             color: Colors
-                                .green
-                                .shade600, // Color distintivo para pagado
+                                .green.shade600, // Color distintivo para pagado
                           ),
                         ),
                       Text(
@@ -195,7 +193,7 @@ class OrderCard extends ConsumerWidget {
                           ),
                         ),
                         child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
+                          child: DropdownButton<OrderStatus>(
                             value: order.status,
                             icon: Icon(
                               Icons.arrow_drop_down,
@@ -213,9 +211,10 @@ class OrderCard extends ConsumerWidget {
                             // 7. El fondo del menú desplegable debe usar el tema
                             dropdownColor: cs.surface,
                             // --- 👆 FIN ADAPTACIÓN 👆 ---
-                            items: _statusTranslations.keys.map((String value) {
+                            items: _statusTranslations.keys
+                                .map((OrderStatus value) {
                               final c = _statusInk[value] ?? _kInkSand;
-                              return DropdownMenuItem<String>(
+                              return DropdownMenuItem<OrderStatus>(
                                 value: value,
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -242,7 +241,7 @@ class OrderCard extends ConsumerWidget {
                                 ),
                               );
                             }).toList(),
-                            onChanged: (String? newValue) async {
+                            onChanged: (OrderStatus? newValue) async {
                               if (newValue != null &&
                                   newValue != order.status) {
                                 await ref

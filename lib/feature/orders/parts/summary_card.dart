@@ -13,7 +13,7 @@ class _SummaryCard extends ConsumerWidget {
   final String title;
   final ProviderBase<num> valueProvider;
   final ProviderBase<num>?
-  pendingValueProvider; // 👈 NUEVO: Provider para el valor gris
+      pendingValueProvider; // 👈 NUEVO: Provider para el valor gris
   final IconData icon;
   final Color color;
 
@@ -42,9 +42,8 @@ class _SummaryCard extends ConsumerWidget {
     // 2. Obtenemos los VALORES
     final num targetValue = ref.watch(valueProvider);
     // 👇 NUEVO: Leer valor pendiente
-    final num pendingValue = pendingValueProvider != null
-        ? ref.watch(pendingValueProvider!)
-        : 0;
+    final num pendingValue =
+        pendingValueProvider != null ? ref.watch(pendingValueProvider!) : 0;
 
     return Card(
       elevation: 0,

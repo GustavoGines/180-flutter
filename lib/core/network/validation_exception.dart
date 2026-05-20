@@ -5,12 +5,12 @@ class ValidationException implements Exception {
   final Map<String, List<String>> errors;
 
   ValidationException(Map<String, dynamic> rawErrors)
-    : errors = rawErrors.map(
-        (k, v) => MapEntry(
-          k.toString(),
-          (v as List).map((i) => i.toString()).toList(),
-        ),
-      );
+      : errors = rawErrors.map(
+          (k, v) => MapEntry(
+            k.toString(),
+            (v as List).map((i) => i.toString()).toList(),
+          ),
+        );
 
   @override
   String toString() {

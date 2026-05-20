@@ -1,5 +1,5 @@
 name: pasteleria_180_flutter
-description: "A new Flutter project."
+description: "App de gestión para 180 Grados Pastelería"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
@@ -41,7 +41,7 @@ dependencies:
   go_router: ^13.2.0
   hooks_riverpod: ^2.5.1
   riverpod: ^2.5.1
-  intl: any
+  intl: ^0.20.2
   flutter_riverpod: ^2.5.1
   flutter_typeahead: ^5.2.0
   image_picker: ^1.0.8
@@ -67,7 +67,6 @@ dependencies:
   printing: ^5.12.0
   google_fonts: ^6.0.0
   flutter_contacts: ^1.1.9+2
-  http: ^1.2.0
   firebase_messaging: ^15.0.0
   flutter_local_notifications: ^19.0.0
   firebase_app_distribution_platform_interface: any
