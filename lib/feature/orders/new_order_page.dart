@@ -4216,8 +4216,14 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                                   }
 
                                   // Secundario: URL remota (si existe)
-                                  if (custom['photo_url'] != null) {
-                                    final url = custom['photo_url'];
+                                  if (custom['photo_urls'] != null && custom['photo_urls'] is List) {
+                                    for (var url in custom['photo_urls'] as List) {
+                                      if (!url.toString().startsWith('placeholder_')) {
+                                        allImages.add(url);
+                                      }
+                                    }
+                                  } else if (custom['photo_url'] != null) {
+                                    final url = custom['photo_url'].toString();
                                     // Ignore placeholders as they are local files
                                     if (!url.startsWith('placeholder_')) {
                                       allImages.add(url);

@@ -111,7 +111,7 @@ class Order {
           })
           .whereType<OrderItem>()
           .toList(),
-      isPaid: json['is_paid'] == 1 || json['is_paid'] == true,
+      isPaid: json['is_paid'] == 1 || json['is_paid'] == '1' || json['is_paid'] == true || json['is_paid'] == 'true',
     );
   }
 
