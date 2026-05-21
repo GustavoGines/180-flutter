@@ -3,13 +3,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:collection/collection.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
@@ -31,6 +28,7 @@ import 'home_page.dart';
 import 'new_order/widgets/date_time_picker_row.dart';
 import 'new_order/widgets/delivery_section.dart';
 import 'new_order/widgets/order_totals_card.dart';
+import 'new_order/widgets/client_selector_widget.dart';
 
 class NewOrderPage extends ConsumerWidget {
   final int? orderId;
@@ -500,157 +498,6 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildClientSelector(BuildContext context) {
-    return Builder(
-      builder: (context) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_selectedClient == null)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: TypeAheadField<Client>(
-                      controller: _clientNameController,
-                      debounceDuration: const Duration(milliseconds: 500),
-                      suggestionsCallback: (pattern) async {
-                        if (_selectedClient != null) {
-                          setState(() {
-                            _selectedClient = null;
-                          });
-                        }
-                        return ref.read(clientsListProvider(pattern).future);
-                      },
-                      itemBuilder: (context, client) => ListTile(
-                        leading: const Icon(Icons.person),
-                        title: Text(client.name),
-                        subtitle: Text(client.phone ?? 'Sin teléfono'),
-                      ),
-                      onSelected: (client) {
-                        setState(() {
-                          _selectedClient = client;
-                          _clientNameController.text = client.name;
-                          _selectedAddressId = null;
-                          _deliveryCostController.text = '0';
-                        });
-                      },
-                      emptyBuilder: (context) => const Padding(
-                        padding: EdgeInsets.all(12.0),
-                        child: Text('No se encontraron clientes.'),
-                      ),
-                      builder: (context, controller, focusNode) =>
-                          TextFormField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        decoration: const InputDecoration(
-                          labelText: 'Buscar cliente...',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.search),
-                        ),
-                        validator: (value) {
-                          if (_selectedClient == null) {
-                            return 'Debes seleccionar un cliente.';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SpeedDial(
-                    icon: Icons.add,
-                    activeIcon: Icons.close,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                    spacing: 5,
-                    buttonSize: const Size(56, 56),
-                    childrenButtonSize: const Size(56, 56),
-                    direction: SpeedDialDirection.down,
-                    curve: Curves.easeInOut,
-                    children: [
-                      SpeedDialChild(
-                        child: const Icon(Icons.contact_phone_outlined),
-                        label: 'Desde Contactos',
-                        onTap: _selectClientFromContacts,
-                      ),
-                      SpeedDialChild(
-                        child: const Icon(Icons.person_add_alt_1),
-                        label: 'Nuevo Manualmente',
-                        onTap: _addClientManuallyDialog,
-                      ),
-                    ],
-                  ),
-                ],
-              )
-            else
-              Card(
-                elevation: 0,
-                color: Theme.of(context).colorScheme.tertiaryContainer,
-                margin: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                ),
-                child: ListTile(
-                  leading: Icon(
-                    Icons.person,
-                    color: Theme.of(context).colorScheme.onTertiaryContainer,
-                  ),
-                  title: Text(
-                    _selectedClient!.name,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onTertiaryContainer,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Tel: ${_selectedClient!.phone ?? "N/A"}',
-                    style: TextStyle(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onTertiaryContainer.withOpacity(0.8),
-                    ),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_selectedClient!.whatsappUrl != null)
-                        IconButton(
-                          icon: const FaIcon(FontAwesomeIcons.whatsapp),
-                          color: Colors.green,
-                          tooltip: 'Chatear por WhatsApp',
-                          onPressed: () {
-                            launchExternalUrl(_selectedClient!.whatsappUrl!);
-                          },
-                        ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.close,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onTertiaryContainer,
-                        ),
-                        tooltip: 'Quitar cliente',
-                        onPressed: () {
-                          setState(() {
-                            _selectedClient = null;
-                            _clientNameController.clear();
-                            _selectedAddressId = null;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
     );
   }
 
@@ -3471,7 +3318,28 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               children: [
-                _buildClientSelector(context),
+                ClientSelectorWidget(
+                  selectedClient: _selectedClient,
+                  clientNameController: _clientNameController,
+                  onClientSelected: (client) {
+                    setState(() {
+                      _selectedClient = client;
+                      _clientNameController.text = client.name;
+                      _selectedAddressId = null;
+                      _deliveryCostController.text = '0';
+                    });
+                  },
+                  onClearClient: () {
+                    setState(() {
+                      _selectedClient = null;
+                      _clientNameController.clear();
+                      _selectedAddressId = null;
+                    });
+                  },
+                  onSelectFromContacts: _selectClientFromContacts,
+                  onAddManually: _addClientManuallyDialog,
+                  launchExternalUrl: launchExternalUrl,
+                ),
                 if (_selectedClient != null)
                   DeliverySection(
                     selectedClient: _selectedClient!,
