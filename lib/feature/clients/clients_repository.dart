@@ -137,6 +137,8 @@ class ClientsRepository {
     List rows;
     if (body is Map && body['data'] is List) {
       rows = body['data'];
+    } else if (body is List) {
+      rows = body; // API devuelve lista directa sin wrapper
     } else {
       rows = const [];
     }
