@@ -19,10 +19,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     defaultConfig {
         applicationId = "com.one80.pasteleria.pasteleria_180_flutter"
         minSdk = flutter.minSdkVersion
@@ -67,6 +63,13 @@ android {
 // Config básica de Flutter
 flutter {
     source = "../.."
+}
+
+// Nuevo DSL de Kotlin 2.3 para opciones del compilador
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
 }
 
 // --- DEPENDENCIAS ---
