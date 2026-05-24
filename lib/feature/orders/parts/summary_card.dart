@@ -110,7 +110,7 @@ class _SummaryCard extends ConsumerWidget {
                         child: Text(
                           'Pendiente: ${fmtCurrency.format(pendingValue)}',
                           style: textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant.withOpacity(0.7),
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.7),
                             fontSize: 10,
                           ),
                           maxLines: 1,

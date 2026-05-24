@@ -15,9 +15,9 @@ class PdfGenerator {
   PdfGenerator._internal();
 
   // --- Constantes y Estilos Centralizados ---
-  static final PdfColor _darkBrown = PdfColor.fromInt(0xFF7A4A4A);
-  static final PdfColor _primaryPink = PdfColor.fromInt(0xFFF8B6B6);
-  static final PdfColor _lightPinkBackground = PdfColor(
+  static const PdfColor _darkBrown = PdfColor.fromInt(0xFF7A4A4A);
+  static const PdfColor _primaryPink = PdfColor.fromInt(0xFFF8B6B6);
+  static const PdfColor _lightPinkBackground = PdfColor(
     0xF8 / 255,
     0xB6 / 255,
     0xB6 / 255,
@@ -138,8 +138,8 @@ class PdfGenerator {
         children: [
           // === 1. Contenedor principal de texto con línea inferior ===
           pw.Container(
-            padding: pw.EdgeInsets.only(right: logoWidth + 20),
-            decoration: pw.BoxDecoration(
+            padding: const pw.EdgeInsets.only(right: logoWidth + 20),
+            decoration: const pw.BoxDecoration(
               border: pw.Border(
                 bottom: pw.BorderSide(
                   color: _primaryPink,
@@ -324,7 +324,7 @@ class PdfGenerator {
       'Total Item',
     ];
 
-    return pw.Table.fromTextArray(
+    return pw.TableHelper.fromTextArray(
       cellAlignment: pw.Alignment.centerLeft,
       headerStyle: pw.TextStyle(
         fontWeight: pw.FontWeight.bold,
@@ -332,7 +332,7 @@ class PdfGenerator {
         color: _darkBrown,
       ),
       cellStyle: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
-      headerDecoration: pw.BoxDecoration(color: _primaryPink),
+      headerDecoration: const pw.BoxDecoration(color: _primaryPink),
       headers: tableHeaders,
       columnWidths: {
         0: const pw.FlexColumnWidth(2),
@@ -511,17 +511,21 @@ class PdfGenerator {
       parts.add('Precio Base: \$${currencyFormat.format(precioBaseCalculado)}');
 
       final List<dynamic> fillingsRaw = custom['selected_fillings'] ?? [];
-      if (fillingsRaw.isNotEmpty)
+      if (fillingsRaw.isNotEmpty) {
         parts.add('Rellenos: ${_formatCustomizationList(fillingsRaw)}');
-      if (extraFillingsRaw.isNotEmpty)
+      }
+      if (extraFillingsRaw.isNotEmpty) {
         parts.add(
             'Rellenos Extra: ${_formatCustomizationList(extraFillingsRaw, multiplier: extraMultiplier)}');
-      if (extrasKgRaw.isNotEmpty)
+      }
+      if (extrasKgRaw.isNotEmpty) {
         parts.add(
             'Extras (x kg): ${_formatCustomizationList(extrasKgRaw, multiplier: extraMultiplier)}');
-      if (extrasUnitRaw.isNotEmpty)
+      }
+      if (extrasUnitRaw.isNotEmpty) {
         parts.add(
             'Extras (x ud): ${_formatCustomizationList(extrasUnitRaw, useQuantity: true)}');
+      }
 
       if (custom['weight_kg'] != null && !isSmallCake) {
         parts.add('Peso: ${custom['weight_kg']} kg');

@@ -155,7 +155,7 @@ class _ExtraFormDialogState extends ConsumerState<ExtraFormDialog> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _priceType,
+              initialValue: _priceType,
               decoration: const InputDecoration(labelText: 'Tipo de Precio'),
               items: const [
                 DropdownMenuItem(value: 'per_unit', child: Text('Por Unidad')),

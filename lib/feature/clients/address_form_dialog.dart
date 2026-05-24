@@ -96,7 +96,7 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
           return;
         }
         Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
         );
         _latController.text = position.latitude.toStringAsFixed(7);
         _lngController.text = position.longitude.toStringAsFixed(7);
@@ -140,9 +140,9 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
   }
 
   Future<void> _submit() async {
-    print('DEBUG: _submit called');
+    debugPrint('DEBUG: _submit called');
     if (!(_formKey.currentState?.validate() ?? false)) {
-      print('DEBUG: Form validation failed');
+      debugPrint('DEBUG: Form validation failed');
       return;
     }
 
@@ -159,22 +159,22 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
       'longitude': longitude,
       'google_maps_url': _gmapsController.text.trim(),
     };
-    print('DEBUG: Payload to send: $payload');
+    debugPrint('DEBUG: Payload to send: $payload');
 
     try {
       final repo = ref.read(clientsRepoProvider);
       if (isEditMode) {
-        print('DEBUG: Updating address');
+        debugPrint('DEBUG: Updating address');
         await repo.updateAddress(
           widget.clientId,
           widget.addressToEdit!.id,
           payload,
         );
       } else {
-        print('DEBUG: Creating address');
+        debugPrint('DEBUG: Creating address');
         await repo.createAddress(widget.clientId, payload);
       }
-      print('DEBUG: Address operation successful');
+      debugPrint('DEBUG: Address operation successful');
 
       ref.invalidate(clientDetailsProvider(widget.clientId));
 
@@ -189,13 +189,13 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
           debugPrint('Error mostrando snackbar: $e');
         }
         if (mounted) {
-          print('DEBUG: Popping dialog');
+          debugPrint('DEBUG: Popping dialog');
           Navigator.of(context).pop();
         }
       }
     } catch (e, stack) {
-      print('DEBUG: Error in _submit: $e');
-      print('DEBUG: Stack trace: $stack');
+      debugPrint('DEBUG: Error in _submit: $e');
+      debugPrint('DEBUG: Stack trace: $stack');
       _showSnackbar('Error al guardar: $e', isError: true);
     } finally {
       if (mounted) {
@@ -283,7 +283,7 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: colorScheme.primary,
                     side: BorderSide(
-                      color: colorScheme.primary.withOpacity(0.5),
+                      color: colorScheme.primary.withValues(alpha: 0.5),
                     ),
                   ),
                 ),
@@ -298,7 +298,7 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: colorScheme.secondary,
                     side: BorderSide(
-                      color: colorScheme.secondary.withOpacity(0.5),
+                      color: colorScheme.secondary.withValues(alpha: 0.5),
                     ),
                   ),
                 ),

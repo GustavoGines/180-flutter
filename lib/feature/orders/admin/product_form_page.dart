@@ -82,28 +82,31 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     try {
       if (widget.productToEdit == null) {
         await ref.read(catalogRepoProvider).createProduct(data);
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Producto creado')));
+        }
       } else {
         await ref
             .read(catalogRepoProvider)
             .updateProduct(widget.productToEdit!.id, data);
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Producto actualizado')));
+        }
       }
       if (mounted) {
         ref.invalidate(catalogProvider); // Refresh catalog
         context.pop();
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
@@ -143,7 +146,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<ProductCategory>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'Categoría',
                 border: OutlineInputBorder(),
@@ -160,7 +163,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<ProductUnit>(
-              value: _selectedUnit,
+              initialValue: _selectedUnit,
               decoration: const InputDecoration(
                 labelText: 'Unidad',
                 border: OutlineInputBorder(),

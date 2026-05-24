@@ -18,7 +18,7 @@ Future<bool> checkTesterUpdate({
 }) async {
   if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) return false;
 
-  final allow = kDebugMode || kFlavor == 'dev';
+  const allow = kDebugMode || kFlavor == 'dev';
   if (!allow) return false;
 
   try {
@@ -85,6 +85,8 @@ Future<bool> maybeShowTesterExplainerOnce(BuildContext context) async {
     debugPrint('ℹ️ Modo de prueba ya activado previamente.');
     return true;
   }
+
+  if (!context.mounted) return false;
 
   // Usamos 'context' que ahora recibimos por parámetro
   final ok = await showDialog<bool>(

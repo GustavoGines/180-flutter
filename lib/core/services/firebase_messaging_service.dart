@@ -167,7 +167,7 @@ class FirebaseMessagingService {
           notification.hashCode,
           notification.title,
           notification.body,
-          NotificationDetails(
+          const NotificationDetails(
             android: AndroidNotificationDetails(
               'high_importance_channel',
               'Notificaciones de Pedidos',

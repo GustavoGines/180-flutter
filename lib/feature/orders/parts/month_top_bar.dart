@@ -1,5 +1,4 @@
-// ignore: use_string_in_part_of_directives
-part of orders_home;
+part of '../home_page.dart';
 
 class _MonthTopBar extends ConsumerStatefulWidget {
   const _MonthTopBar({super.key, required this.onSelect});
@@ -64,9 +63,9 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
     final cs = Theme.of(context).colorScheme;
     final isSel = m.year == selected.year && m.month == selected.month;
 
-    final bg = isSel ? cs.primary.withOpacity(.20) : cs.surfaceContainerHighest;
+    final bg = isSel ? cs.primary.withValues(alpha: .20) : cs.surfaceContainerHighest;
     final brd = isSel ? cs.primary : cs.outlineVariant;
-    final txt = isSel ? cs.primary : cs.onSurface.withOpacity(.80);
+    final txt = isSel ? cs.primary : cs.onSurface.withValues(alpha: .80);
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -112,7 +111,7 @@ class _MonthTopBarState extends ConsumerState<_MonthTopBar> {
             Text(
               '${m.year}',
               style: TextStyle(
-                color: txt.withOpacity(.85),
+                color: txt.withValues(alpha: .85),
                 fontSize: 10.5,
                 height: 1.0,
                 fontWeight: FontWeight.w600,

@@ -1,5 +1,6 @@
-// Defines structures for the product catalog.
 // ignore_for_file: constant_identifier_names
+
+import 'package:flutter/foundation.dart';
 
 enum ProductCategory { torta, mesaDulce, box }
 
@@ -97,7 +98,7 @@ class Product {
         .map((e) => ProductVariant.fromJson(e))
         .toList();
     if (json['variants'] != null && (json['variants'] as List).isNotEmpty) {
-      print(
+      debugPrint(
         'DEBUG: Product ${json['name']} has ${variantsList.length} variants.',
       );
     }

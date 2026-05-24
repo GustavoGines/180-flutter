@@ -80,7 +80,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               fit: BoxFit.contain,
             ),
             const SizedBox(height: 50),
-            Text(
+            const Text(
               'Bienvenido a 180° Pastelería',
               style: TextStyle(
                 fontSize: 24,
@@ -94,7 +94,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               controller: _email,
               decoration: InputDecoration(
                 labelText: 'Email',
-                labelStyle: TextStyle(color: lightBrownText),
+                labelStyle: const TextStyle(color: lightBrownText),
                 filled: true,
                 fillColor: primaryPink.withAlpha(26),
                 border: OutlineInputBorder(
@@ -119,7 +119,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               obscureText: !_passwordVisible,
               decoration: InputDecoration(
                 labelText: 'Contraseña',
-                labelStyle: TextStyle(color: lightBrownText),
+                labelStyle: const TextStyle(color: lightBrownText),
                 filled: true,
                 fillColor: primaryPink.withAlpha(26),
                 border: OutlineInputBorder(
@@ -187,7 +187,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               onPressed: () {
                 context.push('/forgot-password');
               },
-              child: Text(
+              child: const Text(
                 '¿Olvidaste tu contraseña?',
                 style: TextStyle(color: lightBrownText, fontSize: 16),
               ),

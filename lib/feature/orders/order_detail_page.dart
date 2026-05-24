@@ -114,7 +114,7 @@ class OrderDetailPage extends ConsumerWidget {
 
         final allPhotoUrls = order.items
             .map((item) => item.customizationJson?['photo_urls'])
-            .whereNotNull()
+            .nonNulls
             .whereType<List>()
             .expand((urls) => urls)
             .whereType<String>()
@@ -126,7 +126,7 @@ class OrderDetailPage extends ConsumerWidget {
         // --- Fin Lógica de variables ---
 
         return Scaffold(
-          backgroundColor: cs.background,
+          backgroundColor: cs.surface,
           appBar: AppBar(
             title: const Text('Detalle del Pedido'),
             actions: [
@@ -230,7 +230,7 @@ class OrderDetailPage extends ConsumerWidget {
                                     border: Border.all(
                                       color: canEdit
                                           ? cs.outlineVariant
-                                          : cs.outline.withOpacity(0.5),
+                                          : cs.outline.withValues(alpha: 0.5),
                                     ),
                                     // --- FIN ---
                                   ),
@@ -601,7 +601,7 @@ class OrderDetailPage extends ConsumerWidget {
                           style: TextStyle(color: cs.error),
                         ),
                         style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: cs.error.withOpacity(0.5)),
+                           side: BorderSide(color: cs.error.withValues(alpha: 0.5)),
                         ),
                         // --- FIN ---
                         onPressed: () {
@@ -1698,7 +1698,7 @@ class OrderDetailPage extends ConsumerWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: cs.error,
                     foregroundColor: cs.onError,
-                    disabledBackgroundColor: cs.error.withOpacity(0.5),
+                    disabledBackgroundColor: cs.error.withValues(alpha: 0.5),
                   ),
                   // --- FIN ---
                   onPressed: isDeleting

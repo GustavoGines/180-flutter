@@ -74,6 +74,7 @@ class TrashedClientsPage extends ConsumerWidget {
       await ref.read(clientsRepoProvider).forceDeleteClient(client.id);
 
       // --- USA EL HELPER ADAPTADO ---
+      if (!context.mounted) return;
       _showSnackbar(context, 'Cliente eliminado permanentemente');
 
       // Refrescar la lista de la papelera
@@ -86,6 +87,7 @@ class TrashedClientsPage extends ConsumerWidget {
       }
 
       // --- USA EL HELPER ADAPTADO ---
+      if (!context.mounted) return;
       _showSnackbar(context, errorMsg, isError: true);
     }
   }
@@ -148,7 +150,7 @@ class TrashedClientsPage extends ConsumerWidget {
                     style: TextStyle(
                       // --- ADAPTADO AL TEMA ---
                       decoration: TextDecoration.lineThrough,
-                      color: cs.onSurfaceVariant.withOpacity(0.7),
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.7),
                     ),
                   ),
                   subtitle: Text('Eliminado el: $deletedAt'),
@@ -165,6 +167,7 @@ class TrashedClientsPage extends ConsumerWidget {
                                 .restoreClient(client.id);
 
                             // --- USA EL HELPER ADAPTADO ---
+                            if (!context.mounted) return;
                             _showSnackbar(context, 'Cliente restaurado');
 
                             // Refrescar ambas listas
@@ -176,6 +179,7 @@ class TrashedClientsPage extends ConsumerWidget {
                             ); // <-- Refrescar lista principal
                           } catch (e) {
                             // --- USA EL HELPER ADAPTADO ---
+                            if (!context.mounted) return;
                             _showSnackbar(context, 'Error: $e', isError: true);
                           }
                         },

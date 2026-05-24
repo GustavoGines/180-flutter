@@ -72,7 +72,7 @@ class OrderCard extends ConsumerWidget {
       // --- 👇 ADAPTACIÓN TEMA 👇 ---
       // 4. La sombra solo se aplica en modo claro
       shadowColor:
-          isDarkMode ? Colors.transparent : Colors.black.withOpacity(0.50),
+          isDarkMode ? Colors.transparent : Colors.black.withValues(alpha: 0.50),
       // 5. El color de fondo de la tarjeta depende del tema
       color: isDarkMode
           ? cs.surface
@@ -92,8 +92,8 @@ class OrderCard extends ConsumerWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => context.push('/order/${order.id}'),
-        splashColor: ink.withOpacity(0.1), // Splash con color de acento
-        highlightColor: ink.withOpacity(0.05), // Highlight con color de acento
+        splashColor: ink.withValues(alpha: 0.1), // Splash con color de acento
+        highlightColor: ink.withValues(alpha: 0.05), // Highlight con color de acento
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Column(
@@ -188,7 +188,7 @@ class OrderCard extends ConsumerWidget {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: ink.withOpacity(0.4),
+                            color: ink.withValues(alpha: 0.4),
                             width: 0.8,
                           ),
                         ),
@@ -198,7 +198,7 @@ class OrderCard extends ConsumerWidget {
                             icon: Icon(
                               Icons.arrow_drop_down,
                               size: 18,
-                              color: ink.withOpacity(0.8),
+                              color: ink.withValues(alpha: 0.8),
                             ),
                             isDense: true,
                             // Estilo del texto seleccionado (ya usa 'ink', está perfecto)

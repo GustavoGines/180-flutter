@@ -1,4 +1,4 @@
-part of orders_home;
+part of '../home_page.dart';
 
 class _ProgressSheetController {
   final void Function(String) _update;

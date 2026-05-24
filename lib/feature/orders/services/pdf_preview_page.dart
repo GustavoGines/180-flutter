@@ -39,7 +39,7 @@ class PdfPreviewPage extends ConsumerWidget {
             // ✅ CAMBIO: Usar el color de error del tema
             style: TextStyle(
               color: Theme.of(context).colorScheme.error,
-            ), // TODO: Usar cs.error
+            ),
           ),
         ),
         data: (order) {

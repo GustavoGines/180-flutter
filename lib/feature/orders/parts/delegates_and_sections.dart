@@ -132,7 +132,7 @@ class _DateHeader extends StatelessWidget {
                 totalString,
                 style: textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: cs.onSurfaceVariant.withOpacity(0.8),
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.8),
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
@@ -189,7 +189,7 @@ class _WeekSeparator extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
       color:
-          muted ? cs.outline.withOpacity(0.6) : cs.onSurface.withOpacity(0.7),
+          muted ? cs.outline.withValues(alpha: 0.6) : cs.onSurface.withValues(alpha: 0.7),
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     final verticalPadding = muted ? 4.0 : 16.0;
@@ -219,7 +219,7 @@ class _WeekSeparator extends StatelessWidget {
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(/* ... */),
+              decoration: const BoxDecoration(/* ... */),
               child: Text(
                 txt,
                 style: TextStyle(color: color, fontWeight: FontWeight.w700),
@@ -314,7 +314,7 @@ class _MonthBannerState extends State<_MonthBanner>
           gradient: newGradient,
           boxShadow: [
             BoxShadow(
-              color: shadowColor.withOpacity(0.4),
+              color: shadowColor.withValues(alpha: 0.4),
               blurRadius: 12,
               spreadRadius: 2,
               offset: const Offset(0, 5),
@@ -405,7 +405,7 @@ class _EmptyMonthPlaceholder extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     final textStyle = textTheme.bodyMedium?.copyWith(
-      color: cs.onSurface.withOpacity(0.38),
+      color: cs.onSurface.withValues(alpha: 0.38),
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 

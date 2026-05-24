@@ -47,7 +47,6 @@ final ThemeData lightTheme = ThemeData(
     primary: _darkBrown,
     secondary: _primaryPink,
     tertiary: _tertiaryMint, // Usado en las SummaryCard
-    background: Colors.white,
     surface: Colors.white,
     onPrimary: Colors.white, // Color de iconos y texto sobre el color primario
     onSurface: Colors.black87,
@@ -63,7 +62,7 @@ final ThemeData lightTheme = ThemeData(
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: _darkBrown, width: 2),
+      borderSide: const BorderSide(color: _darkBrown, width: 2),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -88,7 +87,6 @@ final ThemeData darkTheme = ThemeData(
     primary: _primaryPink, // Usar el rosa como Primary (se ve mejor en oscuro)
     secondary: _darkBrown,
     tertiary: _tertiaryMint,
-    background: _darkBackground,
     surface: _darkSurface, // Fondo para Cards/Surfaces
     onPrimary: Colors.black, // Texto sobre el rosa
     onSurface: _darkOnSurface,
@@ -102,7 +100,7 @@ final ThemeData darkTheme = ThemeData(
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(
+      borderSide: const BorderSide(
         color: _primaryPink,
         width: 2,
       ), // Resaltar con Primary Pink
@@ -112,7 +110,7 @@ final ThemeData darkTheme = ThemeData(
       borderSide: BorderSide(color: _primaryPink.withAlpha(102)),
     ),
     labelStyle: TextStyle(color: _primaryPink.withAlpha(200)),
-    hintStyle: TextStyle(color: _darkOnSurface.withOpacity(0.5)),
+    hintStyle: TextStyle(color: _darkOnSurface.withValues(alpha: 0.5)),
     fillColor: _darkSurface,
     filled: true,
   ),

@@ -72,6 +72,7 @@ class ClientsPage extends HookConsumerWidget {
   ) async {
     // 1. Pedir Permiso de Contactos
     if (!await FlutterContacts.requestPermission(readonly: true)) {
+      if (!context.mounted) return;
       _showSnackbar(context, 'Permiso de contactos denegado.', isError: true);
       await openAppSettings(); // Sugerir abrir configuración
       return;
@@ -87,6 +88,7 @@ class ClientsPage extends HookConsumerWidget {
           contact.phones.isNotEmpty ? contact.phones.first.number : null;
 
       if (phone == null) {
+        if (!context.mounted) return;
         _showSnackbar(
           context,
           'El contacto seleccionado no tiene número de teléfono.',
@@ -110,6 +112,7 @@ class ClientsPage extends HookConsumerWidget {
         }
       } else {
         // 6. Cliente no existe: crear el nuevo cliente
+        if (!context.mounted) return;
         _createClientFromData(context, ref, name: name, phone: phone);
       }
     }
@@ -146,6 +149,7 @@ class ClientsPage extends HookConsumerWidget {
         final clientToRestore = Client.fromJson(
           (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
         );
+        if (!context.mounted) return;
         _showRestoreDialog(context, ref, clientToRestore);
         return; // Sale del try/catch
       }

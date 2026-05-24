@@ -1,5 +1,4 @@
-// ignore: use_string_in_part_of_directives
-part of orders_home; // 👈 ASUMO QUE ESTA ES LA DIRECTIVA CORRECTA
+part of '../home_page.dart';
 
 DateTime _dayKey(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -22,7 +21,7 @@ List<DateTime> _monthsAroundWindow(DateTime center) {
   final centerMonth = DateTime(center.year, center.month, 1);
   final start = DateTime(centerMonth.year, centerMonth.month - _kBackMonths, 1);
   // Total de meses: 24 atrás + 24 adelante + 1 (actual) = 49
-  final total = _kBackMonths + _kFwdMonths + 1;
+  const total = _kBackMonths + _kFwdMonths + 1;
 
   return List.generate(total, (i) => DateTime(start.year, start.month + i, 1));
 }

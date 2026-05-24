@@ -82,7 +82,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
       }
 
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
       );
       _currentPinPosition = LatLng(position.latitude, position.longitude);
     } catch (e) {
@@ -131,11 +131,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
             onMapCreated: (controller) {
               _mapController = controller;
 
-              // --- APLICAR ESTILO OSCURO SI ES NECESARIO ---
-              if (isDarkMode) {
-                controller.setMapStyle(_darkMapStyle);
-              }
-              // --- FIN ---
+              // Estilo oscuro manejado vía propiedad `style` del GoogleMap
 
               // Si ya determinamos la posición (en initState), mover la cámara
               if (!_isLoading) {
@@ -151,6 +147,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
             myLocationButtonEnabled: true,
             myLocationEnabled: true,
             zoomControlsEnabled: false,
+            style: isDarkMode ? _darkMapStyle : null,
           ),
 
           // Pin/Marcador Fijo en el Centro de la Pantalla
@@ -198,7 +195,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
           if (_isLoading)
             Container(
               // --- OVERLAY ADAPTADO AL TEMA ---
-              color: cs.surface.withOpacity(0.5),
+              color: cs.surface.withValues(alpha: 0.5),
               // --- FIN ---
               child: const Center(child: CircularProgressIndicator()),
             ),
