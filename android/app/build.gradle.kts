@@ -48,6 +48,7 @@ android {
     productFlavors {
         create("dev") {
             dimension = "default"
+            applicationIdSuffix = ".dev"
             resValue("string", "app_name", "Pastelería 180 (Dev)")
             matchingFallbacks += listOf("staging")
         }
