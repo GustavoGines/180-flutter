@@ -1,33 +1,30 @@
-
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
-
-import 'product_catalog.dart';
 import '../../core/models/client.dart';
 import '../../core/models/order.dart';
-import '../../core/models/order_item.dart';
 import '../clients/clients_repository.dart';
 import '../clients/address_form_dialog.dart';
 import 'catalog_repository.dart';
 import 'orders_repository.dart';
 import 'order_detail_page.dart';
 import 'home_page.dart';
+import 'product_catalog.dart';
 
+import 'new_order/new_order_controller.dart';
 import 'new_order/widgets/date_time_picker_row.dart';
 import 'new_order/widgets/delivery_section.dart';
 import 'new_order/widgets/order_totals_card.dart';
 import 'new_order/widgets/client_selector_widget.dart';
-
 import 'new_order/widgets/order_items_section.dart';
+
 class NewOrderPage extends ConsumerWidget {
   final int? orderId;
   const NewOrderPage({super.key, this.orderId});
@@ -88,214 +85,27 @@ class _OrderForm extends ConsumerStatefulWidget {
 
 class _OrderFormState extends ConsumerState<_OrderForm> {
   final _formKey = GlobalKey<FormState>();
-
-  final _clientNameController = TextEditingController();
-  Client? _selectedClient;
-
-  int? _selectedAddressId;
-  bool _isPaid = false;
-
-  late DateTime _date;
-  late TimeOfDay _start;
-  late TimeOfDay _end;
-  final _depositController = TextEditingController();
-  final _deliveryCostController = TextEditingController();
   final _notesController = TextEditingController();
-  final List<OrderItem> _items = [];
-
-  List<Product> get boxProducts =>
-      widget.catalog?.products
-          .where((p) => p.category == ProductCategory.box)
-          .toList() ??
-      [];
-
-  List<Product> get cakeProducts =>
-      widget.catalog?.products
-          .where((p) => p.category == ProductCategory.torta)
-          .toList() ??
-      [];
-
-
-
-  List<Product> get mesaDulceProducts =>
-      widget.catalog?.products
-          .where((p) => p.category == ProductCategory.mesaDulce)
-          .toList() ??
-      [];
-
-  List<Filling> get allFillings => widget.catalog?.fillings ?? [];
-  List<Filling> get freeFillings => allFillings.where((f) => f.isFree).toList();
-  List<Filling> get extraCostFillings =>
-      allFillings.where((f) => !f.isFree).toList();
-
-  List<Extra> get cakeExtras => widget.catalog?.extras ?? [];
-
-  bool _isLoading = false;
-
-  bool get isEditMode => widget.order != null;
-  final Map<String, XFile> _filesToUpload = {};
 
   @override
   void initState() {
     super.initState();
-    if (isEditMode) {
-      final order = widget.order!;
-      _selectedClient = order.client;
-      _clientNameController.text = order.client?.name ?? '';
-      _date = order.eventDate;
-      _start = TimeOfDay.fromDateTime(order.startTime);
-      _end = TimeOfDay.fromDateTime(order.endTime);
-      _depositController.text = order.deposit?.toStringAsFixed(0) ?? '0';
-      _deliveryCostController.text =
-          order.deliveryCost?.toStringAsFixed(0) ?? '0';
-      _notesController.text = order.notes ?? '';
-      _items.addAll(order.items);
-      _isPaid = order.isPaid;
-
-      _selectedAddressId = order.clientAddressId;
-      if (_selectedClient != null) {
-        ref.read(clientDetailsProvider(_selectedClient!.id).future).then((
-          client,
-        ) {
-          if (mounted) {
-            setState(() {});
-          }
-        });
-      }
-    } else {
-      _date = DateTime.now();
-      _start = const TimeOfDay(hour: 9, minute: 0);
-      _end = const TimeOfDay(hour: 10, minute: 0);
-      _depositController.text = '0';
-      _deliveryCostController.text = '0';
+    if (widget.order != null) {
+      _notesController.text = widget.order!.notes ?? '';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(newOrderControllerProvider.notifier).initializeWithOrder(widget.order!);
+      });
     }
 
-    _deliveryCostController.addListener(_recalculateTotals);
-    _clientNameController.addListener(_onClientNameChanged);
+    _notesController.addListener(() {
+      ref.read(newOrderControllerProvider.notifier).updateNotes(_notesController.text);
+    });
   }
 
   @override
   void dispose() {
-    _clientNameController.dispose();
-    _depositController.dispose();
-    _deliveryCostController.dispose();
     _notesController.dispose();
-    _clientNameController.removeListener(_onClientNameChanged);
-    _deliveryCostController.removeListener(_recalculateTotals);
-
     super.dispose();
-  }
-
-  double _itemsSubtotal = 0.0;
-  double _deliveryCost = 0.0;
-  double _grandTotal = 0.0;
-  double _depositAmount = 0.0;
-  double _remainingBalance = 0.0;
-
-  void _recalculateTotals() {
-    double subtotal = 0.0;
-    for (var item in _items) {
-      subtotal += (item.finalUnitPrice * item.qty);
-    }
-
-    double delivery =
-        double.tryParse(_deliveryCostController.text.replaceAll(',', '.')) ??
-            0.0;
-    double deposit =
-        double.tryParse(_depositController.text.replaceAll(',', '.')) ?? 0.0;
-    double total = subtotal + delivery;
-    double remaining = _isPaid ? 0.0 : (total - deposit);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {
-          _itemsSubtotal = subtotal;
-          _deliveryCost = delivery;
-          _grandTotal = total;
-          _depositAmount = deposit;
-          _remainingBalance = remaining;
-        });
-      }
-    });
-  }
-
-  void _updateItemsAndRecalculate(Function updateLogic) {
-    setState(() {
-      updateLogic();
-      _recalculateTotals();
-    });
-  }
-
-  Future<void> _pickDate() async {
-    final d = await showDatePicker(
-      context: context,
-      locale: const Locale('es', 'AR'),
-      firstDate: DateTime.now().subtract(const Duration(days: 90)),
-      lastDate: DateTime.now().add(const Duration(days: 730)),
-      initialDate: _date,
-      builder: (context, child) {
-        final theme = Theme.of(context);
-        return Theme(
-          data: theme.copyWith(
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: theme.colorScheme.primary,
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (d != null) setState(() => _date = d);
-  }
-
-  Future<void> _pickTime(bool isStart) async {
-    final t = await showTimePicker(
-      context: context,
-      initialTime: isStart ? _start : _end,
-      initialEntryMode: TimePickerEntryMode.input,
-      builder: (context, child) {
-        final theme = Theme.of(context);
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          child: Theme(
-            data: theme.copyWith(
-              textButtonTheme: TextButtonThemeData(
-                style: TextButton.styleFrom(
-                  foregroundColor: theme.colorScheme.primary,
-                ),
-              ),
-            ),
-            child: child!,
-          ),
-        );
-      },
-    );
-
-    if (t != null) {
-      setState(() {
-        if (isStart) {
-          _start = t;
-          if ((_start.hour * 60 + _start.minute) >=
-              (_end.hour * 60 + _end.minute)) {
-            _end = TimeOfDay(
-              hour: (_start.hour + 1) % 24,
-              minute: _start.minute,
-            );
-          }
-        } else {
-          _end = t;
-          if ((_start.hour * 60 + _start.minute) >=
-              (_end.hour * 60 + _end.minute)) {
-            _start = TimeOfDay(
-              hour: (_end.hour - 1 + 24) % 24,
-              minute: _end.minute,
-            );
-          }
-        }
-      });
-    }
   }
 
   Future<void> _selectClientFromContacts() async {
@@ -341,12 +151,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       );
 
       if (existingClient != null) {
-        setState(() {
-          _selectedClient = existingClient;
-          _clientNameController.text = existingClient.name;
-          _selectedAddressId = null;
-          _deliveryCostController.text = '0';
-        });
+        ref.read(newOrderControllerProvider.notifier).updateClient(existingClient);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -399,12 +204,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     if (mounted) Navigator.pop(context);
 
     if (newClient != null && mounted) {
-      setState(() {
-        _selectedClient = newClient;
-        _clientNameController.text = newClient!.name;
-        _selectedAddressId = null;
-        _deliveryCostController.text = '0';
-      });
+      ref.read(newOrderControllerProvider.notifier).updateClient(newClient);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -495,7 +295,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     if (didConfirm != true) return;
 
-    setState(() => _isLoading = true);
+    ref.read(newOrderControllerProvider.notifier).setLoading(true);
     try {
       final restoredClient =
           await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
@@ -504,11 +304,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       ref.invalidate(trashedClientsProvider);
 
       if (mounted) {
-        setState(() {
-          _selectedClient = restoredClient;
-          _clientNameController.text = restoredClient.name;
-          _selectedAddressId = null;
-        });
+        ref.read(newOrderControllerProvider.notifier).updateClient(restoredClient);
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -528,16 +324,18 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        ref.read(newOrderControllerProvider.notifier).setLoading(false);
       }
     }
   }
 
   Future<void> _submit() async {
+    final state = ref.read(newOrderControllerProvider);
+    final controller = ref.read(newOrderControllerProvider.notifier);
+    
     final valid = _formKey.currentState?.validate() ?? false;
-    _recalculateTotals();
 
-    if (_depositAmount > _grandTotal + 0.01) {
+    if (state.deposit > state.grandTotal + 0.01) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
@@ -550,7 +348,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       return;
     }
 
-    if (_deliveryCost > 0 && _selectedAddressId == null) {
+    if (state.deliveryCost > 0 && state.selectedAddressId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
@@ -563,7 +361,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       return;
     }
 
-    if (!valid || _selectedClient == null || _items.isEmpty) {
+    if (!valid || state.selectedClient == null || state.items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
@@ -576,7 +374,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       return;
     }
 
-    if (_grandTotal <= 0 && _items.isNotEmpty) {
+    if (state.grandTotal <= 0 && state.items.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -592,33 +390,31 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    controller.setLoading(true);
 
     final fmt = DateFormat('yyyy-MM-dd');
     String t(TimeOfDay x) =>
         '${x.hour.toString().padLeft(2, '0')}:${x.minute.toString().padLeft(2, '0')}';
 
     final payload = {
-      'client_id': _selectedClient!.id,
-      'event_date': fmt.format(_date),
-      'start_time': t(_start),
-      'end_time': t(_end),
-      'status': isEditMode ? widget.order!.status : 'confirmed',
-      'deposit': _depositAmount,
-      'delivery_cost': _deliveryCost > 0 ? _deliveryCost : null,
-      'notes': _notesController.text.trim().isEmpty
-          ? null
-          : _notesController.text.trim(),
-      'client_address_id': _selectedAddressId,
-      'is_paid': _isPaid,
-      'items': _items.map((item) => item.toJson()).toList(),
+      'client_id': state.selectedClient!.id,
+      'event_date': fmt.format(state.eventDate ?? DateTime.now()),
+      'start_time': t(state.startTime ?? const TimeOfDay(hour: 9, minute: 0)),
+      'end_time': t(state.endTime ?? const TimeOfDay(hour: 10, minute: 0)),
+      'status': state.isEditMode ? widget.order!.status : 'confirmed',
+      'deposit': state.deposit,
+      'delivery_cost': state.deliveryCost > 0 ? state.deliveryCost : null,
+      'notes': state.notes.trim().isEmpty ? null : state.notes.trim(),
+      'client_address_id': state.selectedAddressId,
+      'is_paid': state.isPaid,
+      'items': state.items.map((item) => item.toJson()).toList(),
     };
 
     try {
-      if (isEditMode) {
+      if (state.isEditMode) {
         final Order updatedOrder = await ref
             .read(ordersRepoProvider)
-            .updateOrderWithFiles(widget.order!.id, payload, _filesToUpload);
+            .updateOrderWithFiles(widget.order!.id, payload, state.filesToUpload);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -633,12 +429,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
             ),
           );
 
-          await ref
-              .read(ordersWindowProvider.notifier)
-              .updateOrder(updatedOrder);
+          await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
 
-          // Esperamos a que se recargue el pedido completo desde el backend
-          // para garantizar que las fotos ya vengan incluidas en el JSON.
           final _ = await ref.refresh(orderByIdProvider(widget.order!.id).future);
           
           if (mounted) context.pop();
@@ -646,7 +438,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       } else {
         final Order createdOrder = await ref
             .read(ordersRepoProvider)
-            .createOrderWithFiles(payload, _filesToUpload);
+            .createOrderWithFiles(payload, state.filesToUpload);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -677,15 +469,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        controller.setLoading(false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _recalculateTotals());
-
     return Form(
       key: _formKey,
       child: Column(
@@ -695,50 +485,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               children: [
                 ClientSelectorWidget(
-                  selectedClient: _selectedClient,
-                  clientNameController: _clientNameController,
-                  onClientSelected: (client) {
-                    setState(() {
-                      _selectedClient = client;
-                      _clientNameController.text = client.name;
-                      _selectedAddressId = null;
-                      _deliveryCostController.text = '0';
-                    });
-                  },
-                  onClearClient: () {
-                    setState(() {
-                      _selectedClient = null;
-                      _clientNameController.clear();
-                      _selectedAddressId = null;
-                    });
-                  },
                   onSelectFromContacts: _selectClientFromContacts,
                   onAddManually: _addClientManuallyDialog,
                   launchExternalUrl: launchExternalUrl,
                 ),
-                if (_selectedClient != null)
-                  DeliverySection(
-                    selectedClient: _selectedClient!,
-                    selectedAddressId: _selectedAddressId,
-                    onAddressSelected: (newId) {
-                      setState(() {
-                        _selectedAddressId = newId;
-                        if (newId == null) {
-                          _deliveryCostController.text = '0';
-                        }
-                      });
-                    },
-                    onAddAddress: _showAddAddressDialog,
-                  ),
-                const SizedBox(height: 16),
-                DateTimePickerRow(
-                  date: _date,
-                  startTime: _start,
-                  endTime: _end,
-                  onPickDate: _pickDate,
-                  onPickStartTime: () => _pickTime(true),
-                  onPickEndTime: () => _pickTime(false),
+                DeliverySection(
+                  onAddAddress: _showAddAddressDialog,
                 ),
+                const SizedBox(height: 16),
+                const DateTimePickerRow(),
                 const SizedBox(height: 20),
                 TextFormField(
                   controller: _notesController,
@@ -753,37 +508,13 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
                 ),
                 const SizedBox(height: 24),
                 OrderItemsSection(
-                  items: _items,
                   catalog: widget.catalog,
-                  filesToUpload: _filesToUpload,
-                  onItemsChanged: (newItems) {
-                    _updateItemsAndRecalculate(() {
-                      final snapshot = List<OrderItem>.from(newItems);
-                      _items.clear();
-                      _items.addAll(snapshot);
-                    });
-                  },
                 ),
                 const SizedBox(height: 100),
               ],
             ),
           ),
           OrderTotalsCard(
-            depositController: _depositController,
-            deliveryCostController: _deliveryCostController,
-            isPaid: _isPaid,
-            onPaidChanged: (val) {
-              setState(() => _isPaid = val);
-              _recalculateTotals();
-            },
-            onTotalsChanged: _recalculateTotals,
-            itemsSubtotal: _itemsSubtotal,
-            deliveryCost: _deliveryCost,
-            grandTotal: _grandTotal,
-            depositAmount: _depositAmount,
-            remainingBalance: _remainingBalance,
-            isLoading: _isLoading,
-            isEditMode: isEditMode,
             onSubmit: _submit,
           ),
         ],
@@ -791,21 +522,11 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  void _onClientNameChanged() {
-    if (_selectedClient != null &&
-        _clientNameController.text != _selectedClient!.name) {
-      setState(() {
-        _selectedClient = null;
-        _selectedAddressId = null; // <-- 14. LIMPIAR DIRECCIÓN
-      });
-    }
-  }
-
-  // --- HELPER DE UI: FILA DE IMAGENES COMPACTA (Para Pending List) ---
   Future<void> _showAddAddressDialog() async {
-    if (_selectedClient == null) return;
+    final selectedClient = ref.read(newOrderControllerProvider).selectedClient;
+    if (selectedClient == null) return;
 
-    final int clientId = _selectedClient!.id;
+    final int clientId = selectedClient.id;
 
     await showModalBottomSheet(
       context: context,
@@ -826,24 +547,15 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
       },
     );
 
-    // Al cerrar el modal, refrescar los datos del cliente para ver la nueva dirección
     if (!mounted) return;
 
-    // Invalida el provider global para asegurar que futuros usos traigan data fresca
     ref.invalidate(clientDetailsProvider(clientId));
 
-    // Trae la data fresca manualmente para actualizar el estado local
     try {
       final refreshed =
           await ref.read(clientsRepoProvider).getClientById(clientId);
       if (refreshed != null && mounted) {
-        setState(() {
-          _selectedClient = refreshed;
-          // Opcional: Auto-seleccionar la última dirección agregada
-          if (refreshed.addresses.isNotEmpty) {
-            // _selectedAddressId = refreshed.addresses.last.id;
-          }
-        });
+        ref.read(newOrderControllerProvider.notifier).updateClient(refreshed);
       }
     } catch (e) {
       debugPrint('Error refrescando cliente: $e');

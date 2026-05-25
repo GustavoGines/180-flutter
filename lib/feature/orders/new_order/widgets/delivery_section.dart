@@ -1,24 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pasteleria_180_flutter/core/models/client.dart';
-import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
+
+import '../new_order_controller.dart';
+import '../../../../feature/clients/clients_repository.dart';
 
 class DeliverySection extends ConsumerWidget {
-  final Client selectedClient;
-  final int? selectedAddressId;
-  final ValueChanged<int?> onAddressSelected;
   final VoidCallback onAddAddress;
 
   const DeliverySection({
     super.key,
-    required this.selectedClient,
-    required this.selectedAddressId,
-    required this.onAddressSelected,
     required this.onAddAddress,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(newOrderControllerProvider);
+    final controller = ref.read(newOrderControllerProvider.notifier);
+
+    final selectedClient = state.selectedClient;
+    if (selectedClient == null) {
+      return const SizedBox.shrink(); // No mostrar nada si no hay cliente
+    }
+
     final asyncClientDetails = ref.watch(clientDetailsProvider(selectedClient.id));
 
     return asyncClientDetails.when(
@@ -55,7 +58,7 @@ class DeliverySection extends ConsumerWidget {
         final addresses = client?.addresses ?? [];
 
         // Asegurarse que el ID seleccionado sigue siendo válido
-        int? validAddressId = selectedAddressId;
+        int? validAddressId = state.selectedAddressId;
         if (validAddressId != null && !addresses.any((a) => a.id == validAddressId)) {
           validAddressId = null;
         }
@@ -64,7 +67,7 @@ class DeliverySection extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             DropdownButtonFormField<int?>(
-              initialValue: validAddressId,
+              value: validAddressId,
               decoration: InputDecoration(
                 labelText: 'Dirección de Entrega',
                 border: const OutlineInputBorder(),
@@ -91,7 +94,7 @@ class DeliverySection extends ConsumerWidget {
                   );
                 }),
               ],
-              onChanged: onAddressSelected,
+              onChanged: (val) => controller.updateAddress(val),
               validator: (value) => null,
             ),
             const SizedBox(height: 8),

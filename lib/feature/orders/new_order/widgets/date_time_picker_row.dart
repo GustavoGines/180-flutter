@@ -1,26 +1,54 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-class DateTimePickerRow extends StatelessWidget {
-  final DateTime date;
-  final TimeOfDay startTime;
-  final TimeOfDay endTime;
-  final VoidCallback onPickDate;
-  final VoidCallback onPickStartTime;
-  final VoidCallback onPickEndTime;
+import '../new_order_controller.dart';
 
-  const DateTimePickerRow({
-    super.key,
-    required this.date,
-    required this.startTime,
-    required this.endTime,
-    required this.onPickDate,
-    required this.onPickStartTime,
-    required this.onPickEndTime,
-  });
+class DateTimePickerRow extends ConsumerWidget {
+  const DateTimePickerRow({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(newOrderControllerProvider);
+    final controller = ref.read(newOrderControllerProvider.notifier);
+
+    // Fallback if null (should not be null if properly initialized, but just in case)
+    final date = state.eventDate ?? DateTime.now().add(const Duration(days: 3));
+    final startTime = state.startTime ?? const TimeOfDay(hour: 10, minute: 0);
+    final endTime = state.endTime ?? const TimeOfDay(hour: 12, minute: 0);
+
+    Future<void> pickDate() async {
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: date,
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      );
+      if (picked != null) {
+        controller.updateDate(picked);
+      }
+    }
+
+    Future<void> pickStartTime() async {
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: startTime,
+      );
+      if (picked != null) {
+        controller.updateStartTime(picked);
+      }
+    }
+
+    Future<void> pickEndTime() async {
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: endTime,
+      );
+      if (picked != null) {
+        controller.updateEndTime(picked);
+      }
+    }
+
     return Card(
       elevation: 0,
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -37,7 +65,7 @@ class DateTimePickerRow extends StatelessWidget {
               title: Text(
                 'Fecha Evento: ${DateFormat('EEEE d \'de\' MMMM, y', 'es_AR').format(date)}',
               ),
-              onTap: onPickDate,
+              onTap: pickDate,
             ),
             Divider(
               height: 1,
@@ -55,7 +83,7 @@ class DateTimePickerRow extends StatelessWidget {
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     title: Text('Desde: ${startTime.format(context)}'),
-                    onTap: onPickStartTime,
+                    onTap: pickStartTime,
                   ),
                 ),
                 Container(
@@ -71,7 +99,7 @@ class DateTimePickerRow extends StatelessWidget {
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     title: Text('Hasta: ${endTime.format(context)}'),
-                    onTap: onPickEndTime,
+                    onTap: pickEndTime,
                   ),
                 ),
               ],

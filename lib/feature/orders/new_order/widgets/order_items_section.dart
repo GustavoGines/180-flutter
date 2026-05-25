@@ -6,13 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
 
-
 import '../../../../core/models/order_item.dart';
 import '../../../../core/models/catalog.dart';
-
 import '../../product_catalog.dart';
 import 'package:flutter/services.dart';
 import 'package:pasteleria_180_flutter/core/json_utils.dart';
+import '../new_order_controller.dart';
 
 class BoxMesaDulceSelection {
   final Product product;
@@ -34,17 +33,11 @@ class UnitExtraSelection {
 }
 
 class OrderItemsSection extends ConsumerStatefulWidget {
-  final List<OrderItem> items;
   final CatalogResponse? catalog;
-  final Map<String, XFile> filesToUpload;
-  final ValueChanged<List<OrderItem>> onItemsChanged;
 
   const OrderItemsSection({
     super.key,
-    required this.items,
     this.catalog,
-    required this.filesToUpload,
-    required this.onItemsChanged,
   });
 
   @override
@@ -61,8 +54,12 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
 
   final ImagePicker picker = ImagePicker();
 
-  List<OrderItem> get _items => widget.items;
-  Map<String, XFile> get _filesToUpload => widget.filesToUpload;
+  // Referencias mutables para que la lógica existente funcione sin reescribir todo
+  late List<OrderItem> _itemsMutableRef;
+  late Map<String, XFile> _filesMutableRef;
+
+  List<OrderItem> get _items => _itemsMutableRef;
+  Map<String, XFile> get _filesToUpload => _filesMutableRef;
 
   List<Product> get boxProducts => widget.catalog?.products.where((p) => p.category == ProductCategory.box).toList() ?? [];
   List<Product> get cakeProducts => widget.catalog?.products.where((p) => p.category == ProductCategory.torta).toList() ?? [];
@@ -76,10 +73,19 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
   List<Extra> get cakeExtras => widget.catalog?.extras ?? [];
 
   void _updateItemsAndRecalculate(VoidCallback updateLogic) {
-    setState(() {
-      updateLogic();
-    });
-    widget.onItemsChanged(_items);
+    // Tomamos la copia actual del estado, aplicamos mutaciones y lo enviamos al controller
+    _itemsMutableRef = List<OrderItem>.from(ref.read(newOrderControllerProvider).items);
+    
+    // Conservamos las fotos locales agregadas en el diálogo y sumamos las del controller
+    final currentControllerFiles = ref.read(newOrderControllerProvider).filesToUpload;
+    final mergedFiles = Map<String, XFile>.from(currentControllerFiles);
+    mergedFiles.addAll(_filesMutableRef);
+    _filesMutableRef = mergedFiles;
+    
+    updateLogic();
+    
+    ref.read(newOrderControllerProvider.notifier).updateItems(_itemsMutableRef);
+    ref.read(newOrderControllerProvider.notifier).updateFilesToUpload(_filesMutableRef);
   }
 
   void _addItemDialog() {
@@ -285,7 +291,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
 
     final ImagePicker picker = ImagePicker();
     List<String> existingImageUrls = List<String>.from(
-      customData['photo_urls'] ?? [],
+      customData['photo_urls'] ?? (customData['photo_url'] != null ? [customData['photo_url']] : []),
     );
 
     final finalPriceController = TextEditingController();
@@ -1270,7 +1276,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
 
     final ImagePicker picker = ImagePicker();
     List<String> existingImageUrls = List<String>.from(
-      customData['photo_urls'] ?? [],
+      customData['photo_urls'] ?? (customData['photo_url'] != null ? [customData['photo_url']] : []),
     );
 
     final calculatedBasePriceController = TextEditingController();
@@ -1898,7 +1904,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
 
     final ImagePicker picker = ImagePicker();
     List<XFile> selectedFiles = [];
-    String? existingRemoteUrl;
+    List<String> existingRemoteUrls = [];
 
     if (isEditing) {
       if (existingItem.localFile != null &&
@@ -1914,10 +1920,15 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
         }
       }
 
-      if (existingItem.customizationJson?['photo_url'] != null) {
+      if (existingItem.customizationJson?['photo_urls'] != null) {
+        final urls = existingItem.customizationJson!['photo_urls'];
+        if (urls is List) {
+          existingRemoteUrls.addAll(urls.whereType<String>().where((u) => !u.startsWith('placeholder_')));
+        }
+      } else if (existingItem.customizationJson?['photo_url'] != null) {
         final url = existingItem.customizationJson!['photo_url'];
         if (!url.startsWith('placeholder_')) {
-          existingRemoteUrl = url;
+          existingRemoteUrls.add(url);
         }
       }
     }
@@ -1969,7 +1980,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
               if (selectedProduct!.variants.isNotEmpty &&
                   selectedVariant == null) { return; }
 
-              List<XFile> finalLocalFiles = [];
+              List<dynamic> finalLocalFiles = [];
               List<String> allPhotoUrls = [];
 
               if (selectedFiles.isNotEmpty) {
@@ -1982,8 +1993,9 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
                   }
                 }
               }
-              if (existingRemoteUrl != null) {
-                allPhotoUrls.add(existingRemoteUrl!);
+              if (existingRemoteUrls.isNotEmpty) {
+                allPhotoUrls.addAll(existingRemoteUrls);
+                finalLocalFiles.addAll(existingRemoteUrls);
               }
 
               final customization = {
@@ -2113,7 +2125,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
                                                 runSpacing: 4,
                                                 children: _buildCompactImageRow(
                                                   context,
-                                                  it.localFile as List<Object>,
+                                                  it.localFile as List<dynamic>,
                                                   it.qty,
                                                 ),
                                               ),
@@ -2351,26 +2363,27 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
                             ),
                             const SizedBox(height: 10),
                             if (selectedFiles.isNotEmpty ||
-                                existingRemoteUrl != null)
+                                existingRemoteUrls.isNotEmpty)
                               Container(
                                 height: 90,
                                 margin: const EdgeInsets.only(bottom: 10),
                                 child: ListView(
                                   scrollDirection: Axis.horizontal,
                                   children: [
-                                    if (existingRemoteUrl != null)
-                                      Padding(
+                                    ...existingRemoteUrls.map((url) {
+                                      return Padding(
                                         padding: const EdgeInsets.only(
                                           right: 8.0,
                                         ),
                                         child: _buildImageThumbnail(
-                                          existingRemoteUrl!,
+                                          url,
                                           true,
                                           () => setDialogState(() {
-                                            existingRemoteUrl = null;
+                                            existingRemoteUrls.remove(url);
                                           }),
                                         ),
-                                      ),
+                                      );
+                                    }),
                                     ...selectedFiles.map((file) {
                                       return Padding(
                                         padding: const EdgeInsets.only(
@@ -2676,7 +2689,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
 
   // --- LISTENER CAMBIO DE NOMBRE (modificado) ---
   List<Widget> _buildCompactImageRow(
-      BuildContext context, List<Object> images, int qty) {
+      BuildContext context, List<dynamic> images, int qty) {
     // Máximo 3 elementos visibles (2 fotos + 1 indicador, o 3 fotos)
     const int maxVisible = 3;
     final int totalCount = images.length;
@@ -2920,6 +2933,8 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
 
   @override
   Widget build(BuildContext context) {
+    _itemsMutableRef = List<OrderItem>.from(ref.watch(newOrderControllerProvider).items);
+    _filesMutableRef = Map<String, XFile>.from(ref.watch(newOrderControllerProvider).filesToUpload);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
