@@ -67,7 +67,7 @@ class DeliverySection extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             DropdownButtonFormField<int?>(
-              value: validAddressId,
+              initialValue: validAddressId,
               decoration: InputDecoration(
                 labelText: 'Dirección de Entrega',
                 border: const OutlineInputBorder(),
