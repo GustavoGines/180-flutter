@@ -1,8 +1,6 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -13,9 +11,7 @@ import '../../core/models/order.dart';
 import '../clients/clients_repository.dart';
 import '../clients/address_form_dialog.dart';
 import 'catalog_repository.dart';
-import 'orders_repository.dart';
 import 'order_detail_page.dart';
-import 'home_page.dart';
 import 'product_catalog.dart';
 
 import 'new_order/new_order_controller.dart';
@@ -171,51 +167,22 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
   }) async {
     if (name.trim().isEmpty) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    Client? newClient;
-    String? errorMessage;
-
     try {
-      newClient = await ref.read(clientsRepoProvider).createClient({
-        'name': name.trim(),
-        'phone': phone?.trim(),
-      });
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 409 && e.response?.data['client'] != null) {
-        if (mounted) Navigator.pop(context);
-        final clientData = e.response?.data['client'];
-        final clientToRestore = Client.fromJson(
-          (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
-        );
-        _showRestoreDialog(clientToRestore);
-        return;
-      }
-      errorMessage =
-          e.response?.data['message'] as String? ?? 'Error al crear cliente.';
-    } catch (e) {
-      errorMessage = e.toString();
-    }
-
-    if (mounted) Navigator.pop(context);
-
-    if (newClient != null && mounted) {
-      ref.read(newOrderControllerProvider.notifier).updateClient(newClient);
-
+      await ref.read(newOrderControllerProvider.notifier).createClient(name, phone);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Cliente creado y seleccionado'),
           backgroundColor: Colors.green,
         ),
       );
-    } else if (errorMessage != null && mounted) {
+    } on ClientExistsException catch (e) {
+      _showRestoreDialog(e.clientToRestore);
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(errorMessage),
+          content: Text(e.toString()),
           backgroundColor: Theme.of(context).colorScheme.errorContainer,
         ),
       );
@@ -295,182 +262,65 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
     if (didConfirm != true) return;
 
-    ref.read(newOrderControllerProvider.notifier).setLoading(true);
     try {
-      final restoredClient =
-          await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
-
-      ref.invalidate(clientsListProvider(''));
-      ref.invalidate(trashedClientsProvider);
-
-      if (mounted) {
-        ref.read(newOrderControllerProvider.notifier).updateClient(restoredClient);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cliente restaurado y seleccionado'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      await ref.read(newOrderControllerProvider.notifier).restoreClient(clientToRestore.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cliente restaurado y seleccionado'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al restaurar: $e'),
-            backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        ref.read(newOrderControllerProvider.notifier).setLoading(false);
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al restaurar: $e'),
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
+        ),
+      );
     }
   }
 
   Future<void> _submit() async {
-    final state = ref.read(newOrderControllerProvider);
-    final controller = ref.read(newOrderControllerProvider.notifier);
-    
     final valid = _formKey.currentState?.validate() ?? false;
-
-    if (state.deposit > state.grandTotal + 0.01) {
+    if (!valid) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'El monto de la seña/depósito no puede ser mayor al TOTAL del pedido. Verifica los valores.',
-          ),
+          content: const Text('Revisa los campos obligatorios: Cliente y al menos un Producto.'),
           backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
-          duration: const Duration(seconds: 4),
         ),
       );
       return;
     }
-
-    if (state.deliveryCost > 0 && state.selectedAddressId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Si hay costo de envío, debes seleccionar una dirección de entrega.',
-          ),
-          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-
-    if (!valid || state.selectedClient == null || state.items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Revisa los campos obligatorios: Cliente y al menos un Producto.',
-          ),
-          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-
-    if (state.grandTotal <= 0 && state.items.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'El total calculado es cero o negativo. Revisa los precios de los productos.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
-            ),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-      return;
-    }
-
-    controller.setLoading(true);
-
-    final fmt = DateFormat('yyyy-MM-dd');
-    String t(TimeOfDay x) =>
-        '${x.hour.toString().padLeft(2, '0')}:${x.minute.toString().padLeft(2, '0')}';
-
-    final payload = {
-      'client_id': state.selectedClient!.id,
-      'event_date': fmt.format(state.eventDate ?? DateTime.now()),
-      'start_time': t(state.startTime ?? const TimeOfDay(hour: 9, minute: 0)),
-      'end_time': t(state.endTime ?? const TimeOfDay(hour: 10, minute: 0)),
-      'status': state.isEditMode ? widget.order!.status : 'confirmed',
-      'deposit': state.deposit,
-      'delivery_cost': state.deliveryCost > 0 ? state.deliveryCost : null,
-      'notes': state.notes.trim().isEmpty ? null : state.notes.trim(),
-      'client_address_id': state.selectedAddressId,
-      'is_paid': state.isPaid,
-      'items': state.items.map((item) => item.toJson()).toList(),
-    };
 
     try {
-      if (state.isEditMode) {
-        final Order updatedOrder = await ref
-            .read(ordersRepoProvider)
-            .updateOrderWithFiles(widget.order!.id, payload, state.filesToUpload);
+      final isEditMode = ref.read(newOrderControllerProvider).isEditMode;
+      final savedOrder = await ref.read(newOrderControllerProvider.notifier).saveOrder();
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Pedido actualizado con éxito.',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onTertiaryContainer,
-                ),
-              ),
-              backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-            ),
-          );
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isEditMode ? 'Pedido actualizado con éxito.' : 'Pedido creado con éxito.'),
+          backgroundColor: Colors.green,
+        ),
+      );
 
-          await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
-
-          final _ = await ref.refresh(orderByIdProvider(widget.order!.id).future);
-          
-          if (mounted) context.pop();
-        }
+      if (isEditMode) {
+        context.pop();
       } else {
-        final Order createdOrder = await ref
-            .read(ordersRepoProvider)
-            .createOrderWithFiles(payload, state.filesToUpload);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Pedido creado con éxito.',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onTertiaryContainer,
-                ),
-              ),
-              backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
-            ),
-          );
-
-          await ref.read(ordersWindowProvider.notifier).addOrder(createdOrder);
-
-          if (mounted) context.pushReplacement('/order/${createdOrder.id}');
-        }
+        context.pushReplacement('/order/${savedOrder.id}');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        controller.setLoading(false);
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 

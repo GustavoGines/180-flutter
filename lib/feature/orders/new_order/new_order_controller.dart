@@ -2,12 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/models/client.dart';
 import '../../../../core/models/order.dart';
 import '../../../../core/models/order_item.dart';
+import '../../clients/clients_repository.dart';
+import '../orders_repository.dart';
+import '../home_page.dart';
+import '../order_detail_page.dart';
 
 part 'new_order_controller.freezed.dart';
+
+class ClientExistsException implements Exception {
+  final Client clientToRestore;
+  ClientExistsException(this.clientToRestore);
+}
+
+class ValidationException implements Exception {
+  final String message;
+  ValidationException(this.message);
+  @override
+  String toString() => message;
+}
 
 @freezed
 abstract class NewOrderState with _$NewOrderState {
@@ -145,7 +163,6 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
     state = state.copyWith(filesToUpload: files);
   }
 
-
   void removeFile(String localPath) {
     final newFiles = Map<String, XFile>.from(state.filesToUpload);
     newFiles.remove(localPath);
@@ -159,6 +176,123 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
   
   void setError(String? error) {
     state = state.copyWith(error: error);
+  }
+
+  // --- Lógica de Negocio (API) ---
+
+  /// Guarda el pedido (Crea o Actualiza)
+  Future<Order> saveOrder() async {
+    // 1. Validaciones
+    if (state.deposit > state.grandTotal + 0.01) {
+      throw ValidationException('El monto de la seña/depósito no puede ser mayor al TOTAL del pedido. Verifica los valores.');
+    }
+    if (state.deliveryCost > 0 && state.selectedAddressId == null) {
+      throw ValidationException('Si hay costo de envío, debes seleccionar una dirección de entrega.');
+    }
+    if (state.selectedClient == null || state.items.isEmpty) {
+      throw ValidationException('Revisa los campos obligatorios: Cliente y al menos un Producto.');
+    }
+    if (state.grandTotal <= 0 && state.items.isNotEmpty) {
+      throw ValidationException('El total calculado es cero o negativo. Revisa los precios de los productos.');
+    }
+
+    setLoading(true);
+
+    try {
+      final fmt = DateFormat('yyyy-MM-dd');
+      String t(TimeOfDay x) =>
+          '${x.hour.toString().padLeft(2, '0')}:${x.minute.toString().padLeft(2, '0')}';
+
+      final payload = {
+        'client_id': state.selectedClient!.id,
+        'event_date': fmt.format(state.eventDate ?? DateTime.now()),
+        'start_time': t(state.startTime ?? const TimeOfDay(hour: 9, minute: 0)),
+        'end_time': t(state.endTime ?? const TimeOfDay(hour: 10, minute: 0)),
+        'status': state.isEditMode ? state.originalOrder!.status : 'confirmed',
+        'deposit': state.deposit,
+        'delivery_cost': state.deliveryCost > 0 ? state.deliveryCost : null,
+        'notes': state.notes.trim().isEmpty ? null : state.notes.trim(),
+        'client_address_id': state.selectedAddressId,
+        'is_paid': state.isPaid,
+        'items': state.items.map((item) => item.toJson()).toList(),
+      };
+
+      final ordersRepo = ref.read(ordersRepoProvider);
+      
+      if (state.isEditMode) {
+        final Order updatedOrder = await ordersRepo.updateOrderWithFiles(
+          state.originalOrder!.id, 
+          payload, 
+          state.filesToUpload,
+        );
+        
+        await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
+        
+        // No necesitamos esperar esto, pero invalida el proveedor de detalle
+        ref.invalidate(orderByIdProvider(state.originalOrder!.id));
+        
+        return updatedOrder;
+      } else {
+        final Order createdOrder = await ordersRepo.createOrderWithFiles(
+          payload, 
+          state.filesToUpload,
+        );
+        
+        await ref.read(ordersWindowProvider.notifier).addOrder(createdOrder);
+        
+        return createdOrder;
+      }
+    } catch (e) {
+      rethrow;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /// Crea un nuevo cliente y lo selecciona automáticamente
+  Future<Client> createClient(String name, String? phone) async {
+    setLoading(true);
+    try {
+      final newClient = await ref.read(clientsRepoProvider).createClient({
+        'name': name.trim(),
+        'phone': phone?.trim(),
+      });
+      
+      updateClient(newClient);
+      return newClient;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 409 && e.response?.data['client'] != null) {
+        final clientData = e.response?.data['client'];
+        final clientToRestore = Client.fromJson(
+          (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
+        );
+        throw ClientExistsException(clientToRestore);
+      }
+      final msg = e.response?.data['message'] as String? ?? 'Error al crear cliente.';
+      throw Exception(msg);
+    } catch (e) {
+      rethrow;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /// Restaura un cliente eliminado y lo selecciona
+  Future<Client> restoreClient(int clientId) async {
+    setLoading(true);
+    try {
+      final restoredClient = await ref.read(clientsRepoProvider).restoreClient(clientId);
+      
+      ref.invalidate(clientsListProvider(''));
+      ref.invalidate(trashedClientsProvider);
+      
+      updateClient(restoredClient);
+      return restoredClient;
+    } catch (e) {
+      rethrow;
+    } finally {
+      setLoading(false);
+    }
   }
 }
 
