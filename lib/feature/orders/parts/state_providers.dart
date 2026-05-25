@@ -104,6 +104,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
     } catch (e, s) {
       // 3. Si la API falla, lanzamos un error
       state = AsyncError(e, s);
+      rethrow;
     }
   }
 

@@ -1970,13 +1970,20 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
                   selectedVariant == null) { return; }
 
               List<XFile> finalLocalFiles = [];
-              String? finalPhotoUrl;
+              List<String> allPhotoUrls = [];
 
               if (selectedFiles.isNotEmpty) {
                 finalLocalFiles.addAll(selectedFiles);
+                // Buscar los placeholders correspondientes en _filesToUpload
+                for (var file in selectedFiles) {
+                  final matchingEntry = _filesToUpload.entries.firstWhereOrNull((e) => e.value == file);
+                  if (matchingEntry != null) {
+                    allPhotoUrls.add(matchingEntry.key);
+                  }
+                }
               }
               if (existingRemoteUrl != null) {
-                finalPhotoUrl = existingRemoteUrl;
+                allPhotoUrls.add(existingRemoteUrl!);
               }
 
               final customization = {
@@ -1991,8 +1998,8 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
                 if (itemNotesController.text.trim().isNotEmpty)
                   'item_notes': itemNotesController.text.trim(),
                 if (isUnitSaleForDozen) 'is_unit_sale_for_dozen': true,
-                if (finalPhotoUrl != null) 'photo_url': finalPhotoUrl,
-                if (finalPhotoUrl != null) 'photo_urls': [finalPhotoUrl],
+                if (allPhotoUrls.isNotEmpty) 'photo_url': allPhotoUrls.first,
+                if (allPhotoUrls.isNotEmpty) 'photo_urls': allPhotoUrls,
                 if (double.tryParse(unitAdjustmentsController.text) != null &&
                     double.parse(unitAdjustmentsController.text) != 0)
                   'unit_adjustment': double.parse(
@@ -2389,7 +2396,21 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
                                     await picker.pickMultiImage();
                                 if (pickedFiles.isNotEmpty) {
                                   setDialogState(() {
-                                    selectedFiles.addAll(pickedFiles);
+                                    for (var file in pickedFiles) {
+                                      final String placeholderId =
+                                          'placeholder_${DateTime.now().millisecondsSinceEpoch}_${file.name.replaceAll(' ', '_')}';
+                                      _filesToUpload[placeholderId] = file;
+                                      
+                                      // Usar un set/lista para fotos en Mesa Dulce si hiciera falta
+                                      // pero primero la agregamos a selectedFiles para que se muestre si el codigo de abajo lo requiere,
+                                      // o mejor aun, manejamos un array unificado como existingImageUrls.
+                                      // Para minimizar el refactor de esta funcion:
+                                      selectedFiles.add(file);
+                                      
+                                      // PERO la clave es generar el placeholder para que se suba.
+                                      // Como _addMesaDulceDialog solo usa finalPhotoUrl = existingRemoteUrl, 
+                                      // necesitamos que el JSON incluya los placeholders.
+                                    }
                                   });
                                 }
                               },
@@ -2437,37 +2458,6 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
                       } else {
                         _updateItemsAndRecalculate(() {
                           for (var newItem in pendingItems) {
-                            if (newItem.localFile != null &&
-                                (newItem.localFile as List).isNotEmpty) {
-                              final files = newItem.localFile as List<XFile>;
-                              final List<String> placeholderKeys = [];
-
-                              for (var file in files) {
-                                final String key =
-                                    'placeholder_${DateTime.now().microsecondsSinceEpoch}_${file.name}';
-                                _filesToUpload[key] = file;
-                                placeholderKeys.add(key);
-                              }
-
-                              if (newItem.customizationJson != null) {
-                                final existingUrls =
-                                    newItem.customizationJson!['photo_urls'];
-                                List<String> currentList = [];
-                                if (existingUrls is List) {
-                                  currentList = List<String>.from(existingUrls);
-                                }
-
-                                currentList.addAll(placeholderKeys);
-
-                                newItem.customizationJson!['photo_urls'] =
-                                    currentList;
-
-                                if (currentList.isNotEmpty) {
-                                  newItem.customizationJson!['photo_url'] =
-                                      currentList.first;
-                                }
-                              }
-                            }
                             _smartMergeItem(_items, newItem);
                           }
                         });

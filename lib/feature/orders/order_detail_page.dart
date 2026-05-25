@@ -1706,9 +1706,12 @@ class OrderDetailPage extends ConsumerWidget {
                       : () async {
                           ref.read(isDeletingProvider.notifier).state = true;
                           try {
+                            // Actualizamos el estado local sin invalidar toda la lista.
+                            // El notifier ya se encarga de llamar al repositorio (API).
                             await ref
-                                .read(ordersRepoProvider)
+                                .read(ordersWindowProvider.notifier)
                                 .deleteOrder(order.id);
+
                             if (context.mounted) {
                               Navigator.of(context).pop(); // Cierra el diálogo
                               // --- ADAPTADO AL TEMA ---
@@ -1719,9 +1722,6 @@ class OrderDetailPage extends ConsumerWidget {
                                 ),
                               );
                               // --- FIN ---
-                              ref.invalidate(
-                                ordersWindowProvider,
-                              ); // Refresca la home
                               context.go('/'); // Vuelve a la home
                             }
                           } catch (e) {

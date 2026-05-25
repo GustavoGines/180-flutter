@@ -637,7 +637,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
               .read(ordersWindowProvider.notifier)
               .updateOrder(updatedOrder);
 
-          ref.invalidate(orderByIdProvider(widget.order!.id));
+          // Esperamos a que se recargue el pedido completo desde el backend
+          // para garantizar que las fotos ya vengan incluidas en el JSON.
+          final _ = await ref.refresh(orderByIdProvider(widget.order!.id).future);
+          
           if (mounted) context.pop();
         }
       } else {
@@ -660,7 +663,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
           await ref.read(ordersWindowProvider.notifier).addOrder(createdOrder);
 
-          if (mounted) context.pop();
+          if (mounted) context.pushReplacement('/order/${createdOrder.id}');
         }
       }
     } catch (e) {
