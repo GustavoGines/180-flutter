@@ -58,7 +58,7 @@ dependencies:
   table_calendar: ^3.0.9
   scrollable_positioned_list: ^0.3.8
   url_launcher: ^6.2.5
-  font_awesome_flutter: ^10.7.0
+  font_awesome_flutter: ^11.0.0
   flutter_speed_dial: 7.0.0
   flutter_hooks: ^0.20.5
   geolocator: ^13.0.0
