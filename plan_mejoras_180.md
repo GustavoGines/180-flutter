@@ -189,16 +189,20 @@
 - [x] **F4c.2** — Los callbacks de mutación se pasan como parámetros tipados
 - [x] **F4c.3** — Verificar flujo completo de agregar/editar/eliminar items ✓
 #### Sub-fase F4d — Crear `NewOrderController` (StateNotifier/Notifier) (~4h)
-- [ ] **F4d.1** — Crear `new_order_controller.dart` con `NotifierProvider`
-- [ ] **F4d.2** — Migrar variables de estado de `_OrderFormState` al controller
-- [ ] **F4d.3** — `new_order_page.dart` pasa a ser < 150 líneas de scaffolding puro
-- [ ] **F4d.4** — Testing manual exhaustivo de todo el flujo de creación/edición ✓
+- [x] **F4d.1** — Crear `new_order_controller.dart` con `NotifierProvider`
+- [x] **F4d.2** — Migrar variables de estado de `_OrderFormState` al controller
+- [x] **F4d.3** — `new_order_page.dart` pasa a ser < 150 líneas de scaffolding puro
+- [x] **F4d.4** — Testing manual exhaustivo de todo el flujo de creación/edición ✓
 
 #### Sub-fase F4e — Desglosar Diálogos de Items (Post-Controller) (~1.5h)
-- [ ] **F4e.1** — Extraer `_addBoxDialog` → `widgets/dialogs/add_box_dialog.dart` (leyendo del Controller)
-- [ ] **F4e.2** — Extraer `_addCakeDialog` → `widgets/dialogs/add_cake_dialog.dart`
-- [ ] **F4e.3** — Extraer `_addMesaDulceDialog` → `widgets/dialogs/add_mesa_dulce_dialog.dart`
-- [ ] **F4e.4** — Limpiar y refactorizar `order_items_section.dart` al mínimo posible.
+- [x] **F4e.1** — Extraer `_addBoxDialog` → `widgets/dialogs/add_box_dialog.dart` (leyendo del Controller)
+- [x] **F4e.2** — Extraer `_addCakeDialog` → `widgets/dialogs/add_cake_dialog.dart`
+- [x] **F4e.3** — Extraer `_addMesaDulceDialog` → `widgets/dialogs/add_mesa_dulce_dialog.dart`
+- [x] **F4e.4** — Limpiar y refactorizar `order_items_section.dart` al mínimo posible.
+
+#### Sub-fase F4f (Agregada) — Integración final y API
+- [x] **F4f.1** — Mover `saveOrder` y mutaciones de DB al `NewOrderController`
+- [x] **F4f.2** — Limpiar `_submit` en `new_order_page.dart` dejándolo sólo con `try/catch` visual.
 
 **✅ Criterio de éxito**: `new_order_page.dart` < 200 líneas. Cada widget en su archivo propio. Cero cambios en comportamiento visible.
 
