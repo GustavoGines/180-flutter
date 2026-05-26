@@ -2,8 +2,8 @@ name: Deploy Android to Firebase
 
 on:
   push:
-    branches:
-      - develop
+    tags:
+      - 'v*.*.*'
 
 jobs:
   build:
@@ -50,3 +50,4 @@ jobs:
           token: ${{ secrets.FIREBASE_TOKEN }}
           groups: staff
           file: build/app/outputs/flutter-apk/app-dev-release.apk
+          releaseNotes: "Release ${{ github.ref_name }}"
