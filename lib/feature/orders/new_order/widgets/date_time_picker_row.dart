@@ -13,7 +13,7 @@ class DateTimePickerRow extends ConsumerWidget {
     final controller = ref.read(newOrderControllerProvider.notifier);
 
     // Fallback if null (should not be null if properly initialized, but just in case)
-    final date = state.eventDate ?? DateTime.now().add(const Duration(days: 3));
+    final date = state.eventDate ?? DateTime.now();
     final startTime = state.startTime ?? const TimeOfDay(hour: 10, minute: 0);
     final endTime = state.endTime ?? const TimeOfDay(hour: 12, minute: 0);
 
