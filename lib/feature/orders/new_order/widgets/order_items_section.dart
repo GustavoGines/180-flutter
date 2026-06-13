@@ -94,6 +94,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
   void _addItemDialog() {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Seleccionar Tipo de Producto'),
         content: Column(
@@ -148,6 +149,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
   void _addBoxDialog({OrderItem? existingItem, int? itemIndex}) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AddBoxDialog(
         catalog: widget.catalog,
         existingItem: existingItem,
@@ -175,6 +177,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
   void _addCakeDialog({OrderItem? existingItem, int? itemIndex}) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AddCakeDialog(
         catalog: widget.catalog,
         existingItem: existingItem,
@@ -202,6 +205,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
   void _addMesaDulceDialog({OrderItem? existingItem, int? itemIndex}) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AddMesaDulceDialog(
         catalog: widget.catalog,
         existingItem: existingItem,

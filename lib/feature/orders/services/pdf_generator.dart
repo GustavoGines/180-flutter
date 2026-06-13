@@ -555,8 +555,10 @@ class PdfGenerator {
             : selectedSize;
         parts.add('Tamaño: $formatted');
       } else if (productUnit == 'dozen') {
-        if (custom['is_unit_sale'] == true) {
+        if (isUnitSaleForDozen || custom['is_unit_sale'] == true) {
           parts.add('Presentación: Por Unidad (Suela)');
+        } else if (isHalfDozen) {
+          parts.add('Presentación: Media Docena');
         } else {
           // Es docena completa
           final qty = item.qty;
