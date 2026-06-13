@@ -417,10 +417,11 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                       else if (selectedProduct!.unit == ProductUnit.dozen)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const Text('Modo de Carga: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                              const SizedBox(width: 10),
+                              const Text('Modo de Carga:', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
                               SegmentedButton<bool>(
                                 segments: const [
                                   ButtonSegment<bool>(value: false, label: Text('Docenas')),
