@@ -302,78 +302,85 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
           children: [
             if (!isEditing) ...[
               if (pendingItems.isNotEmpty)
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 150),
+                Card(
+                  elevation: 2,
                   margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: pendingItems.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (ctx, idx) {
-                      final it = pendingItems[idx];
-                      final vName = it.customizationJson?['variant_name'] ??
-                          (it.customizationJson?['is_unit_sale'] == true ? 'Unidad' : 'Docenas');
-                      final formattedVName = vName.startsWith('size') ? vName.replaceAll('size', '') : vName;
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 150),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: pendingItems.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (ctx, idx) {
+                        final it = pendingItems[idx];
+                        final vName = it.customizationJson?['variant_name'] ??
+                            (it.customizationJson?['is_unit_sale'] == true ? 'Unidad' : 'Docenas');
+                        final formattedVName = vName.startsWith('size') ? vName.replaceAll('size', '') : vName;
 
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (it.localFile != null && (it.localFile as List).isNotEmpty)
-                                    Container(
-                                      margin: const EdgeInsets.only(right: 8),
-                                      constraints: const BoxConstraints(maxWidth: 130),
-                                      child: Wrap(
-                                        spacing: 4,
-                                        runSpacing: 4,
-                                        children: widget.buildCompactImageRow(context, it.localFile as List<dynamic>, it.qty),
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (it.localFile != null && (it.localFile as List).isNotEmpty)
+                                      Container(
+                                        margin: const EdgeInsets.only(right: 8),
+                                        constraints: const BoxConstraints(maxWidth: 130),
+                                        child: Wrap(
+                                          spacing: 4,
+                                          runSpacing: 4,
+                                          children: widget.buildCompactImageRow(context, it.localFile as List<dynamic>, it.qty),
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('${it.name} ($formattedVName)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                          Text('${it.qty} x \$${it.basePrice.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                        ],
                                       ),
                                     ),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text('${it.name} ($formattedVName)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                        Text('${it.qty} x \$${it.basePrice.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                              onPressed: () {
-                                setState(() {
-                                  pendingItems.removeAt(idx);
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                              IconButton(
+                                icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                                onPressed: () {
+                                  setState(() {
+                                    pendingItems.removeAt(idx);
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shopping_basket_outlined, color: Colors.grey),
+                      SizedBox(width: 8),
+                      Text('El carrito está vacío', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                    ],
                   ),
                 ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 2, bottom: 2),
-                  child: Text(
-                    'Total Carrito: \$${pendingItems.fold<double>(0, (sum, item) => sum + (item.basePrice * item.qty) + item.adjustments).toStringAsFixed(0)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueGrey),
-                  ),
-                ),
-              ),
               const Divider(thickness: 2),
             ],
             Flexible(
@@ -542,7 +549,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                     if (!isEditing)
                       SizedBox(
                         width: double.infinity,
-                        child: OutlinedButton.icon(
+                        child: FilledButton.tonalIcon(
                           icon: const Icon(Icons.add_shopping_cart),
                           label: const Text('AGREGAR A LISTA'),
                           onPressed: addToPendingList,
@@ -555,36 +562,71 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
           ],
         ),
       ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cerrar'),
-        ),
-        if (pendingItems.isNotEmpty || isEditing || (double.tryParse(qtyController.text) ?? 0.0) > 0)
-          FilledButton(
-            onPressed: () {
-              if (isEditing) {
-                addToPendingList();
-              } else {
-                bool formHasData = (double.tryParse(qtyController.text) ?? 0.0) != 1.0 ||
-                    notesController.text.isNotEmpty ||
-                    itemNotesController.text.isNotEmpty ||
-                    (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 ||
-                    selectedFiles.isNotEmpty ||
-                    existingRemoteUrls.isNotEmpty;
-                if (pendingItems.isEmpty || formHasData) {
-                  addToPendingList();
-                }
-                if (pendingItems.isNotEmpty) {
-                  widget.onAddPending(pendingItems);
-                }
-                if (mounted && Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                }
-              }
-            },
-            child: Text(isEditing ? 'Guardar Cambios' : 'AGREGAR TODO (${pendingItems.length + ((pendingItems.isEmpty || ((double.tryParse(qtyController.text) ?? 0.0) != 1.0 || notesController.text.isNotEmpty || itemNotesController.text.isNotEmpty || (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 || selectedFiles.isNotEmpty || existingRemoteUrls.isNotEmpty)) ? 1 : 0)})'),
+        SizedBox(
+          width: double.maxFinite,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (!isEditing)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Total Carrito:', style: TextStyle(fontSize: 12)),
+                      Text(
+                        '\$${pendingItems.fold<double>(0, (sum, item) => sum + (item.basePrice * item.qty) + item.adjustments).toStringAsFixed(0)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                const Expanded(child: SizedBox()),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cerrar'),
+                  ),
+                  if (pendingItems.isNotEmpty || isEditing || (double.tryParse(qtyController.text) ?? 0.0) > 0)
+                    ... [
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: () {
+                          if (isEditing) {
+                            addToPendingList();
+                          } else {
+                            bool formHasData = (double.tryParse(qtyController.text) ?? 0.0) != 1.0 ||
+                                notesController.text.isNotEmpty ||
+                                itemNotesController.text.isNotEmpty ||
+                                (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 ||
+                                selectedFiles.isNotEmpty ||
+                                existingRemoteUrls.isNotEmpty;
+                            if (pendingItems.isEmpty || formHasData) {
+                              addToPendingList();
+                            }
+                            if (pendingItems.isNotEmpty) {
+                              widget.onAddPending(pendingItems);
+                            }
+                            if (mounted && Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            }
+                          }
+                        },
+                        child: Text(isEditing ? 'Guardar' : 'AGREGAR TODO (${pendingItems.length + ((pendingItems.isEmpty || ((double.tryParse(qtyController.text) ?? 0.0) != 1.0 || notesController.text.isNotEmpty || itemNotesController.text.isNotEmpty || (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 || selectedFiles.isNotEmpty || existingRemoteUrls.isNotEmpty)) ? 1 : 0)})'),
+                      ),
+                    ]
+                ],
+              ),
+            ],
           ),
+        ),
       ],
     );
   }
