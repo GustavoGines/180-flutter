@@ -161,7 +161,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
           
           if (remainder > 0) {
             if (remainder == 0.5 && selectedProduct!.allowHalfDozen) {
-              remainderPrice = selectedProduct!.halfDozenPrice ?? (selectedProduct!.price / 2);
+              remainderPrice = selectedProduct!.price / 2;
             } else {
               remainderPrice = (remainder * 12) * (selectedProduct!.price / 12);
             }

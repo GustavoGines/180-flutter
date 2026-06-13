@@ -628,10 +628,16 @@ class PdfGenerator {
   }
 
   pw.Widget _buildSummarySection(Order order) {
-    final itemsSubtotal = order.items.fold<double>(
+    final rawSubtotal = order.items.fold<double>(
       0.0,
-      (sum, item) => sum + item.finalLinePrice,
+      (sum, item) => sum + (item.basePrice * item.qty),
     );
+    final totalAdjustments = order.items.fold<double>(
+      0.0,
+      (sum, item) => sum + item.adjustments,
+    );
+    final itemsSubtotal = rawSubtotal + totalAdjustments;
+    
     final deliveryCost = order.deliveryCost ?? 0.0;
     final total = order.total ?? (itemsSubtotal + deliveryCost);
     final deposit = order.deposit ?? 0.0;
@@ -642,7 +648,13 @@ class PdfGenerator {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.end,
         children: [
-          _buildSummaryRow('Subtotal Productos:', itemsSubtotal),
+          if (totalAdjustments != 0) ...[
+            _buildSummaryRow('Subtotal Bruto:', rawSubtotal),
+            _buildSummaryRow(totalAdjustments < 0 ? 'Descuentos / Ajustes:' : 'Recargos / Ajustes:', totalAdjustments),
+            _buildSummaryRow('Subtotal con Ajustes:', itemsSubtotal),
+          ] else ...[
+            _buildSummaryRow('Subtotal Productos:', itemsSubtotal),
+          ],
           if (deliveryCost > 0) _buildSummaryRow('Costo Envío:', deliveryCost),
           pw.Divider(color: _darkBrown, thickness: 1.5),
           _buildSummaryRow('TOTAL PEDIDO:', total, isTotal: true),
