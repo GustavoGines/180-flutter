@@ -693,7 +693,7 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
                 ),
               TextButton.icon(
                 icon: const Icon(Icons.photo_library),
-                label: const Text('AÃ±adir Fotos al Box'),
+                label: const Text('Añadir Fotos al Box'),
                 onPressed: () async {
                   final pickedFiles = await picker.pickMultiImage();
                   if (pickedFiles.isNotEmpty) {

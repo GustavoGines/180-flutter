@@ -533,7 +533,7 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
                 ),
               TextButton.icon(
                 icon: const Icon(Icons.photo_library),
-                label: const Text('AÃ±adir Fotos de Referencia'),
+                label: const Text('Añadir Fotos de Referencia'),
                 onPressed: () async {
                   final pickedFiles = await picker.pickMultiImage();
                   if (pickedFiles.isNotEmpty) {
