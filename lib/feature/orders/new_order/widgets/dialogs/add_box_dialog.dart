@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:collection/collection.dart';
 import '../../../../../../core/models/order_item.dart';
@@ -63,6 +64,12 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
   double calculatedExtrasCost = 0.0;
   double calculatedSubItemsCost = 0.0;
 
+  bool _freeFillingsExpanded = true;
+  bool _extraFillingsExpanded = false;
+  bool _extraKgExpanded = false;
+  bool _extraUnitExpanded = false;
+  bool _mesaDulceExpanded = true;
+
   List<Product> get boxProducts => widget.catalog?.products.where((p) => p.category == ProductCategory.box).toList() ?? [];
   List<Product> get cakeProducts => widget.catalog?.products.where((p) => p.category == ProductCategory.torta).toList() ?? [];
   List<Product> get _derivedSmallCakeProducts => cakeProducts.where((p) => p.name.contains('Base') || p.name.contains('Mini') || p.name.contains('Micro')).toList();
@@ -75,6 +82,7 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
   @override
   void initState() {
     super.initState();
+    _loadPreferences();
     isEditing = widget.existingItem != null;
     customData = isEditing ? (widget.existingItem!.customizationJson ?? {}) : {};
 
@@ -162,6 +170,23 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
     }
   }
 
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _freeFillingsExpanded = prefs.getBool('box_free_fillings_exp') ?? true;
+      _extraFillingsExpanded = prefs.getBool('box_extra_fillings_exp') ?? false;
+      _extraKgExpanded = prefs.getBool('box_extra_kg_exp') ?? false;
+      _extraUnitExpanded = prefs.getBool('box_extra_unit_exp') ?? false;
+      _mesaDulceExpanded = prefs.getBool('box_mesa_dulce_exp') ?? true;
+    });
+  }
+
+  void _savePreference(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+  }
+
   void calculatePrice() {
     if (selectedProduct == null) {
       finalPriceController.text = 'N/A';
@@ -223,6 +248,22 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
           isExtraCost ? selectedExtraFillings.add(filling) : selectedFillings.add(filling);
         } else {
           isExtraCost ? selectedExtraFillings.remove(filling) : selectedFillings.remove(filling);
+        }
+        calculatePrice();
+      }),
+    );
+  }
+
+  Widget buildFreeFillingChip(Filling filling) {
+    bool isSelected = selectedFillings.contains(filling);
+    return FilterChip(
+      label: Text(filling.name),
+      selected: isSelected,
+      onSelected: (val) => setState(() {
+        if (val) {
+          selectedFillings.add(filling);
+        } else {
+          selectedFillings.remove(filling);
         }
         calculatePrice();
       }),
@@ -499,9 +540,18 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
                       decoration: const InputDecoration(labelText: 'Mini Torta Base', isDense: true),
                     ),
                     const SizedBox(height: 16),
-                    Text('Productos de Mesa Dulce a Incluir:', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    ...mesaDulceProducts.map(buildMesaDulceItemSelector),
+                    Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        initiallyExpanded: _mesaDulceExpanded,
+                        onExpansionChanged: (val) {
+                          _mesaDulceExpanded = val;
+                          _savePreference('box_mesa_dulce_exp', val);
+                        },
+                        title: const Text('Productos de Mesa Dulce a Incluir', style: TextStyle(fontWeight: FontWeight.bold)),
+                        children: mesaDulceProducts.map(buildMesaDulceItemSelector).toList(),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                   ],
                 )
@@ -511,17 +561,64 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
                   children: [
                     Text('Personalización de Mini Torta/Contenido:', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    Text('Rellenos Incluidos (Mini Torta)', style: Theme.of(context).textTheme.titleSmall),
-                    ...freeFillings.map((f) => buildFillingCheckbox(f, false)),
-                    const SizedBox(height: 8),
-                    Text('Rellenos con Costo Extra (Mini Torta)', style: Theme.of(context).textTheme.titleSmall),
-                    ...extraCostFillings.map((f) => buildFillingCheckbox(f, true)),
-                    const SizedBox(height: 8),
-                    Text('Extras por Peso (Costo Fijo/Box)', style: Theme.of(context).textTheme.titleSmall),
-                    ...cakeExtras.where((ex) => !ex.isPerUnit).map(buildExtraKgCheckbox),
-                    const SizedBox(height: 8),
-                    Text('Extras por Unidad (Costo por Unidad/Box)', style: Theme.of(context).textTheme.titleSmall),
-                    ...cakeExtras.where((ex) => ex.isPerUnit).map(buildExtraUnitSelector),
+                    Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        initiallyExpanded: _freeFillingsExpanded,
+                        onExpansionChanged: (val) {
+                          _freeFillingsExpanded = val;
+                          _savePreference('box_free_fillings_exp', val);
+                        },
+                        title: const Text('Rellenos Incluidos (Mini Torta)', style: TextStyle(fontWeight: FontWeight.bold)),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                            child: Wrap(
+                              spacing: 8.0,
+                              runSpacing: 4.0,
+                              alignment: WrapAlignment.start,
+                              children: freeFillings.map((f) => buildFreeFillingChip(f)).toList(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        initiallyExpanded: _extraFillingsExpanded,
+                        onExpansionChanged: (val) {
+                          _extraFillingsExpanded = val;
+                          _savePreference('box_extra_fillings_exp', val);
+                        },
+                        title: const Text('Rellenos con Costo Extra (Mini Torta)', style: TextStyle(fontWeight: FontWeight.bold)),
+                        children: extraCostFillings.map((f) => buildFillingCheckbox(f, true)).toList(),
+                      ),
+                    ),
+                    Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        initiallyExpanded: _extraKgExpanded,
+                        onExpansionChanged: (val) {
+                          _extraKgExpanded = val;
+                          _savePreference('box_extra_kg_exp', val);
+                        },
+                        title: const Text('Extras por Peso (Costo Fijo/Box)', style: TextStyle(fontWeight: FontWeight.bold)),
+                        children: cakeExtras.where((ex) => !ex.isPerUnit).map(buildExtraKgCheckbox).toList(),
+                      ),
+                    ),
+                    Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        initiallyExpanded: _extraUnitExpanded,
+                        onExpansionChanged: (val) {
+                          _extraUnitExpanded = val;
+                          _savePreference('box_extra_unit_exp', val);
+                        },
+                        title: const Text('Extras por Unidad (Costo por Unidad/Box)', style: TextStyle(fontWeight: FontWeight.bold)),
+                        children: cakeExtras.where((ex) => ex.isPerUnit).map(buildExtraUnitSelector).toList(),
+                      ),
+                    ),
                   ],
                 ),
               TextFormField(
@@ -555,13 +652,6 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
                 textCapitalization: TextCapitalization.sentences,
               ),
               const Divider(),
-              TextFormField(
-                controller: finalPriceController,
-                readOnly: true,
-                decoration: const InputDecoration(labelText: 'Precio Final Item (Total)', prefixText: '\$'),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
@@ -603,7 +693,7 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
                 ),
               TextButton.icon(
                 icon: const Icon(Icons.photo_library),
-                label: const Text('Añadir Fotos al Box'),
+                label: const Text('AÃ±adir Fotos al Box'),
                 onPressed: () async {
                   final pickedFiles = await picker.pickMultiImage();
                   if (pickedFiles.isNotEmpty) {
@@ -621,15 +711,45 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
           ),
         ),
       ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-        FilledButton(
-          onPressed: () {
-            onSave();
-            Navigator.pop(context);
-          },
-          child: Text(isEditing ? 'Guardar Cambios' : 'AGREGAR BOX'),
-        ),
+        SizedBox(
+          width: double.maxFinite,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Precio Final:', style: TextStyle(fontSize: 12)),
+                    Text(
+                      '\$${finalPriceController.text}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () {
+                      onSave();
+                      Navigator.pop(context);
+                    },
+                    child: Text(isEditing ? 'Guardar' : 'Agregar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        )
       ],
     );
   }

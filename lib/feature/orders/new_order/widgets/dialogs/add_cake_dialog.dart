@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:collection/collection.dart';
 import '../../../../../../core/models/order_item.dart';
@@ -62,6 +63,11 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
   double calculatedBasePrice = 0.0;
   double multiplierAdjustment = 0.0;
 
+  bool _freeFillingsExpanded = true;
+  bool _extraFillingsExpanded = false;
+  bool _extraKgExpanded = false;
+  bool _extraUnitExpanded = false;
+
   List<Product> get cakeProducts => widget.catalog?.products.where((p) => p.category == ProductCategory.torta).toList() ?? [];
   List<Filling> get allFillings => widget.catalog?.fillings ?? [];
   List<Filling> get freeFillings => allFillings.where((f) => f.isFree).toList();
@@ -71,6 +77,7 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
   @override
   void initState() {
     super.initState();
+    _loadPreferences();
     isEditing = widget.existingItem != null;
     customData = isEditing ? (widget.existingItem!.customizationJson ?? {}) : {};
 
@@ -129,6 +136,22 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
     finalPriceController = TextEditingController();
   }
 
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _freeFillingsExpanded = prefs.getBool('cake_free_fillings_exp') ?? true;
+      _extraFillingsExpanded = prefs.getBool('cake_extra_fillings_exp') ?? false;
+      _extraKgExpanded = prefs.getBool('cake_extra_kg_exp') ?? false;
+      _extraUnitExpanded = prefs.getBool('cake_extra_unit_exp') ?? false;
+    });
+  }
+
+  void _savePreference(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+  }
+
   void calculateCakePrice() {
     if (selectedCakeType == null) {
       calculatedBasePriceController.text = 'N/A';
@@ -178,6 +201,22 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
           isExtraCost ? selectedExtraFillings.add(filling) : selectedFillings.add(filling);
         } else {
           isExtraCost ? selectedExtraFillings.remove(filling) : selectedFillings.remove(filling);
+        }
+        calculateCakePrice();
+      }),
+    );
+  }
+
+  Widget buildFreeFillingChip(Filling filling) {
+    bool isSelected = selectedFillings.contains(filling);
+    return FilterChip(
+      label: Text(filling.name),
+      selected: isSelected,
+      onSelected: (val) => setState(() {
+        if (val) {
+          selectedFillings.add(filling);
+        } else {
+          selectedFillings.remove(filling);
         }
         calculateCakePrice();
       }),
@@ -354,17 +393,64 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
                 ],
               ),
               const SizedBox(height: 10),
-              Text('Rellenos Incluidos', style: Theme.of(context).textTheme.titleSmall),
-              ...freeFillings.map((f) => buildFillingCheckbox(f, false)),
-              const SizedBox(height: 10),
-              Text('Rellenos con Costo Extra', style: Theme.of(context).textTheme.titleSmall),
-              ...extraCostFillings.map((f) => buildFillingCheckbox(f, true)),
-              const SizedBox(height: 10),
-              Text('Extras por Peso (Kg)', style: Theme.of(context).textTheme.titleSmall),
-              ...cakeExtras.where((ex) => !ex.isPerUnit).map(buildExtraKgCheckbox),
-              const SizedBox(height: 10),
-              Text('Extras por Unidad', style: Theme.of(context).textTheme.titleSmall),
-              ...cakeExtras.where((ex) => ex.isPerUnit).map(buildExtraUnitSelector),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _freeFillingsExpanded,
+                  onExpansionChanged: (val) {
+                    _freeFillingsExpanded = val;
+                    _savePreference('cake_free_fillings_exp', val);
+                  },
+                  title: const Text('Rellenos Incluidos', style: TextStyle(fontWeight: FontWeight.bold)),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: Wrap(
+                        spacing: 8.0,
+                        runSpacing: 4.0,
+                        alignment: WrapAlignment.start,
+                        children: freeFillings.map((f) => buildFreeFillingChip(f)).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _extraFillingsExpanded,
+                  onExpansionChanged: (val) {
+                    _extraFillingsExpanded = val;
+                    _savePreference('cake_extra_fillings_exp', val);
+                  },
+                  title: const Text('Rellenos con Costo Extra', style: TextStyle(fontWeight: FontWeight.bold)),
+                  children: extraCostFillings.map((f) => buildFillingCheckbox(f, true)).toList(),
+                ),
+              ),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _extraKgExpanded,
+                  onExpansionChanged: (val) {
+                    _extraKgExpanded = val;
+                    _savePreference('cake_extra_kg_exp', val);
+                  },
+                  title: const Text('Extras por Peso (Kg)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  children: cakeExtras.where((ex) => !ex.isPerUnit).map(buildExtraKgCheckbox).toList(),
+                ),
+              ),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _extraUnitExpanded,
+                  onExpansionChanged: (val) {
+                    _extraUnitExpanded = val;
+                    _savePreference('cake_extra_unit_exp', val);
+                  },
+                  title: const Text('Extras por Unidad', style: TextStyle(fontWeight: FontWeight.bold)),
+                  children: cakeExtras.where((ex) => ex.isPerUnit).map(buildExtraUnitSelector).toList(),
+                ),
+              ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: itemNotesController,
@@ -406,13 +492,6 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
                 textCapitalization: TextCapitalization.sentences,
               ),
               const Divider(),
-              TextFormField(
-                controller: finalPriceController,
-                readOnly: true,
-                decoration: const InputDecoration(labelText: 'Precio Final Item (Total)', prefixText: '\$'),
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
@@ -454,7 +533,7 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
                 ),
               TextButton.icon(
                 icon: const Icon(Icons.photo_library),
-                label: const Text('Añadir Fotos de Referencia'),
+                label: const Text('AÃ±adir Fotos de Referencia'),
                 onPressed: () async {
                   final pickedFiles = await picker.pickMultiImage();
                   if (pickedFiles.isNotEmpty) {
@@ -472,15 +551,45 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
           ),
         ),
       ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-        FilledButton(
-          onPressed: () {
-            onSave();
-            Navigator.pop(context);
-          },
-          child: Text(isEditing ? 'Guardar Cambios' : 'AGREGAR TORTA'),
-        ),
+        SizedBox(
+          width: double.maxFinite,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Precio Final:', style: TextStyle(fontSize: 12)),
+                    Text(
+                      '\$${finalPriceController.text}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () {
+                      onSave();
+                      Navigator.pop(context);
+                    },
+                    child: Text(isEditing ? 'Guardar' : 'Agregar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        )
       ],
     );
   }
