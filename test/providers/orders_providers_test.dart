@@ -57,7 +57,6 @@ void main() {
   group('selectedMonthOrdersProvider', () {
     test('filtra pedidos al mes seleccionado', () async {
       final mayo = DateTime(2025, 5, 1);
-      final junio = DateTime(2025, 6, 1);
 
       final pedidoMayo = _makeOrder(id: 1, eventDate: DateTime(2025, 5, 15));
       final pedidoJunio = _makeOrder(id: 2, eventDate: DateTime(2025, 6, 10));

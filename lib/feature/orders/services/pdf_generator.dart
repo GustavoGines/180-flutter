@@ -342,13 +342,13 @@ class PdfGenerator {
         4: const pw.FlexColumnWidth(1.5),
       },
       data: order.items.map((item) {
-        final itemTotal = item.finalUnitPrice * item.qty;
+        final itemTotal = item.finalLinePrice;
         final details = _getItemDetailsText(item);
         return [
           item.name,
           details,
           item.qty.toString(),
-          '\$${currencyFormat.format(item.finalUnitPrice)}',
+          '\$${currencyFormat.format(item.basePrice)}',
           '\$${currencyFormat.format(itemTotal)}',
         ];
       }).toList(),
@@ -631,7 +631,7 @@ class PdfGenerator {
   pw.Widget _buildSummarySection(Order order) {
     final itemsSubtotal = order.items.fold<double>(
       0.0,
-      (sum, item) => sum + (item.finalUnitPrice * item.qty),
+      (sum, item) => sum + item.finalLinePrice,
     );
     final deliveryCost = order.deliveryCost ?? 0.0;
     final total = order.total ?? (itemsSubtotal + deliveryCost);

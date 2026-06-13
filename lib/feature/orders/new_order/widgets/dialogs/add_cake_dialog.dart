@@ -54,6 +54,8 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
   late TextEditingController qtyController;
   late TextEditingController itemNotesController;
   late TextEditingController adjustmentsController;
+  late TextEditingController unitAdjustmentsController;
+  late TextEditingController kgAdjustmentsController;
   late TextEditingController adjustmentNotesController;
   late TextEditingController calculatedBasePriceController;
   late TextEditingController finalPriceController;
@@ -123,6 +125,8 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
     qtyController = TextEditingController(text: isEditing ? widget.existingItem!.qty.toString() : '1');
     itemNotesController = TextEditingController(text: customData['item_notes'] ?? '');
     adjustmentsController = TextEditingController(text: isEditing ? widget.existingItem!.adjustments.toStringAsFixed(0) : '0');
+    unitAdjustmentsController = TextEditingController(text: isEditing ? (customData['unit_adjustment']?.toString() ?? '0') : '0');
+    kgAdjustmentsController = TextEditingController(text: isEditing ? (customData['kg_adjustment']?.toString() ?? '0') : '0');
     adjustmentNotesController = TextEditingController(text: isEditing ? widget.existingItem!.customizationNotes ?? '' : '');
     calculatedBasePriceController = TextEditingController();
     finalPriceController = TextEditingController();
@@ -138,7 +142,9 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
     final bool isSmallCake = selectedCakeType?.name == 'Mini Torta Personalizada (Base)' || selectedCakeType?.name == 'Micro Torta (Base)';
     double extraMultiplier = isSmallCake ? 0.5 : cakeWeight;
 
-    calculatedBasePrice = selectedCakeType!.price * cakeWeight;
+    double kgAdj = double.tryParse(kgAdjustmentsController.text) ?? 0.0;
+    calculatedBasePrice = (selectedCakeType!.price + kgAdj) * extraMultiplier;
+
     double calculatedExtrasCost = 0.0;
 
     for (var f in selectedExtraFillings) {
@@ -153,7 +159,9 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
       calculatedExtrasCost += (exu.extra.price * exu.quantity);
     }
 
-    calculatedBasePrice += calculatedExtrasCost;
+    double unitAdjustments = double.tryParse(unitAdjustmentsController.text) ?? 0.0;
+    calculatedBasePrice += calculatedExtrasCost + unitAdjustments;
+    
     int qty = int.tryParse(qtyController.text) ?? 1;
     manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
 
@@ -273,6 +281,12 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
       'selected_extras_kg': selectedExtrasKg.map((ex) => {'name': ex.name, 'price': ex.price}).toList(),
       'selected_extras_unit': selectedExtrasUnit.map((ex) => {'name': ex.extra.name, 'quantity': ex.quantity, 'price': ex.extra.price}).toList(),
       if (itemNotesController.text.trim().isNotEmpty) 'item_notes': itemNotesController.text.trim(),
+      if (double.tryParse(unitAdjustmentsController.text) != null &&
+          double.parse(unitAdjustmentsController.text) != 0)
+        'unit_adjustment': double.parse(unitAdjustmentsController.text),
+      if (double.tryParse(kgAdjustmentsController.text) != null &&
+          double.parse(kgAdjustmentsController.text) != 0)
+        'kg_adjustment': double.parse(kgAdjustmentsController.text),
       if (allImageUrls.isNotEmpty) 'photo_url': allImageUrls.first,
       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
     };
@@ -363,16 +377,42 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
                 textCapitalization: TextCapitalization.sentences,
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: adjustmentsController,
-                decoration: InputDecoration(
-                  labelText: 'Ajuste Manual Adicional (SUMA al Total \$)',
-                  hintText: 'Ej: 1000 (extra), -500 (descuento)',
-                  prefixText: '\$${calculatedBasePrice.toStringAsFixed(0)} + ',
-                ),
-                keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
-                onChanged: (_) => setState(calculateCakePrice),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      controller: kgAdjustmentsController,
+                      decoration: const InputDecoration(labelText: '\$ / Kg', isDense: true, prefixText: '\$'),
+                      keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
+                      onChanged: (_) => setState(calculateCakePrice),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      controller: unitAdjustmentsController,
+                      decoration: const InputDecoration(labelText: '\$ Unit.', isDense: true, prefixText: '\$'),
+                      keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
+                      onChanged: (_) => setState(calculateCakePrice),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      controller: adjustmentsController,
+                      decoration: const InputDecoration(labelText: '\$ Tot.', isDense: true, prefixText: '\$'),
+                      keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
+                      onChanged: (_) => setState(calculateCakePrice),
+                    ),
+                  ),
+                ],
               ),
               TextFormField(
                 controller: adjustmentNotesController,

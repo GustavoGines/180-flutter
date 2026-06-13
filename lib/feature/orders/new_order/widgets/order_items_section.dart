@@ -927,7 +927,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
                           children: [
                             Text(
                               _currencyFormat.format(
-                                item.finalUnitPrice * item.qty,
+                                item.finalLinePrice,
                               ),
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,

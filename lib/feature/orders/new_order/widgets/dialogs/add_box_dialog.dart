@@ -56,6 +56,7 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
   late TextEditingController qtyController;
   late TextEditingController itemNotesController;
   late TextEditingController adjustmentsController;
+  late TextEditingController unitAdjustmentsController;
   late TextEditingController adjustmentNotesController;
   late TextEditingController finalPriceController;
 
@@ -94,6 +95,7 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
     qtyController = TextEditingController(text: isEditing ? widget.existingItem!.qty.toString() : '1');
     itemNotesController = TextEditingController(text: customData['item_notes'] ?? '');
     adjustmentsController = TextEditingController(text: isEditing ? widget.existingItem!.adjustments.toStringAsFixed(0) : '0');
+    unitAdjustmentsController = TextEditingController(text: isEditing ? (customData['unit_adjustment']?.toString() ?? '0') : '0');
     adjustmentNotesController = TextEditingController(text: isEditing ? widget.existingItem!.customizationNotes ?? '' : '');
     finalPriceController = TextEditingController();
 
@@ -203,7 +205,8 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
     for (var exu in selectedExtrasUnit) {
       calculatedExtrasCost += (exu.extra.price * exu.quantity);
     }
-    calculatedTotalBasePrice += calculatedExtrasCost;
+    double unitAdjustments = double.tryParse(unitAdjustmentsController.text) ?? 0.0;
+    calculatedTotalBasePrice += calculatedExtrasCost + unitAdjustments;
 
     int qty = int.tryParse(qtyController.text) ?? 1;
     double manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
@@ -402,6 +405,9 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
         'variant_name': selectedVariant!.variantName,
       },
       if (itemNotesController.text.trim().isNotEmpty) 'item_notes': itemNotesController.text.trim(),
+      if (double.tryParse(unitAdjustmentsController.text) != null &&
+          double.parse(unitAdjustmentsController.text) != 0)
+        'unit_adjustment': double.parse(unitAdjustmentsController.text),
       if (allImageUrls.isNotEmpty) 'photo_url': allImageUrls.first,
       if (allImageUrls.isNotEmpty) 'photo_urls': allImageUrls,
       if (isPersonalizedBox) ...{
@@ -531,16 +537,31 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
                 textCapitalization: TextCapitalization.sentences,
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: adjustmentsController,
-                decoration: InputDecoration(
-                  labelText: 'Ajuste Manual Adicional (SUMA al Precio Base Total \$)',
-                  hintText: 'Ej: 500 (extra), -200 (descuento)',
-                  prefixText: '\$${calculatedTotalBasePrice.toStringAsFixed(0)} + ',
-                ),
-                keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
-                onChanged: (_) => setState(calculatePrice),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      controller: unitAdjustmentsController,
+                      decoration: const InputDecoration(labelText: '\$ Unit.', isDense: true, prefixText: '\$'),
+                      keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
+                      onChanged: (_) => setState(calculatePrice),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      controller: adjustmentsController,
+                      decoration: const InputDecoration(labelText: '\$ Tot.', isDense: true, prefixText: '\$'),
+                      keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
+                      onChanged: (_) => setState(calculatePrice),
+                    ),
+                  ),
+                ],
               ),
               TextFormField(
                 controller: adjustmentNotesController,

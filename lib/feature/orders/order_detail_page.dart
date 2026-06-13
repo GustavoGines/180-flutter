@@ -105,7 +105,7 @@ class OrderDetailPage extends ConsumerWidget {
 
         final itemsSubtotal = order.items.fold<double>(
           0.0,
-          (sum, item) => sum + (item.finalUnitPrice * item.qty),
+          (sum, item) => sum + item.finalLinePrice,
         );
         final deliveryCost = order.deliveryCost ?? 0.0;
         final total = order.total ?? (itemsSubtotal + deliveryCost);
@@ -373,7 +373,7 @@ class OrderDetailPage extends ConsumerWidget {
                       final category = ProductCategory.values.firstWhereOrNull(
                         (e) => e.name == custom['product_category']?.toString(),
                       );
-                      final itemTotal = item.qty * item.finalUnitPrice;
+                      final itemTotal = item.finalLinePrice;
 
                       // --- ADAPTADO AL TEMA ---
                       final isDarkMode =
@@ -413,7 +413,7 @@ class OrderDetailPage extends ConsumerWidget {
                               ),
                               subtitle: (category == ProductCategory.mesaDulce)
                                   ? Text(
-                                      'Precio Base: ${currencyFormat.format(item.finalUnitPrice)}',
+                                      'Precio Base: ${currencyFormat.format(item.basePrice)}',
                                       style: TextStyle(
                                         color: secondaryTextColor,
                                       ),
@@ -1267,7 +1267,7 @@ class OrderDetailPage extends ConsumerWidget {
           _buildDetailRow(
             context,
             'Precio Unitario:',
-            currencyFormat.format(item.finalUnitPrice),
+            currencyFormat.format(item.basePrice),
             isSubTotal: true,
           ),
         );

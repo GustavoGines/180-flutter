@@ -32,8 +32,11 @@ class OrderItem {
   });
 
   // --- GETTER PARA PRECIO FINAL ---
-  // Calcula el precio unitario final sumando base + ajustes
-  double get finalUnitPrice => basePrice + adjustments;
+  // Calcula el precio unitario final sumando base
+  double get finalUnitPrice => basePrice; // Unit price is just the base price now
+  
+  // Calcula el precio total de la linea (base * qty + ajuste fijo)
+  double get finalLinePrice => (basePrice * qty) + adjustments;
   // --- FIN GETTER ---
 
   // Factory fromJson actualizado

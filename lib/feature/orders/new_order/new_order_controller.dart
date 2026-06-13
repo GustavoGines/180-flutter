@@ -52,7 +52,7 @@ abstract class NewOrderState with _$NewOrderState {
   
   /// Suma total de todos los items en el carrito
   double get itemsTotal => items.fold(
-      0.0, (sum, item) => sum + (item.finalUnitPrice * item.qty));
+      0.0, (sum, item) => sum + item.finalLinePrice);
 
   /// Total general = Items + Costo de Envío
   double get grandTotal => itemsTotal + deliveryCost;
