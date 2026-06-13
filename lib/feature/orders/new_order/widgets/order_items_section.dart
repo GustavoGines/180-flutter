@@ -427,7 +427,7 @@ class _OrderItemsSectionState extends ConsumerState<OrderItemsSection> {
 
   // --- LISTENER CAMBIO DE NOMBRE (modificado) ---
   List<Widget> _buildCompactImageRow(
-      BuildContext context, List<dynamic> images, int qty) {
+      BuildContext context, List<dynamic> images, double qty) {
     // Máximo 3 elementos visibles (2 fotos + 1 indicador, o 3 fotos)
     const int maxVisible = 3;
     final int totalCount = images.length;

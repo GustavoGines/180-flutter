@@ -554,15 +554,14 @@ class PdfGenerator {
             ? selectedSize.replaceFirst('size', '')
             : selectedSize;
         parts.add('Tamaño: $formatted');
-      } else if (isHalfDozen) {
-        parts.add('Presentación: Media Docena');
       } else if (productUnit == 'dozen') {
-        if (isUnitSaleForDozen) {
+        if (custom['is_unit_sale'] == true) {
           parts.add('Presentación: Por Unidad (Suela)');
         } else {
           // Es docena completa
           final qty = item.qty;
-          final label = qty == 1 ? '1 Docena' : '$qty Docenas';
+          String qtyStr = qty == qty.truncateToDouble() ? qty.truncate().toString() : qty.toString();
+          final label = qty == 1.0 ? '1 Docena' : '$qtyStr Docenas';
           parts.add('Presentación: Docena ($label)');
         }
       }

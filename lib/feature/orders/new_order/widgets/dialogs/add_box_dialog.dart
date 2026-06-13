@@ -17,7 +17,7 @@ class AddBoxDialog extends StatefulWidget {
   final void Function(OrderItem newItem) onSaveEditing;
   final void Function(OrderItem newItem) onAddPending;
   final Widget Function(dynamic imageSource, bool isNetwork, VoidCallback onRemove) buildImageThumbnail;
-  final List<Widget> Function(BuildContext context, List<dynamic> allImages, int qty) buildCompactImageRow;
+  final List<Widget> Function(BuildContext context, List<dynamic> allImages, double qty) buildCompactImageRow;
 
   const AddBoxDialog({
     super.key,
@@ -206,7 +206,7 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
     double unitAdjustments = double.tryParse(unitAdjustmentsController.text) ?? 0.0;
     calculatedTotalBasePrice += calculatedExtrasCost + unitAdjustments;
 
-    int qty = int.tryParse(qtyController.text) ?? 1;
+    double qty = double.tryParse(qtyController.text) ?? 1.0;
     double total = (calculatedTotalBasePrice * qty);
 
     finalPriceController.text = total.toStringAsFixed(0);
@@ -374,7 +374,7 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
 
   void onSave() {
     if (selectedProduct == null) return;
-    int qty = int.tryParse(qtyController.text) ?? 1;
+    double qty = double.tryParse(qtyController.text) ?? 1.0;
 
     List<dynamic> finalLocalFiles = [];
     List<String> allImageUrls = [];

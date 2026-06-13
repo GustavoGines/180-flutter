@@ -15,7 +15,7 @@ class AddMesaDulceDialog extends StatefulWidget {
   final void Function(OrderItem newItem) onSaveEditing;
   final void Function(List<OrderItem> pendingItems) onAddPending;
   final Widget Function(dynamic imageSource, bool isNetwork, VoidCallback onRemove) buildImageThumbnail;
-  final List<Widget> Function(BuildContext context, List<dynamic> allImages, int qty) buildCompactImageRow;
+  final List<Widget> Function(BuildContext context, List<dynamic> allImages, double qty) buildCompactImageRow;
 
   const AddMesaDulceDialog({
     super.key,
@@ -48,7 +48,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
   late TextEditingController itemNotesController;
   late TextEditingController unitAdjustmentsController;
   late TextEditingController finalPriceController;
-  bool isUnitSaleForDozen = false;
+  bool isUnitSale = false;
   
   final ImagePicker picker = ImagePicker();
   List<XFile> selectedFiles = [];
@@ -100,8 +100,8 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
           : '0',
     );
     finalPriceController = TextEditingController();
-    isUnitSaleForDozen = isEditing
-        ? (existingItem!.customizationJson?['is_unit_sale_for_dozen'] == true)
+    isUnitSale = isEditing
+        ? (existingItem!.customizationJson?['is_unit_sale'] == true)
         : false;
 
     if (isEditing) {
@@ -137,25 +137,47 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
       finalPriceController.text = '0';
       return;
     }
-    int qty = int.tryParse(qtyController.text) ?? 0;
+    double qty = double.tryParse(qtyController.text) ?? 0.0;
 
     double unitAdj =
         double.tryParse(unitAdjustmentsController.text) ?? 0.0;
 
-    double unitBasePrice = 0.0;
+    double calculatedTotalBase = 0.0;
+
     if (selectedProduct!.variants.isNotEmpty) {
-      unitBasePrice = selectedVariant?.price ?? 0.0;
-    } else if (selectedProduct!.allowHalfDozen && isHalfDozen) {
-      unitBasePrice = selectedProduct!.halfDozenPrice ??
-          (selectedProduct!.price / 2);
-    } else if (selectedProduct!.unit == ProductUnit.dozen &&
-        isUnitSaleForDozen) {
-      unitBasePrice = selectedProduct!.price / 12;
+      calculatedTotalBase = (selectedVariant?.price ?? 0.0) * qty;
     } else {
-      unitBasePrice = selectedProduct!.price;
+      if (selectedProduct!.unit == ProductUnit.dozen) {
+        if (isUnitSale) {
+          // Si carga en unidades (ej. 18)
+          double pricePerUnit = selectedProduct!.price / 12;
+          calculatedTotalBase = pricePerUnit * qty;
+        } else {
+          // Si carga en docenas (ej. 1.5)
+          int fullDozens = qty.truncate();
+          double remainder = qty - fullDozens;
+          double fullDozensPrice = fullDozens * selectedProduct!.price;
+          double remainderPrice = 0.0;
+          
+          if (remainder > 0) {
+            if (remainder == 0.5 && selectedProduct!.allowHalfDozen) {
+              remainderPrice = selectedProduct!.halfDozenPrice ?? (selectedProduct!.price / 2);
+            } else {
+              remainderPrice = (remainder * 12) * (selectedProduct!.price / 12);
+            }
+          }
+          calculatedTotalBase = fullDozensPrice + remainderPrice;
+        }
+      } else {
+        calculatedTotalBase = selectedProduct!.price * qty;
+      }
     }
 
-    double effectiveUnitDetailPrice = unitBasePrice + unitAdj;
+    // Para evitar problemas con el modelo basePrice, lo seteamos como el total dividido por la cantidad 
+    // (asi (basePrice * qty) = calculatedTotalBase). Si qty es 0, basePrice es 0.
+    double effectiveBasePrice = qty > 0 ? (calculatedTotalBase / qty) : 0.0;
+    
+    double effectiveUnitDetailPrice = effectiveBasePrice + unitAdj;
     basePrice = effectiveUnitDetailPrice;
 
     double total = (effectiveUnitDetailPrice * qty);
@@ -183,7 +205,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
 
   void addToPendingList() {
     if (selectedProduct == null) { return; }
-    int qty = int.tryParse(qtyController.text) ?? 0;
+    double qty = double.tryParse(qtyController.text) ?? 0.0;
     if (qty <= 0) { return; }
     if (selectedProduct!.variants.isNotEmpty &&
         selectedVariant == null) { return; }
@@ -212,11 +234,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
         'variant_id': selectedVariant!.id,
         'variant_name': selectedVariant!.variantName,
       },
-      if (selectedProduct!.allowHalfDozen)
-        'is_half_dozen': isHalfDozen,
-      if (itemNotesController.text.trim().isNotEmpty)
-        'item_notes': itemNotesController.text.trim(),
-      if (isUnitSaleForDozen) 'is_unit_sale_for_dozen': true,
+      if (isUnitSale) 'is_unit_sale': true,
       if (allPhotoUrls.isNotEmpty) 'photo_url': allPhotoUrls.first,
       if (allPhotoUrls.isNotEmpty) 'photo_urls': allPhotoUrls,
       if (double.tryParse(unitAdjustmentsController.text) != null &&
@@ -298,7 +316,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                     itemBuilder: (ctx, idx) {
                       final it = pendingItems[idx];
                       final vName = it.customizationJson?['variant_name'] ??
-                          (it.customizationJson?['is_half_dozen'] == true ? 'Media Docena' : 'Unidad');
+                          (it.customizationJson?['is_unit_sale'] == true ? 'Unidad' : 'Docenas');
                       final formattedVName = vName.startsWith('size') ? vName.replaceAll('size', '') : vName;
 
                       return Padding(
@@ -377,8 +395,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                         } else {
                           selectedVariant = null;
                         }
-                        isHalfDozen = false;
-                        isUnitSaleForDozen = false;
+                        isUnitSale = false;
                         calculateCurrentItemPrice();
                       }),
                       decoration: const InputDecoration(labelText: 'Producto', isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 10)),
@@ -397,39 +414,26 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                           }),
                           decoration: const InputDecoration(labelText: 'Variante'),
                         )
-                      else if (selectedProduct!.allowHalfDozen || selectedProduct!.unit == ProductUnit.dozen)
+                      else if (selectedProduct!.unit == ProductUnit.dozen)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Row(
                             children: [
-                              if (selectedProduct!.allowHalfDozen) ...[
-                                const Text('Media Doc.', style: TextStyle(fontSize: 14)),
-                                Transform.scale(
-                                  scale: 0.8,
-                                  child: Switch(
-                                    value: isHalfDozen,
-                                    onChanged: (v) => setState(() {
-                                      isHalfDozen = v;
-                                      if (v) isUnitSaleForDozen = false;
-                                      calculateCurrentItemPrice();
-                                    }),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                              if (selectedProduct!.unit == ProductUnit.dozen && !isHalfDozen) ...[
-                                const Text('Unidad', style: TextStyle(fontSize: 14)),
-                                Transform.scale(
-                                  scale: 0.8,
-                                  child: Switch(
-                                    value: isUnitSaleForDozen,
-                                    onChanged: (v) => setState(() {
-                                      isUnitSaleForDozen = v;
-                                      calculateCurrentItemPrice();
-                                    }),
-                                  ),
-                                ),
-                              ],
+                              const Text('Modo de Carga: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 10),
+                              SegmentedButton<bool>(
+                                segments: const [
+                                  ButtonSegment<bool>(value: false, label: Text('Docenas')),
+                                  ButtonSegment<bool>(value: true, label: Text('Unidades')),
+                                ],
+                                selected: {isUnitSale},
+                                onSelectionChanged: (Set<bool> newSelection) {
+                                  setState(() {
+                                    isUnitSale = newSelection.first;
+                                    calculateCurrentItemPrice();
+                                  });
+                                },
+                              ),
                             ],
                           ),
                         ),
@@ -555,13 +559,13 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cerrar'),
         ),
-        if (pendingItems.isNotEmpty || isEditing || (int.tryParse(qtyController.text) ?? 0) > 0)
+        if (pendingItems.isNotEmpty || isEditing || (double.tryParse(qtyController.text) ?? 0.0) > 0)
           FilledButton(
             onPressed: () {
               if (isEditing) {
                 addToPendingList();
               } else {
-                bool formHasData = (int.tryParse(qtyController.text) ?? 0) != 1 ||
+                bool formHasData = (double.tryParse(qtyController.text) ?? 0.0) != 1.0 ||
                     notesController.text.isNotEmpty ||
                     itemNotesController.text.isNotEmpty ||
                     (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 ||
@@ -578,7 +582,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                 }
               }
             },
-            child: Text(isEditing ? 'Guardar Cambios' : 'AGREGAR TODO (${pendingItems.length + ((pendingItems.isEmpty || ((int.tryParse(qtyController.text) ?? 0) != 1 || notesController.text.isNotEmpty || itemNotesController.text.isNotEmpty || (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 || selectedFiles.isNotEmpty || existingRemoteUrls.isNotEmpty)) ? 1 : 0)})'),
+            child: Text(isEditing ? 'Guardar Cambios' : 'AGREGAR TODO (${pendingItems.length + ((pendingItems.isEmpty || ((double.tryParse(qtyController.text) ?? 0.0) != 1.0 || notesController.text.isNotEmpty || itemNotesController.text.isNotEmpty || (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 || selectedFiles.isNotEmpty || existingRemoteUrls.isNotEmpty)) ? 1 : 0)})'),
           ),
       ],
     );

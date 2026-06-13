@@ -17,7 +17,7 @@ class AddCakeDialog extends StatefulWidget {
   final void Function(OrderItem newItem) onSaveEditing;
   final void Function(OrderItem newItem) onAddPending;
   final Widget Function(dynamic imageSource, bool isNetwork, VoidCallback onRemove) buildImageThumbnail;
-  final List<Widget> Function(BuildContext context, List<dynamic> allImages, int qty) buildCompactImageRow;
+  final List<Widget> Function(BuildContext context, List<dynamic> allImages, double qty) buildCompactImageRow;
 
   const AddCakeDialog({
     super.key,
@@ -159,7 +159,7 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
     double unitAdjustments = double.tryParse(unitAdjustmentsController.text) ?? 0.0;
     calculatedBasePrice += calculatedExtrasCost + unitAdjustments;
     
-    int qty = int.tryParse(qtyController.text) ?? 1;
+    double qty = double.tryParse(qtyController.text) ?? 1.0;
 
     double total = (calculatedBasePrice * qty);
 
@@ -250,7 +250,7 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
 
   void onSave() {
     if (selectedCakeType == null) return;
-    int qty = int.tryParse(qtyController.text) ?? 1;
+    double qty = double.tryParse(qtyController.text) ?? 1.0;
 
     List<dynamic> finalLocalFiles = [];
     List<String> allImageUrls = [];

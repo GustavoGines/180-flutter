@@ -4,7 +4,7 @@ import '../json_utils.dart'; // Asumo que tienes este archivo para toInt/toNum
 class OrderItem {
   final int? id; // El id es opcional (para items nuevos vs. existentes)
   final String name;
-  final int qty;
+  final double qty;
   // final double unitPrice; // <-- ELIMINADO del constructor y guardado directo
 
   // --- NUEVOS CAMPOS ---
@@ -63,7 +63,7 @@ class OrderItem {
     return OrderItem(
       id: j['id'] != null ? toInt(j['id']) : null,
       name: j['name'] ?? 'Item Desconocido',
-      qty: toInt(j['qty'] ?? 1), // Default qty a 1 si falta
+      qty: toNum(j['qty'] ?? 1).toDouble(), // Default qty a 1 si falta
       basePrice: base,
       adjustments: adjust,
       customizationNotes: j['customization_notes'] as String?,
@@ -97,7 +97,7 @@ class OrderItem {
   OrderItem copyWith({
     int? id,
     String? name,
-    int? qty,
+    double? qty,
     double? basePrice,
     double? adjustments,
     String? customizationNotes,
