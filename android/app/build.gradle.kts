@@ -8,6 +8,12 @@ plugins {
     id("com.google.firebase.appdistribution")
 }
 
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = java.util.Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.one80.pasteleria.pasteleria_180_flutter"
     compileSdk = 36
@@ -27,11 +33,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+            storePassword = keystoreProperties["storePassword"] as String?
+        }
+    }
+
     // --- BUILD TYPES ---
     buildTypes {
         getByName("release") {
-            // Firma debug para simplificar (cuando quieras, cambiá a tu keystore propia)
-            signingConfig = signingConfigs.getByName("debug")
+            // Firma permanente configurada
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
             // Fallbacks por si alguna lib solo publica 'profile' o 'debug'
