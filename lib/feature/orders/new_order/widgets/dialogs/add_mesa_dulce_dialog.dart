@@ -368,16 +368,16 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade800 : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
+                    border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade700 : Colors.grey.shade300),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.shopping_basket_outlined, color: Colors.grey),
-                      SizedBox(width: 8),
-                      Text('El carrito está vacío', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                      Icon(Icons.shopping_basket_outlined, color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade400 : Colors.grey),
+                      const SizedBox(width: 8),
+                      Text('El carrito está vacío', style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade300 : Colors.grey, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -566,29 +566,25 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
       actions: [
         SizedBox(
           width: double.maxFinite,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (!isEditing)
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total Carrito:', style: TextStyle(fontSize: 12)),
+                      const Text('Total Carrito:', style: TextStyle(fontSize: 16)),
                       Text(
                         '\$${pendingItems.fold<double>(0, (sum, item) => sum + (item.basePrice * item.qty) + item.adjustments).toStringAsFixed(0)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.green),
                       ),
                     ],
                   ),
-                )
-              else
-                const Expanded(child: SizedBox()),
+                ),
               Row(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
@@ -597,29 +593,36 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                   if (pendingItems.isNotEmpty || isEditing || (double.tryParse(qtyController.text) ?? 0.0) > 0)
                     ... [
                       const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: () {
-                          if (isEditing) {
-                            addToPendingList();
-                          } else {
-                            bool formHasData = (double.tryParse(qtyController.text) ?? 0.0) != 1.0 ||
-                                notesController.text.isNotEmpty ||
-                                itemNotesController.text.isNotEmpty ||
-                                (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 ||
-                                selectedFiles.isNotEmpty ||
-                                existingRemoteUrls.isNotEmpty;
-                            if (pendingItems.isEmpty || formHasData) {
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () {
+                            if (isEditing) {
                               addToPendingList();
+                            } else {
+                              bool formHasData = (double.tryParse(qtyController.text) ?? 0.0) != 1.0 ||
+                                  notesController.text.isNotEmpty ||
+                                  itemNotesController.text.isNotEmpty ||
+                                  (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 ||
+                                  selectedFiles.isNotEmpty ||
+                                  existingRemoteUrls.isNotEmpty;
+                              if (pendingItems.isEmpty || formHasData) {
+                                addToPendingList();
+                              }
+                              if (pendingItems.isNotEmpty) {
+                                widget.onAddPending(pendingItems);
+                              }
+                              if (mounted && Navigator.canPop(context)) {
+                                Navigator.pop(context);
+                              }
                             }
-                            if (pendingItems.isNotEmpty) {
-                              widget.onAddPending(pendingItems);
-                            }
-                            if (mounted && Navigator.canPop(context)) {
-                              Navigator.pop(context);
-                            }
-                          }
-                        },
-                        child: Text(isEditing ? 'Guardar' : 'AGREGAR TODO (${pendingItems.length + ((pendingItems.isEmpty || ((double.tryParse(qtyController.text) ?? 0.0) != 1.0 || notesController.text.isNotEmpty || itemNotesController.text.isNotEmpty || (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 || selectedFiles.isNotEmpty || existingRemoteUrls.isNotEmpty)) ? 1 : 0)})'),
+                          },
+                          child: Text(
+                            isEditing ? 'Guardar' : 'AGREGAR TODO (${pendingItems.length + ((pendingItems.isEmpty || ((double.tryParse(qtyController.text) ?? 0.0) != 1.0 || notesController.text.isNotEmpty || itemNotesController.text.isNotEmpty || (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 || selectedFiles.isNotEmpty || existingRemoteUrls.isNotEmpty)) ? 1 : 0)})',
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ),
                     ]
                 ],
