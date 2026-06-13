@@ -53,7 +53,6 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
 
   late TextEditingController qtyController;
   late TextEditingController itemNotesController;
-  late TextEditingController adjustmentsController;
   late TextEditingController unitAdjustmentsController;
   late TextEditingController kgAdjustmentsController;
   late TextEditingController adjustmentNotesController;
@@ -61,7 +60,6 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
   late TextEditingController finalPriceController;
 
   double calculatedBasePrice = 0.0;
-  double manualAdjustments = 0.0;
   double multiplierAdjustment = 0.0;
 
   List<Product> get cakeProducts => widget.catalog?.products.where((p) => p.category == ProductCategory.torta).toList() ?? [];
@@ -124,7 +122,6 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
 
     qtyController = TextEditingController(text: isEditing ? widget.existingItem!.qty.toString() : '1');
     itemNotesController = TextEditingController(text: customData['item_notes'] ?? '');
-    adjustmentsController = TextEditingController(text: isEditing ? widget.existingItem!.adjustments.toStringAsFixed(0) : '0');
     unitAdjustmentsController = TextEditingController(text: isEditing ? (customData['unit_adjustment']?.toString() ?? '0') : '0');
     kgAdjustmentsController = TextEditingController(text: isEditing ? (customData['kg_adjustment']?.toString() ?? '0') : '0');
     adjustmentNotesController = TextEditingController(text: isEditing ? widget.existingItem!.customizationNotes ?? '' : '');
@@ -163,9 +160,8 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
     calculatedBasePrice += calculatedExtrasCost + unitAdjustments;
     
     int qty = int.tryParse(qtyController.text) ?? 1;
-    manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
 
-    double total = (calculatedBasePrice * qty) + manualAdjustments;
+    double total = (calculatedBasePrice * qty);
 
     calculatedBasePriceController.text = calculatedBasePrice.toStringAsFixed(0);
     finalPriceController.text = total.toStringAsFixed(0);
@@ -296,7 +292,7 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
       name: selectedCakeType!.name,
       qty: qty,
       basePrice: calculatedBasePrice,
-      adjustments: manualAdjustments,
+      adjustments: 0.0, // Ya no se usa $ Tot.
       customizationNotes: adjustmentNotesController.text.trim().isEmpty ? null : adjustmentNotesController.text.trim(),
       customizationJson: customization,
       localFile: finalLocalFiles.isNotEmpty ? finalLocalFiles : null,
@@ -395,18 +391,7 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
                     flex: 3,
                     child: TextFormField(
                       controller: unitAdjustmentsController,
-                      decoration: const InputDecoration(labelText: '\$ Unit.', isDense: true, prefixText: '\$'),
-                      keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
-                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
-                      onChanged: (_) => setState(calculateCakePrice),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 3,
-                    child: TextFormField(
-                      controller: adjustmentsController,
-                      decoration: const InputDecoration(labelText: '\$ Tot.', isDense: true, prefixText: '\$'),
+                      decoration: const InputDecoration(labelText: 'Ajuste Fijo (\$)', isDense: true, prefixText: '\$'),
                       keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
                       onChanged: (_) => setState(calculateCakePrice),

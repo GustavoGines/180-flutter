@@ -43,7 +43,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
   double adjustments = 0.0;
   bool isHalfDozen = false;
   late TextEditingController qtyController;
-  late TextEditingController adjustmentsController;
+
   late TextEditingController notesController;
   late TextEditingController itemNotesController;
   late TextEditingController unitAdjustmentsController;
@@ -85,9 +85,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
     qtyController = TextEditingController(
       text: isEditing ? existingItem!.qty.toString() : '1',
     );
-    adjustmentsController = TextEditingController(
-      text: adjustments.toStringAsFixed(0),
-    );
+
     notesController = TextEditingController(
       text: isEditing ? existingItem!.customizationNotes ?? '' : '',
     );
@@ -140,8 +138,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
       return;
     }
     int qty = int.tryParse(qtyController.text) ?? 0;
-    double manualAdj =
-        double.tryParse(adjustmentsController.text) ?? 0.0;
+
     double unitAdj =
         double.tryParse(unitAdjustmentsController.text) ?? 0.0;
 
@@ -161,7 +158,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
     double effectiveUnitDetailPrice = unitBasePrice + unitAdj;
     basePrice = effectiveUnitDetailPrice;
 
-    double total = (effectiveUnitDetailPrice * qty) + manualAdj;
+    double total = (effectiveUnitDetailPrice * qty);
     finalPriceController.text = total.toStringAsFixed(0);
   }
 
@@ -234,7 +231,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
       name: selectedProduct!.name,
       qty: qty,
       basePrice: basePrice,
-      adjustments: double.tryParse(adjustmentsController.text) ?? 0.0,
+      adjustments: 0.0,
       customizationNotes: notesController.text.trim().isEmpty
           ? null
           : notesController.text.trim(),
@@ -249,7 +246,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
       } else {
         _smartMergeItem(newItem);
         qtyController.text = '1';
-        adjustmentsController.text = '0';
+
         notesController.clear();
         itemNotesController.clear();
         unitAdjustmentsController.text = '0';
@@ -457,19 +454,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                           child: TextField(
                             controller: unitAdjustmentsController,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: '\$ Unit.', isDense: true, prefixText: '\$'),
-                            onChanged: (_) => setState(() {
-                              calculateCurrentItemPrice();
-                            }),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 3,
-                          child: TextField(
-                            controller: adjustmentsController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: '\$ Tot.', isDense: true, prefixText: '\$'),
+                            decoration: const InputDecoration(labelText: 'Ajuste Fijo (\$)', isDense: true, prefixText: '\$'),
                             onChanged: (_) => setState(() {
                               calculateCurrentItemPrice();
                             }),
@@ -579,7 +564,6 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                 bool formHasData = (int.tryParse(qtyController.text) ?? 0) != 1 ||
                     notesController.text.isNotEmpty ||
                     itemNotesController.text.isNotEmpty ||
-                    (double.tryParse(adjustmentsController.text) ?? 0) != 0 ||
                     (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 ||
                     selectedFiles.isNotEmpty ||
                     existingRemoteUrls.isNotEmpty;
@@ -594,7 +578,7 @@ class _AddMesaDulceDialogState extends State<AddMesaDulceDialog> {
                 }
               }
             },
-            child: Text(isEditing ? 'Guardar Cambios' : 'AGREGAR TODO (${pendingItems.length + ((pendingItems.isEmpty || ((int.tryParse(qtyController.text) ?? 0) != 1 || notesController.text.isNotEmpty || itemNotesController.text.isNotEmpty || (double.tryParse(adjustmentsController.text) ?? 0) != 0 || (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 || selectedFiles.isNotEmpty || existingRemoteUrls.isNotEmpty)) ? 1 : 0)})'),
+            child: Text(isEditing ? 'Guardar Cambios' : 'AGREGAR TODO (${pendingItems.length + ((pendingItems.isEmpty || ((int.tryParse(qtyController.text) ?? 0) != 1 || notesController.text.isNotEmpty || itemNotesController.text.isNotEmpty || (double.tryParse(unitAdjustmentsController.text) ?? 0) != 0 || selectedFiles.isNotEmpty || existingRemoteUrls.isNotEmpty)) ? 1 : 0)})'),
           ),
       ],
     );

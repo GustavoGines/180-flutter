@@ -55,7 +55,6 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
 
   late TextEditingController qtyController;
   late TextEditingController itemNotesController;
-  late TextEditingController adjustmentsController;
   late TextEditingController unitAdjustmentsController;
   late TextEditingController adjustmentNotesController;
   late TextEditingController finalPriceController;
@@ -94,7 +93,6 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
 
     qtyController = TextEditingController(text: isEditing ? widget.existingItem!.qty.toString() : '1');
     itemNotesController = TextEditingController(text: customData['item_notes'] ?? '');
-    adjustmentsController = TextEditingController(text: isEditing ? widget.existingItem!.adjustments.toStringAsFixed(0) : '0');
     unitAdjustmentsController = TextEditingController(text: isEditing ? (customData['unit_adjustment']?.toString() ?? '0') : '0');
     adjustmentNotesController = TextEditingController(text: isEditing ? widget.existingItem!.customizationNotes ?? '' : '');
     finalPriceController = TextEditingController();
@@ -209,8 +207,7 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
     calculatedTotalBasePrice += calculatedExtrasCost + unitAdjustments;
 
     int qty = int.tryParse(qtyController.text) ?? 1;
-    double manualAdjustments = double.tryParse(adjustmentsController.text) ?? 0.0;
-    double total = (calculatedTotalBasePrice * qty) + manualAdjustments;
+    double total = (calculatedTotalBasePrice * qty);
 
     finalPriceController.text = total.toStringAsFixed(0);
   }
@@ -429,7 +426,7 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
       name: selectedProduct!.name,
       qty: qty,
       basePrice: calculatedTotalBasePrice,
-      adjustments: double.tryParse(adjustmentsController.text) ?? 0.0,
+      adjustments: 0.0,
       customizationNotes: adjustmentNotesController.text.trim().isEmpty ? null : adjustmentNotesController.text.trim(),
       customizationJson: customization,
       localFile: finalLocalFiles.isNotEmpty ? finalLocalFiles : null,
@@ -541,21 +538,9 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    flex: 3,
                     child: TextFormField(
                       controller: unitAdjustmentsController,
-                      decoration: const InputDecoration(labelText: '\$ Unit.', isDense: true, prefixText: '\$'),
-                      keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
-                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
-                      onChanged: (_) => setState(calculatePrice),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 3,
-                    child: TextFormField(
-                      controller: adjustmentsController,
-                      decoration: const InputDecoration(labelText: '\$ Tot.', isDense: true, prefixText: '\$'),
+                      decoration: const InputDecoration(labelText: 'Ajuste Fijo (\$)', isDense: true, prefixText: '\$'),
                       keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: false),
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^-?\d*'))],
                       onChanged: (_) => setState(calculatePrice),
