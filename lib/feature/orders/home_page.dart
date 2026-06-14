@@ -267,12 +267,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 children: [
                   Image.asset('assets/images/logo_180.png', height: 50.0),
                   const SizedBox(width: 15),
-                  const Flexible(
-                    child: Text(
-                      'Pedidos',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                  const Text('Pedidos'),
                 ],
               ),
         centerTitle: false,
@@ -286,16 +281,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                   _isSearching = false;
                   _searchController.clear();
                   ref.read(orderSearchQueryProvider.notifier).state = '';
-                });
-              },
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.search),
-              tooltip: 'Buscar pedidos',
-              onPressed: () {
-                setState(() {
-                  _isSearching = true;
                 });
               },
             ),
@@ -325,6 +310,11 @@ class _HomePageState extends ConsumerState<HomePage> {
           PopupMenuButton<String>(
             onSelected: (value) async {
               switch (value) {
+                case 'search':
+                  setState(() {
+                    _isSearching = true;
+                  });
+                  break;
                 case 'logout':
                   ref.read(authStateProvider.notifier).logout();
                   break;
@@ -403,6 +393,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
 
                 const PopupMenuDivider(),
+
+                const PopupMenuItem(
+                  value: 'search',
+                  child: ListTile(
+                    leading: Icon(Icons.search),
+                    title: Text('Buscar Pedidos'),
+                  ),
+                ),
 
                 // --- FIN SELECCIÓN DE TEMA ---
                 const PopupMenuItem(
