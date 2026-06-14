@@ -13,12 +13,12 @@ const Color _darkSurface = Color(0xFF1D1D1D); // Para Cards, AppBar, etc.
 const Color _darkOnSurface = Colors.white70; // Texto claro
 
 // Estilo de AppBar compartido
-const AppBarTheme _appBarThemeLight = AppBarTheme(
+final AppBarTheme _appBarThemeLight = AppBarTheme(
   backgroundColor: Colors.white,
   foregroundColor: _darkBrown, // Color del título y los iconos
   elevation: 1,
-  iconTheme: IconThemeData(color: _darkBrown),
-  titleTextStyle: TextStyle(
+  iconTheme: const IconThemeData(color: _darkBrown),
+  titleTextStyle: GoogleFonts.outfit(
     color: _darkBrown,
     fontSize: 20,
     fontWeight: FontWeight.bold,
@@ -26,12 +26,12 @@ const AppBarTheme _appBarThemeLight = AppBarTheme(
 );
 
 // Estilo de AppBar para el MODO OSCURO
-const AppBarTheme _appBarThemeDark = AppBarTheme(
+final AppBarTheme _appBarThemeDark = AppBarTheme(
   backgroundColor: _darkSurface,
   foregroundColor: _darkOnSurface, // Texto en color claro
   elevation: 1,
-  iconTheme: IconThemeData(color: _darkOnSurface),
-  titleTextStyle: TextStyle(
+  iconTheme: const IconThemeData(color: _darkOnSurface),
+  titleTextStyle: GoogleFonts.outfit(
     color: _darkOnSurface,
     fontSize: 20,
     fontWeight: FontWeight.bold,
