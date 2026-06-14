@@ -152,11 +152,14 @@ class OrdersRepository {
     }
   }
 
-  Future<Order> createOrderWithFiles(
+  Future<Order> _sendFormData(
+    String path,
     Map<String, dynamic> payload,
-    Map<String, XFile> files,
-  ) async {
+    Map<String, XFile> files, {
+    String method = 'POST',
+  }) async {
     final Map<String, dynamic> formDataMap = {
+      if (method == 'PUT') '_method': 'PUT',
       'order_payload': jsonEncode(payload),
     };
 
@@ -181,20 +184,20 @@ class OrdersRepository {
       final formData = FormData.fromMap(formDataMap);
 
       final response = await _dio.post(
-        '/orders',
+        path,
         data: formData,
       );
 
       return Order.fromJson(_parseOrderData(response.data));
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error createOrderWithFiles: $e');
+        debugPrint('Error en _sendFormData ($path): $e');
       }
       rethrow;
     } finally {
       for (var path in tempPaths) {
         try {
-          File(path).delete();
+          File(path).deleteSync();
         } catch (e) {
           debugPrint('Error borrando archivo temporal: $e');
         }
@@ -202,55 +205,18 @@ class OrdersRepository {
     }
   }
 
+  Future<Order> createOrderWithFiles(
+    Map<String, dynamic> payload,
+    Map<String, XFile> files,
+  ) async {
+    return _sendFormData('/orders', payload, files);
+  }
+
   Future<Order> updateOrderWithFiles(
     int orderId,
     Map<String, dynamic> payload,
     Map<String, XFile> files,
   ) async {
-    final Map<String, dynamic> formDataMap = {
-      '_method': 'PUT',
-      'order_payload': jsonEncode(payload),
-    };
-
-    final List<String> tempPaths = [];
-
-    try {
-      for (var entry in files.entries) {
-        final placeholderId = entry.key;
-        final file = entry.value;
-
-        final String pathToSend = await _compressImage(file);
-        if (pathToSend != file.path) {
-          tempPaths.add(pathToSend);
-        }
-
-        formDataMap['files[$placeholderId]'] = await MultipartFile.fromFile(
-          pathToSend,
-          filename: file.name,
-        );
-      }
-
-      final formData = FormData.fromMap(formDataMap);
-
-      final response = await _dio.post(
-        '/orders/$orderId',
-        data: formData,
-      );
-
-      return Order.fromJson(_parseOrderData(response.data));
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error updateOrderWithFiles: $e');
-      }
-      rethrow;
-    } finally {
-      for (var path in tempPaths) {
-        try {
-          File(path).delete();
-        } catch (e) {
-          debugPrint('Error borrando archivo temporal: $e');
-        }
-      }
-    }
+    return _sendFormData('/orders/$orderId', payload, files, method: 'PUT');
   }
 }

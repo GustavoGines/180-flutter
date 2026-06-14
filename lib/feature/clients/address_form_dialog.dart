@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/snackbar_helper.dart';
 import 'package:pasteleria_180_flutter/core/models/client_address.dart';
 // Asegúrate de que esta ruta sea correcta según tu estructura
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
@@ -65,20 +66,7 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
     super.dispose();
   }
 
-  void _showSnackbar(String message, {bool isError = false}) {
-    if (!mounted) return;
-    final cs = Theme.of(context).colorScheme;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: isError ? TextStyle(color: cs.onError) : null,
-        ),
-        backgroundColor: isError ? cs.error : null,
-      ),
-    );
-  }
 
   Future<void> _getUserLocation() async {
     setState(() => _isGettingLocation = true);
@@ -88,10 +76,12 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
         bool isLocationServiceEnabled =
             await Geolocator.isLocationServiceEnabled();
         if (!isLocationServiceEnabled) {
-          _showSnackbar(
-            'Por favor, activa el GPS de tu dispositivo.',
-            isError: true,
-          );
+          if (mounted) {
+            context.showCustomSnackbar(
+              'Por favor, activa el GPS de tu dispositivo.',
+              isError: true,
+            );
+          }
           setState(() => _isGettingLocation = false);
           return;
         }
@@ -100,15 +90,15 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
         );
         _latController.text = position.latitude.toStringAsFixed(7);
         _lngController.text = position.longitude.toStringAsFixed(7);
-        _showSnackbar('Ubicación obtenida con éxito.');
+        if (mounted) context.showCustomSnackbar('Ubicación obtenida con éxito.');
       } else if (status.isDenied || status.isPermanentlyDenied) {
-        _showSnackbar('Permiso de ubicación denegado.', isError: true);
+        if (mounted) context.showCustomSnackbar('Permiso de ubicación denegado.', isError: true);
         if (status.isPermanentlyDenied) {
           await openAppSettings();
         }
       }
     } catch (e) {
-      _showSnackbar('Error al obtener la ubicación: $e', isError: true);
+      if (mounted) context.showCustomSnackbar('Error al obtener la ubicación: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isGettingLocation = false);
@@ -135,7 +125,7 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
     if (selectedLocation != null && mounted) {
       _latController.text = selectedLocation.latitude.toStringAsFixed(7);
       _lngController.text = selectedLocation.longitude.toStringAsFixed(7);
-      _showSnackbar('Ubicación seleccionada desde el mapa.');
+      if (mounted) context.showCustomSnackbar('Ubicación seleccionada desde el mapa.');
     }
   }
 
@@ -196,7 +186,7 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
     } catch (e, stack) {
       debugPrint('DEBUG: Error in _submit: $e');
       debugPrint('DEBUG: Stack trace: $stack');
-      _showSnackbar('Error al guardar: $e', isError: true);
+      if (mounted) context.showCustomSnackbar('Error al guardar: $e', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

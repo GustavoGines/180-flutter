@@ -9,6 +9,8 @@ import 'package:pasteleria_180_flutter/core/models/client.dart'; // <-- AÑADIDO
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async'; // Para el Debouncer
+import 'package:pasteleria_180_flutter/core/utils/debouncer.dart';
+import 'package:pasteleria_180_flutter/core/utils/snackbar_helper.dart';
 
 // --- AÑADIDOS PARA SPEED DIAL ---
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
@@ -18,22 +20,6 @@ import 'package:collection/collection.dart'; // Para .firstWhereOrNull
 import 'package:dio/dio.dart'; // Para manejo de errores
 // --- FIN DE AÑADIDOS ---
 
-// Un simple Debouncer para no buscar en cada tecleo
-class Debouncer {
-  final int milliseconds;
-  Timer? _timer;
-
-  Debouncer({required this.milliseconds});
-
-  run(VoidCallback action) {
-    _timer?.cancel();
-    _timer = Timer(Duration(milliseconds: milliseconds), action);
-  }
-
-  dispose() {
-    _timer?.cancel();
-  }
-}
 
 // Provider para el query de búsqueda
 // --- ❗️ CAMBIO AQUÍ: Añadido .autoDispose ---
@@ -46,23 +32,7 @@ class ClientsPage extends HookConsumerWidget {
   const ClientsPage({super.key});
 
   // --- Helper de SnackBar (copiado de otros archivos) ---
-  void _showSnackbar(
-    BuildContext context,
-    String message, {
-    bool isError = false,
-  }) {
-    if (!context.mounted) return;
-    final cs = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: isError ? TextStyle(color: cs.onError) : null,
-        ),
-        backgroundColor: isError ? cs.error : null,
-      ),
-    );
-  }
+
 
   // --- LÓGICA DE "DESDE CONTACTOS" (Adaptada de new_order_page) ---
 
@@ -73,7 +43,7 @@ class ClientsPage extends HookConsumerWidget {
     // 1. Pedir Permiso de Contactos
     if (!await FlutterContacts.requestPermission(readonly: true)) {
       if (!context.mounted) return;
-      _showSnackbar(context, 'Permiso de contactos denegado.', isError: true);
+      context.showCustomSnackbar('Permiso de contactos denegado.', isError: true);
       await openAppSettings(); // Sugerir abrir configuración
       return;
     }
@@ -89,8 +59,7 @@ class ClientsPage extends HookConsumerWidget {
 
       if (phone == null) {
         if (!context.mounted) return;
-        _showSnackbar(
-          context,
+        context.showCustomSnackbar(
           'El contacto seleccionado no tiene número de teléfono.',
           isError: true,
         );
@@ -107,7 +76,7 @@ class ClientsPage extends HookConsumerWidget {
       if (existingClient != null) {
         // 5. Cliente ya existe: navegar a su detalle
         if (context.mounted) {
-          _showSnackbar(context, 'Cliente "${existingClient.name}" ya existe.');
+          context.showCustomSnackbar('Cliente "${existingClient.name}" ya existe.');
           context.push('/clients/${existingClient.id}');
         }
       } else {
@@ -162,7 +131,7 @@ class ClientsPage extends HookConsumerWidget {
     if (context.mounted) Navigator.pop(context); // Cerrar loader
 
     if (newClient != null && context.mounted) {
-      _showSnackbar(context, 'Cliente creado con éxito');
+        context.showCustomSnackbar('Cliente creado con éxito');
       final currentQuery = ref.read(clientSearchQueryProvider);
       ref.invalidate(clientsListProvider(currentQuery));
       if (currentQuery.isNotEmpty) {
@@ -173,7 +142,7 @@ class ClientsPage extends HookConsumerWidget {
         '/clients/${newClient.id}',
       ); // Navega al detalle del nuevo cliente
     } else if (errorMessage != null && context.mounted) {
-      _showSnackbar(context, errorMessage, isError: true);
+        context.showCustomSnackbar(errorMessage, isError: true);
     }
   }
 
@@ -215,11 +184,11 @@ class ClientsPage extends HookConsumerWidget {
       ref.invalidate(trashedClientsProvider);
 
       if (context.mounted) {
-        _showSnackbar(context, 'Cliente restaurado con éxito');
+        context.showCustomSnackbar('Cliente restaurado con éxito');
       }
     } catch (e) {
       if (context.mounted) {
-        _showSnackbar(context, 'Error al restaurar: $e', isError: true);
+        context.showCustomSnackbar('Error al restaurar: $e', isError: true);
       }
     }
   }

@@ -5,29 +5,12 @@ import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:pasteleria_180_flutter/core/models/client.dart';
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
+import '../../core/utils/snackbar_helper.dart';
 
 class TrashedClientsPage extends ConsumerWidget {
   const TrashedClientsPage({super.key});
 
-  // --- Helper de SnackBar adaptado al tema ---
-  void _showSnackbar(
-    BuildContext context,
-    String message, {
-    bool isError = false,
-  }) {
-    if (!context.mounted) return;
-    final cs = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: isError ? TextStyle(color: cs.onError) : null,
-        ),
-        backgroundColor: isError ? cs.error : null,
-      ),
-    );
-  }
-  // --- Fin Helper ---
+
 
   Future<void> _handleForceDelete(
     BuildContext context,
@@ -75,7 +58,7 @@ class TrashedClientsPage extends ConsumerWidget {
 
       // --- USA EL HELPER ADAPTADO ---
       if (!context.mounted) return;
-      _showSnackbar(context, 'Cliente eliminado permanentemente');
+      context.showCustomSnackbar('Cliente eliminado permanentemente');
 
       // Refrescar la lista de la papelera
       ref.invalidate(trashedClientsProvider); // <-- NOMBRE CORREGIDO
@@ -88,7 +71,7 @@ class TrashedClientsPage extends ConsumerWidget {
 
       // --- USA EL HELPER ADAPTADO ---
       if (!context.mounted) return;
-      _showSnackbar(context, errorMsg, isError: true);
+      context.showCustomSnackbar(errorMsg, isError: true);
     }
   }
 
@@ -168,7 +151,7 @@ class TrashedClientsPage extends ConsumerWidget {
 
                             // --- USA EL HELPER ADAPTADO ---
                             if (!context.mounted) return;
-                            _showSnackbar(context, 'Cliente restaurado');
+                            context.showCustomSnackbar('Cliente restaurado');
 
                             // Refrescar ambas listas
                             ref.invalidate(
@@ -180,7 +163,7 @@ class TrashedClientsPage extends ConsumerWidget {
                           } catch (e) {
                             // --- USA EL HELPER ADAPTADO ---
                             if (!context.mounted) return;
-                            _showSnackbar(context, 'Error: $e', isError: true);
+                            context.showCustomSnackbar('Error: $e', isError: true);
                           }
                         },
                       ),

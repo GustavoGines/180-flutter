@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/snackbar_helper.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 import 'package:dio/dio.dart';
@@ -107,19 +108,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     super.dispose();
   }
 
-  void _showSnackbar(String message, {bool isError = false}) {
-    if (!mounted) return;
-    final cs = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: isError ? TextStyle(color: cs.onError) : null,
-        ),
-        backgroundColor: isError ? cs.error : null,
-      ),
-    );
-  }
+
 
   // --- ❗️ FUNCIÓN _submit MODIFICADA ---
   Future<void> _submit() async {
@@ -169,7 +158,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
           // _clientJustCreated ya está asignado.
         } else {
           // Si es modo edición o no se quiso añadir dirección:
-          _showSnackbar(successMessage);
+          context.showCustomSnackbar(successMessage);
           context.pop(); // Volver a la página anterior
         }
       }
@@ -192,7 +181,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
                 'Se encontró un cliente eliminado, pero no se pudo leer.';
           }
         }
-        _showSnackbar(errorMessage, isError: true);
+        context.showCustomSnackbar(errorMessage, isError: true);
       }
     } finally {
       // 3. El loader se quita en CUALQUIER caso (éxito, error, o paso-al-modal)
@@ -267,12 +256,12 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       ref.invalidate(clientDetailsProvider(widget.client!.id));
 
       if (mounted) {
-        _showSnackbar('Cliente enviado a la papelera');
+        context.showCustomSnackbar('Cliente enviado a la papelera');
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        _showSnackbar('Error al eliminar: $e', isError: true);
+        context.showCustomSnackbar('Error al eliminar: $e', isError: true);
       }
     } finally {
       if (mounted) {
@@ -310,12 +299,12 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
       ref.invalidate(trashedClientsProvider);
 
       if (mounted) {
-        _showSnackbar('Cliente restaurado con éxito');
+        context.showCustomSnackbar('Cliente restaurado con éxito');
         context.pop();
       }
     } catch (e) {
       if (mounted) {
-        _showSnackbar('Error al restaurar: $e', isError: true);
+        context.showCustomSnackbar('Error al restaurar: $e', isError: true);
       }
     } finally {
       if (mounted) {
