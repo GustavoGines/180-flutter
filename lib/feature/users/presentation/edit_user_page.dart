@@ -49,7 +49,7 @@ class _EditUserFormState extends ConsumerState<_EditUserForm> {
     // Inicializamos los controllers con los datos del usuario
     _name = TextEditingController(text: widget.user.name);
     _email = TextEditingController(text: widget.user.email);
-    _role = widget.user.role;
+    _role = widget.user.role.name;
   }
 
   @override

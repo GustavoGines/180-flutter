@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 import 'package:dio/dio.dart';
 import 'package:pasteleria_180_flutter/core/models/client.dart';
+import 'package:pasteleria_180_flutter/core/utils/client_dialogs.dart';
 // --- IMPORTAMOS EL DIÁLOGO DE DIRECCIÓN ---
 import 'package:pasteleria_180_flutter/feature/clients/address_form_dialog.dart';
 
@@ -174,14 +175,19 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
               (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
             );
             setState(() => _isLoading = false);
-            _showRestoreDialog(clientToRestore);
+            final restored = await ClientDialogs.showRestoreDialog(context, ref, clientToRestore);
+            if (restored && mounted) {
+                context.pop();
+            }
             return;
           } catch (parseError) {
             errorMessage =
                 'Se encontró un cliente eliminado, pero no se pudo leer.';
           }
         }
-        context.showCustomSnackbar(errorMessage, isError: true);
+        if (mounted) {
+          context.showCustomSnackbar(errorMessage, isError: true);
+        }
       }
     } finally {
       // 3. El loader se quita en CUALQUIER caso (éxito, error, o paso-al-modal)
@@ -270,48 +276,7 @@ class _ClientFormState extends ConsumerState<_ClientForm> {
     }
   }
 
-  Future<void> _showRestoreDialog(Client clientToRestore) async {
-    final didConfirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cliente Encontrado'),
-        content: Text(
-          'El cliente "${clientToRestore.name}" ya existe pero fue eliminado. ¿Deseas restaurarlo?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Sí, Restaurar'),
-          ),
-        ],
-      ),
-    );
 
-    if (didConfirm != true) return;
-    setState(() => _isLoading = true);
-    try {
-      await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
-      ref.invalidate(clientsListProvider);
-      ref.invalidate(trashedClientsProvider);
-
-      if (mounted) {
-        context.showCustomSnackbar('Cliente restaurado con éxito');
-        context.pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        context.showCustomSnackbar('Error al restaurar: $e', isError: true);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

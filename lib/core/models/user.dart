@@ -1,8 +1,10 @@
+import 'package:pasteleria_180_flutter/core/enums/user_role.dart';
+
 class AppUser {
   final int id;
   final String name;
   final String email;
-  final String role; // 'admin' | 'staff'
+  final UserRole role;
 
   AppUser(
       {required this.id,
@@ -14,8 +16,8 @@ class AppUser {
         id: j['id'],
         name: j['name'] ?? '',
         email: j['email'] ?? '',
-        role: j['role'] ?? 'staff',
+        role: UserRoleX.fromString(j['role'] ?? 'guest'),
       );
 
-  bool get isAdmin => role == 'admin';
+  bool get isAdmin => role == UserRole.admin;
 }

@@ -5,8 +5,8 @@ import 'package:collection/collection.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'package:pasteleria_180_flutter/core/utils/client_dialogs.dart';
 import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
-import '../../core/models/client.dart';
 import '../../core/models/order.dart';
 import '../clients/clients_repository.dart';
 import '../clients/address_form_dialog.dart';
@@ -177,7 +177,10 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
         ),
       );
     } on ClientExistsException catch (e) {
-      _showRestoreDialog(e.clientToRestore);
+      final restored = await ClientDialogs.showRestoreDialog(context, ref, e.clientToRestore);
+      if (restored) {
+        ref.read(newOrderControllerProvider.notifier).updateClient(e.clientToRestore);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -239,48 +242,7 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
     );
   }
 
-  Future<void> _showRestoreDialog(Client clientToRestore) async {
-    final didConfirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cliente Encontrado'),
-        content: Text(
-          'El cliente "${clientToRestore.name}" ya existe pero fue eliminado. ¿Deseas restaurarlo?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Sí, Restaurar'),
-          ),
-        ],
-      ),
-    );
 
-    if (didConfirm != true) return;
-
-    try {
-      await ref.read(newOrderControllerProvider.notifier).restoreClient(clientToRestore.id);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cliente restaurado y seleccionado'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al restaurar: $e'),
-          backgroundColor: Theme.of(context).colorScheme.onErrorContainer,
-        ),
-      );
-    }
-  }
 
   Future<void> _submit() async {
     final valid = _formKey.currentState?.validate() ?? false;

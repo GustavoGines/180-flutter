@@ -7,6 +7,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:pasteleria_180_flutter/core/ui/skeleton.dart';
 import 'package:pasteleria_180_flutter/core/models/client.dart'; // <-- AÑADIDO
+import 'package:pasteleria_180_flutter/core/utils/client_dialogs.dart'; // <-- AÑADIDO
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async'; // Para el Debouncer
@@ -120,7 +121,10 @@ class ClientsPage extends HookConsumerWidget {
           (clientData as Map).map((k, v) => MapEntry(k.toString(), v)),
         );
         if (!context.mounted) return;
-        _showRestoreDialog(context, ref, clientToRestore);
+        final restored = await ClientDialogs.showRestoreDialog(context, ref, clientToRestore);
+        if (restored) {
+            // Already handled by ClientDialogs
+        }
         return; // Sale del try/catch
       }
       errorMessage =
@@ -147,53 +151,7 @@ class ClientsPage extends HookConsumerWidget {
     }
   }
 
-  // --- Helper: Diálogo de Restauración (Copiado de client_form_page) ---
-  Future<void> _showRestoreDialog(
-    BuildContext context,
-    WidgetRef ref,
-    Client clientToRestore,
-  ) async {
-    final didConfirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cliente Encontrado'),
-        content: Text(
-          'El cliente "${clientToRestore.name}" ya existe pero fue eliminado. ¿Deseas restaurarlo?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Sí, Restaurar'),
-          ),
-        ],
-      ),
-    );
 
-    if (didConfirm != true) return;
-
-    try {
-      await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
-      final currentQuery = ref.read(clientSearchQueryProvider);
-      ref.invalidate(clientsListProvider(currentQuery));
-      if (currentQuery.isNotEmpty) {
-        ref.invalidate(clientsListProvider(''));
-      }
-      ref.invalidate(trashedClientsProvider);
-
-      if (context.mounted) {
-        context.showCustomSnackbar('Cliente restaurado con éxito');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        context.showCustomSnackbar('Error al restaurar: $e', isError: true);
-      }
-    }
-  }
-  // --- FIN DE LÓGICA DE CONTACTOS ---
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

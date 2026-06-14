@@ -16,9 +16,9 @@ class DioClient {
   DioClient._internal() {
     dio = Dio(
       BaseOptions(
-        baseUrl: kApiBase, // ← usa SIEMPRE la fuente única
-        connectTimeout: const Duration(seconds: 60),
-        receiveTimeout: const Duration(seconds: 60),
+        baseUrl: kApiBase, // ← usa kApiBase central
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 30),
         headers: {'Accept': 'application/json'},
       ),
     );

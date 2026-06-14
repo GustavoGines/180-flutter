@@ -21,11 +21,22 @@ import 'product_catalog.dart';
 
 // Provider que busca un solo pedido por su ID
 import 'package:pasteleria_180_flutter/core/ui/skeleton.dart';
+import 'package:pasteleria_180_flutter/core/enums/user_role.dart';
 
 final orderByIdProvider = FutureProvider.autoDispose.family<Order?, int>((
   ref,
   orderId,
 ) async {
+  // 1. Buscar primero en la caché en memoria (ventana de órdenes)
+  final windowAsync = ref.read(ordersWindowProvider);
+  if (windowAsync.hasValue && windowAsync.value != null) {
+    final cachedOrder = windowAsync.value!.where((o) => o.id == orderId).firstOrNull;
+    if (cachedOrder != null) {
+      return cachedOrder;
+    }
+  }
+
+  // 2. Fallback a petición de red
   final repository = ref.watch(ordersRepoProvider);
   return repository.getOrderById(orderId);
 });
@@ -78,7 +89,7 @@ class OrderDetailPage extends ConsumerWidget {
 
         // --- Lógica de variables ---
         final userRole = ref.watch(authStateProvider).user?.role;
-        final bool canEdit = userRole == 'admin' || userRole == 'staff';
+        final bool canEdit = userRole == UserRole.admin || userRole == UserRole.staff;
 
         final itemsSubtotal = order.items.fold<double>(
           0.0,

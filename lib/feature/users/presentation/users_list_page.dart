@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/user.dart';
+import '../../../core/enums/user_role.dart';
 import '../../auth/auth_state.dart';
 import '../data/users_repository.dart';
 import 'create_user_page.dart'; // Para navegar a la pág de creación
@@ -83,7 +84,7 @@ class _UsersListPageState extends ConsumerState<UsersListPage> {
   Widget build(BuildContext context) {
     // --- Verificación de Admin ---
     final auth = ref.watch(authStateProvider);
-    if (auth.user?.role != 'admin') {
+    if (auth.user?.role != UserRole.admin) {
       return const Scaffold(
         body: Center(
           child: Text('Acceso denegado. Solo para administradores.'),
@@ -208,7 +209,7 @@ class _UsersListPageState extends ConsumerState<UsersListPage> {
                           children: [
                             Chip(
                               label: Text(
-                                user.role == 'admin' ? 'Admin' : 'Staff',
+                                user.role == UserRole.admin ? 'Admin' : 'Staff',
                                 style: TextStyle(
                                   color:
                                       user.isAdmin ? Colors.red : Colors.blue,
