@@ -70,7 +70,7 @@ class OrderDetailController {
 
     if (confirm) {
       try {
-        final Order? updatedOrder = await ref.read(ordersRepoProvider).markAsUnpaid(order.id);
+        final updatedOrder = await ref.read(ordersRepoProvider).markAsUnpaid(order.id);
         if (updatedOrder != null) {
           await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
         }

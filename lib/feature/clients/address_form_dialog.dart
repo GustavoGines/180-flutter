@@ -170,7 +170,7 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
 
       if (mounted) {
         try {
-          _showSnackbar(
+          context.showCustomSnackbar(
             isEditMode
                 ? 'Dirección actualizada'
                 : 'Dirección añadida con éxito',
