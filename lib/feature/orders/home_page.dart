@@ -66,6 +66,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   Timer? _jumpCooldownTimer;
   ImageProvider? _logoImageProvider;
 
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -245,16 +248,52 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Image.asset('assets/images/logo_180.png', height: 50.0),
-            const SizedBox(width: 15),
-            const Text('Pedidos'),
-          ],
-        ),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Buscar cliente...',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
+                style: const TextStyle(fontSize: 16),
+                onChanged: (val) {
+                  ref.read(orderSearchQueryProvider.notifier).state = val;
+                },
+              )
+            : Row(
+                children: [
+                  Image.asset('assets/images/logo_180.png', height: 50.0),
+                  const SizedBox(width: 15),
+                  const Text('Pedidos'),
+                ],
+              ),
         centerTitle: false,
 
         actions: [
+          if (_isSearching)
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () {
+                setState(() {
+                  _isSearching = false;
+                  _searchController.clear();
+                  ref.read(orderSearchQueryProvider.notifier).state = '';
+                });
+              },
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.search),
+              tooltip: 'Buscar pedidos',
+              onPressed: () {
+                setState(() {
+                  _isSearching = true;
+                });
+              },
+            ),
           // Botón de recarga
           IconButton(
             tooltip: 'Recargar pedidos',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // Definiciones de Color para asegurar consistencia
 const Color _primaryPink = Color(0xFFF8B6B6);
@@ -50,8 +51,8 @@ final ThemeData lightTheme = ThemeData(
     surface: Colors.white,
     onPrimary: Colors.white, // Color de iconos y texto sobre el color primario
     onSurface: Colors.black87,
-    // NO AÑADIMOS brightness: Brightness.light, ya que es el default
   ),
+  textTheme: GoogleFonts.outfitTextTheme(ThemeData.light().textTheme),
   scaffoldBackgroundColor: Colors.grey[50], // Fondo ligeramente gris
   appBarTheme: _appBarThemeLight,
 
@@ -90,6 +91,10 @@ final ThemeData darkTheme = ThemeData(
     surface: _darkSurface, // Fondo para Cards/Surfaces
     onPrimary: Colors.black, // Texto sobre el rosa
     onSurface: _darkOnSurface,
+  ),
+  textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme).apply(
+    bodyColor: _darkOnSurface,
+    displayColor: _darkOnSurface,
   ),
   scaffoldBackgroundColor: _darkBackground,
   appBarTheme: _appBarThemeDark,

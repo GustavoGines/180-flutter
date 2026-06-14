@@ -42,6 +42,17 @@ class GoRouterNotifier extends ChangeNotifier {
   }
 }
 
+// ✅ Función de transición Fade
+CustomTransitionPage<T> _fadePageBuilder<T>(BuildContext context, GoRouterState state, Widget child) {
+  return CustomTransitionPage<T>(
+    key: state.pageKey,
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
+  );
+}
+
 // ✅ Router principal
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(goRouterNotifierProvider);
@@ -52,73 +63,73 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
 
     routes: [
-      GoRoute(path: '/loading', builder: (_, __) => const LoadingPage()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginPage()),
+      GoRoute(path: '/loading', pageBuilder: (context, state) => _fadePageBuilder(context, state, const LoadingPage())),
+      GoRoute(path: '/login', pageBuilder: (context, state) => _fadePageBuilder(context, state, const LoginPage())),
       GoRoute(
         path: '/forgot-password',
-        builder: (_, __) => const ForgotPasswordPage(),
+        pageBuilder: (context, state) => _fadePageBuilder(context, state, const ForgotPasswordPage()),
       ),
       GoRoute(
         path: '/reset-password',
-        builder: (_, state) {
+        pageBuilder: (context, state) {
           final token = state.uri.queryParameters['token'];
           final email = state.uri.queryParameters['email'];
           if (token != null && email != null) {
-            return ResetPasswordPage(token: token, email: email);
+            return _fadePageBuilder(context, state, ResetPasswordPage(token: token, email: email));
           }
-          return const LoginPage();
+          return _fadePageBuilder(context, state, const LoginPage());
         },
       ),
-      GoRoute(path: '/', builder: (_, __) => const HomePage()),
-      GoRoute(path: '/new_order', builder: (_, __) => const NewOrderPage()),
+      GoRoute(path: '/', pageBuilder: (context, state) => _fadePageBuilder(context, state, const HomePage())),
+      GoRoute(path: '/new_order', pageBuilder: (context, state) => _fadePageBuilder(context, state, const NewOrderPage())),
       GoRoute(
         path: '/order/:id',
-        builder: (_, state) =>
-            OrderDetailPage(orderId: int.parse(state.pathParameters['id']!)),
+        pageBuilder: (context, state) =>
+            _fadePageBuilder(context, state, OrderDetailPage(orderId: int.parse(state.pathParameters['id']!))),
         routes: [
           GoRoute(
             path: 'edit',
-            builder: (_, state) =>
-                NewOrderPage(orderId: int.parse(state.pathParameters['id']!)),
+            pageBuilder: (context, state) =>
+                _fadePageBuilder(context, state, NewOrderPage(orderId: int.parse(state.pathParameters['id']!))),
           ),
           GoRoute(
             path: 'pdf/preview',
-            builder: (_, state) =>
-                PdfPreviewPage(orderId: int.parse(state.pathParameters['id']!)),
+            pageBuilder: (context, state) =>
+                _fadePageBuilder(context, state, PdfPreviewPage(orderId: int.parse(state.pathParameters['id']!))),
           ),
         ],
       ),
       GoRoute(
         path: '/users',
-        builder: (_, __) => const UsersListPage(),
+        pageBuilder: (context, state) => _fadePageBuilder(context, state, const UsersListPage()),
         routes: [
-          GoRoute(path: 'new', builder: (_, __) => const CreateUserPage()),
+          GoRoute(path: 'new', pageBuilder: (context, state) => _fadePageBuilder(context, state, const CreateUserPage())),
           GoRoute(
             path: ':id/edit',
-            builder: (_, state) =>
-                EditUserPage(userId: int.parse(state.pathParameters['id']!)),
+            pageBuilder: (context, state) =>
+                _fadePageBuilder(context, state, EditUserPage(userId: int.parse(state.pathParameters['id']!))),
           ),
         ],
       ),
       GoRoute(
         path: '/clients',
-        builder: (_, __) => const ClientsPage(),
+        pageBuilder: (context, state) => _fadePageBuilder(context, state, const ClientsPage()),
         routes: [
-          GoRoute(path: 'new', builder: (_, __) => const ClientFormPage()),
+          GoRoute(path: 'new', pageBuilder: (context, state) => _fadePageBuilder(context, state, const ClientFormPage())),
           GoRoute(
             path: 'trashed',
-            builder: (_, __) => const TrashedClientsPage(),
+            pageBuilder: (context, state) => _fadePageBuilder(context, state, const TrashedClientsPage()),
           ),
           GoRoute(
             path: ':id',
-            builder: (_, state) =>
-                ClientDetailPage(id: int.parse(state.pathParameters['id']!)),
+            pageBuilder: (context, state) =>
+                _fadePageBuilder(context, state, ClientDetailPage(id: int.parse(state.pathParameters['id']!))),
             routes: [
               GoRoute(
                 path: 'edit',
-                builder: (_, state) => ClientFormPage(
+                pageBuilder: (context, state) => _fadePageBuilder(context, state, ClientFormPage(
                   clientId: int.parse(state.pathParameters['id']!),
-                ),
+                )),
               ),
             ],
           ),
@@ -126,18 +137,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/admin/catalog',
-        builder: (_, __) => const AdminCatalogPage(),
+        pageBuilder: (context, state) => _fadePageBuilder(context, state, const AdminCatalogPage()),
         routes: [
           GoRoute(
             path: 'product/new',
-            builder: (_, __) => const ProductFormPage(),
+            pageBuilder: (context, state) => _fadePageBuilder(context, state, const ProductFormPage()),
           ),
           GoRoute(
             path: 'product/edit',
-            builder: (_, state) {
-              // Pasamos el producto completo como objeto 'extra'
+            pageBuilder: (context, state) {
               final product = state.extra as Product;
-              return ProductFormPage(productToEdit: product);
+              return _fadePageBuilder(context, state, ProductFormPage(productToEdit: product));
             },
           ),
         ],

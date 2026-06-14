@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'package:collection/collection.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:photo_view/photo_view.dart';
+import 'package:photo_view/photo_view_gallery.dart';
 import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
 import 'package:pasteleria_180_flutter/core/theme/order_status_colors.dart';
 import 'package:pasteleria_180_flutter/feature/orders/home_page.dart';
@@ -291,7 +293,7 @@ class OrderDetailPage extends ConsumerWidget {
                               return Padding(
                                 padding: const EdgeInsets.only(right: 10),
                                 child: GestureDetector(
-                                  onTap: () => _showImageDialog(context, url),
+                                  onTap: () => _showImageGallery(context, allPhotoUrls, index),
                                   child: Hero(
                                     tag: url,
                                     child: ClipRRect(
@@ -1365,66 +1367,44 @@ class OrderDetailPage extends ConsumerWidget {
     );
   }
 
-  // --- _showImageDialog (Adaptado al tema) ---
-  void _showImageDialog(BuildContext context, String imageUrl) {
-    final cs = Theme.of(context).colorScheme;
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 40,
-          ),
-          backgroundColor: cs.surface, // ADAPTADO
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Expanded(
-                child: InteractiveViewer(
-                  panEnabled: true,
-                  minScale: 0.5,
-                  maxScale: 4.0,
-                  child: Hero(
-                    tag: imageUrl,
-                    child: Image.network(
-                      imageUrl,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                            color: cs.primary,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) => Center(
-                        child: Icon(
-                          Icons.broken_image,
-                          color: cs.onSurfaceVariant,
-                          size: 50,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              TextButton(
-                child: Text("Cerrar", style: TextStyle(color: cs.primary)),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-              const SizedBox(height: 10),
-            ],
-          ),
-        );
-      },
+  // --- _showImageGallery (Galería Interactiva M3) ---
+  void _showImageGallery(BuildContext context, List<String> imageUrls, int initialIndex) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (context, _, __) {
+          return Scaffold(
+            backgroundColor: Colors.black.withValues(alpha: 0.9),
+            extendBodyBehindAppBar: true,
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: Colors.white),
+            ),
+            body: PhotoViewGallery.builder(
+              itemCount: imageUrls.length,
+              pageController: PageController(initialPage: initialIndex),
+              builder: (context, index) {
+                final url = imageUrls[index];
+                return PhotoViewGalleryPageOptions(
+                  imageProvider: NetworkImage(url),
+                  heroAttributes: PhotoViewHeroAttributes(tag: url),
+                  minScale: PhotoViewComputedScale.contained,
+                  maxScale: PhotoViewComputedScale.covered * 3,
+                );
+              },
+              loadingBuilder: (context, event) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                );
+              },
+            ),
+          );
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
     );
   }
 
