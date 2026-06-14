@@ -1572,6 +1572,28 @@ class OrderDetailPage extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
     // --- FIN ---
 
+    if (newStatus == OrderStatus.canceled) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Confirmar Cancelación'),
+          content: const Text('¿Estás seguro de que deseas cancelar este pedido?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('No'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Sí, cancelar', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
     try {
       // 1. Capturamos la orden actualizada
       // (Tu repo devuelve Order? pero updateOrderStatus en el Notifier también lo hace)
