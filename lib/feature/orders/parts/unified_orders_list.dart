@@ -90,46 +90,54 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
         }
 
         // 2. USAR initialScrollIndex Y initialAlignment
-        return ScrollablePositionedList.builder(
-          itemScrollController: widget.itemScrollController,
-          itemPositionsListener: widget.itemPositionsListener,
-          physics: const AlwaysScrollableScrollPhysics(),
-
-          // ✅ Usamos el índice calculado solo en el primer render
-          initialScrollIndex: initialIndex,
-          initialAlignment: 0.15,
-
-          itemCount: _flatList.length,
-          itemBuilder: (context, index) {
-            // ... (Resto del itemBuilder)
-            final item = _flatList[index];
-            switch (item.type) {
-              case _ItemType.monthBanner:
-                return _MonthBanner(
-                  date: item.data,
-                  logoImage: widget.logoImageProvider, // 👈 Pasa el logo aquí
-                );
-
-              case _ItemType.weekSeparator:
-                return _WeekSeparator(
-                  weekStart: item.data['ws'],
-                  weekEnd: item.data['we'],
-                  total: item.data['total'],
-                  muted: item.data['muted'],
-                  currentDisplayMonth: item.data['current_month'] as DateTime,
-                );
-
-              case _ItemType.emptyMonthPlaceholder:
-                return _EmptyMonthPlaceholder(date: item.data);
-
-              case _ItemType.dayHeader:
-                return _DateHeader(orders: item.data);
-              case _ItemType.orderCard:
-                return _buildOrderCard(context, ref, item.data);
-              case _ItemType.padding:
-                return SizedBox(height: item.data);
-            }
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(ordersWindowProvider);
+            try {
+              await ref.read(ordersWindowProvider.future);
+            } catch (_) {}
           },
+          child: ScrollablePositionedList.builder(
+            itemScrollController: widget.itemScrollController,
+            itemPositionsListener: widget.itemPositionsListener,
+            physics: const AlwaysScrollableScrollPhysics(),
+
+            // ✅ Usamos el índice calculado solo en el primer render
+            initialScrollIndex: initialIndex,
+            initialAlignment: 0.15,
+
+            itemCount: _flatList.length,
+            itemBuilder: (context, index) {
+              // ... (Resto del itemBuilder)
+              final item = _flatList[index];
+              switch (item.type) {
+                case _ItemType.monthBanner:
+                  return _MonthBanner(
+                    date: item.data,
+                    logoImage: widget.logoImageProvider, // 👈 Pasa el logo aquí
+                  );
+
+                case _ItemType.weekSeparator:
+                  return _WeekSeparator(
+                    weekStart: item.data['ws'],
+                    weekEnd: item.data['we'],
+                    total: item.data['total'],
+                    muted: item.data['muted'],
+                    currentDisplayMonth: item.data['current_month'] as DateTime,
+                  );
+
+                case _ItemType.emptyMonthPlaceholder:
+                  return _EmptyMonthPlaceholder(date: item.data);
+
+                case _ItemType.dayHeader:
+                  return _DateHeader(orders: item.data);
+                case _ItemType.orderCard:
+                  return _buildOrderCard(context, ref, item.data);
+                case _ItemType.padding:
+                  return SizedBox(height: item.data);
+              }
+            },
+          ),
         );
       },
     );

@@ -209,8 +209,29 @@ class OrderCard extends ConsumerWidget {
                               );
                             }).toList(),
                             onChanged: (OrderStatus? newValue) async {
-                              if (newValue != null &&
-                                  newValue != order.status) {
+                              if (newValue != null && newValue != order.status) {
+                                if (newValue == OrderStatus.canceled) {
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('Confirmar Cancelación'),
+                                      content: const Text('¿Estás seguro de que deseas cancelar este pedido?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.of(context).pop(false),
+                                          child: const Text('No'),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () => Navigator.of(context).pop(true),
+                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                          child: const Text('Sí, cancelar', style: TextStyle(color: Colors.white)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirm != true) return;
+                                }
+
                                 await ref
                                     .read(ordersWindowProvider.notifier)
                                     .updateOrderStatus(order.id, newValue);

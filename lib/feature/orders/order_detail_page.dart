@@ -18,10 +18,12 @@ import 'orders_repository.dart';
 import 'product_catalog.dart';
 
 // Provider que busca un solo pedido por su ID
+import 'package:pasteleria_180_flutter/core/ui/skeleton.dart';
+
 final orderByIdProvider = FutureProvider.autoDispose.family<Order?, int>((
   ref,
   orderId,
-) {
+) async {
   final repository = ref.watch(ordersRepoProvider);
   return repository.getOrderById(orderId);
 });
@@ -52,7 +54,10 @@ class OrderDetailPage extends ConsumerWidget {
     return orderAsyncValue.when(
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('Detalle del Pedido')),
-        body: Center(child: CircularProgressIndicator(color: cs.primary)),
+        body: const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: SkeletonList(itemCount: 4, itemHeight: 120.0),
+        ),
       ),
       error: (err, stack) => Scaffold(
         appBar: AppBar(title: const Text('Detalle del Pedido')),

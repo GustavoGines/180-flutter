@@ -11,9 +11,20 @@ class SelectedMonth extends rp.Notifier<DateTime> {
     return DateTime(now.year, now.month, 1);
   }
 
-  void setTo(DateTime m) => state = DateTime(m.year, m.month, 1);
-  void next() => state = DateTime(state.year, state.month + 1, 1);
-  void prev() => state = DateTime(state.year, state.month - 1, 1);
+  void setTo(DateTime m) {
+    state = DateTime(m.year, m.month, 1);
+    ref.read(ordersWindowProvider.notifier).fetchMonthIfNeeded(state);
+  }
+
+  void next() {
+    state = DateTime(state.year, state.month + 1, 1);
+    ref.read(ordersWindowProvider.notifier).fetchMonthIfNeeded(state);
+  }
+
+  void prev() {
+    state = DateTime(state.year, state.month - 1, 1);
+    ref.read(ordersWindowProvider.notifier).fetchMonthIfNeeded(state);
+  }
 }
 
 final selectedMonthProvider = rp.NotifierProvider<SelectedMonth, DateTime>(
@@ -32,29 +43,64 @@ const int _kFwdMonths = 24;
 class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
   // El método 'build' hace lo mismo que tu FutureProvider:
   // Carga los datos iniciales.
+  final Set<DateTime> _fetchedMonths = {};
+
   @override
   Future<List<Order>> build() async {
     final repository = ref.watch(ordersRepoProvider);
     final now = DateTime.now();
     final centerMonth = DateTime(now.year, now.month, 1);
 
-    // 👇 RECUERDA: Usamos +_kFwdMonths (49 meses), no +_kFwdMonths+1 (50)
+    // Cargar inicialmente solo ±3 meses (ventana de 7 meses) para carga rápida
     final from = DateTime(
       centerMonth.year,
-      centerMonth.month - _kBackMonths,
+      centerMonth.month - 3,
       1,
     );
     final to = DateTime(
       centerMonth.year,
-      centerMonth.month + _kFwdMonths + 1, // 👈 Sumamos 1 mes más
+      centerMonth.month + 4,
       1,
-    ).subtract(const Duration(days: 1)); // 👈 Y restamos 1 día
+    ).subtract(const Duration(days: 1));
 
     final orders = await repository.getOrders(from: from, to: to);
+
+    // Marcar estos 7 meses como cacheados
+    for (int i = -3; i <= 3; i++) {
+      _fetchedMonths.add(DateTime(centerMonth.year, centerMonth.month + i, 1));
+    }
 
     orders.sortedByDateAndStatus();
 
     return orders;
+  }
+
+  // 👇 NUEVO: Método para fetch dinámico al hacer scroll o cambiar de mes
+  Future<void> fetchMonthIfNeeded(DateTime month) async {
+    final monthKey = DateTime(month.year, month.month, 1);
+    if (_fetchedMonths.contains(monthKey)) return;
+
+    // Marcamos como fetcheado optimísticamente para no disparar duplicados
+    _fetchedMonths.add(monthKey);
+
+    final from = monthKey;
+    final to = DateTime(monthKey.year, monthKey.month + 1, 1)
+        .subtract(const Duration(days: 1));
+
+    try {
+      final repository = ref.read(ordersRepoProvider);
+      final newOrders = await repository.getOrders(from: from, to: to);
+      
+      if (newOrders.isNotEmpty) {
+        final previousState = state.valueOrNull ?? [];
+        final newList = [...previousState, ...newOrders];
+        newList.sortedByDateAndStatus();
+        state = AsyncData(newList);
+      }
+    } catch (e) {
+      // Si falla, permitimos reintento en el futuro
+      _fetchedMonths.remove(monthKey);
+    }
   }
 
   // 👇 2. MÉTODO PÚBLICO para actualizar un estado

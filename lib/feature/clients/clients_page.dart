@@ -5,6 +5,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 // ignore: legacy_Linter_file_Name
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:pasteleria_180_flutter/core/ui/skeleton.dart';
 import 'package:pasteleria_180_flutter/core/models/client.dart'; // <-- AÑADIDO
 import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 import 'package:go_router/go_router.dart';
@@ -268,7 +269,10 @@ class ClientsPage extends HookConsumerWidget {
           ),
           Expanded(
             child: asyncClients.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: SkeletonList(itemCount: 8, itemHeight: 70.0),
+              ),
               error: (err, stack) =>
                   Center(child: Text('Error al cargar clientes: $err')),
               data: (clients) {
