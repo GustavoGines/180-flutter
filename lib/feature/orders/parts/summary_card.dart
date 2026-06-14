@@ -60,10 +60,15 @@ class _SummaryCard extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: textTheme.labelLarge?.copyWith(
-                      color: cs.onSurfaceVariant,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      title,
+                      style: textTheme.labelLarge?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
                     ),
                   ),
                   const SizedBox(height: 2),

@@ -267,7 +267,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                 children: [
                   Image.asset('assets/images/logo_180.png', height: 50.0),
                   const SizedBox(width: 15),
-                  const Text('Pedidos'),
+                  const Flexible(
+                    child: Text(
+                      'Pedidos',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
         centerTitle: false,
