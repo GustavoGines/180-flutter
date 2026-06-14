@@ -89,6 +89,23 @@ class OrderCard extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Row(
                     children: [
+                      // Contador de ítems
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? cs.surfaceContainerHighest : cs.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${order.items.length} ítems',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: isDarkMode ? cs.onSurfaceVariant : cs.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       // 👇 NUEVO: Icono de "Pagado"
                       if (order.isPaid)
                         Padding(

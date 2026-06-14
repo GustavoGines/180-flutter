@@ -104,10 +104,11 @@ class _AdminCatalogPageState extends ConsumerState<AdminCatalogPage>
   }
 
   void _handleCreateAction(int index) {
-    if (index < 3) {
+    final int productCategoriesCount = ProductCategory.values.length;
+    if (index < productCategoriesCount) {
       // Crear Producto
       context.push('/admin/catalog/product/new');
-    } else if (index == 3) {
+    } else if (index == productCategoriesCount) {
       // Crear Relleno
       showDialog(context: context, builder: (_) => const FillingFormDialog());
     } else {

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+final GlobalKey<ScaffoldMessengerState> globalSnackbarKey = GlobalKey<ScaffoldMessengerState>();
+
 extension SnackbarHelper on BuildContext {
   void showCustomSnackbar(String message, {bool isError = false}) {
     if (!mounted) return;

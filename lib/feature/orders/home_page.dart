@@ -414,55 +414,6 @@ class _HomePageState extends ConsumerState<HomePage> {
             },
           ),
         ],
-
-        // Barra inferior fija con Resumen y Meses
-        bottom: PreferredSize(
-          // 👇 AUMENTADO de 148 a 170 para evitar que el SummaryCard
-          // "tape" el logo o rompa el layout al crecer por el texto "Pendiente".
-          preferredSize: const Size.fromHeight(170),
-          child: Column(
-            children: [
-              Consumer(
-                builder: (context, ref, child) {
-                  // final totalIncome = ref.watch(monthlyIncomeProvider);
-                  // final totalOrders = ref.watch(monthlyOrdersCountProvider);
-                  final cs = Theme.of(context).colorScheme;
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _SummaryCard(
-                            title: 'Ingreso Mes',
-                            valueProvider: monthlyIncomeProvider,
-                            icon: Icons.trending_up,
-                            color: cs.tertiary,
-                            pendingValueProvider: monthlyPendingIncomeProvider,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _SummaryCard(
-                            title: 'Pedidos',
-                            valueProvider: monthlyOrdersCountProvider,
-                            icon: Icons.shopping_bag_outlined,
-                            color: cs.tertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              _MonthTopBar(
-                key: _monthBarKey,
-                onSelect: (m) {
-                  _jumpToMonth(m);
-                },
-              ),
-            ],
-          ),
-        ),
       ),
 
       // SpeedDial para acciones flotantes
@@ -542,8 +493,49 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
 
       // EL CUERPO (BODY) DE LA PÁGINA
-      body: ordersAsync.when(
-        // 1. MIENTRAS CARGA: Muestra un spinner centrado.
+      body: Column(
+        children: [
+          // Barra superior flexible con Resumen y Meses (Antes estaba en AppBar.bottom)
+          Consumer(
+            builder: (context, ref, child) {
+              final cs = Theme.of(context).colorScheme;
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _SummaryCard(
+                        title: 'Ingreso Mes',
+                        valueProvider: monthlyIncomeProvider,
+                        icon: Icons.trending_up,
+                        color: cs.tertiary,
+                        pendingValueProvider: monthlyPendingIncomeProvider,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SummaryCard(
+                        title: 'Pedidos',
+                        valueProvider: monthlyOrdersCountProvider,
+                        icon: Icons.shopping_bag_outlined,
+                        color: cs.tertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          _MonthTopBar(
+            key: _monthBarKey,
+            onSelect: (m) {
+              _jumpToMonth(m);
+            },
+          ),
+          
+          Expanded(
+            child: ordersAsync.when(
+              // 1. MIENTRAS CARGA: Muestra un spinner centrado.
         loading: () => Center(
           child: CircularProgressIndicator(
             color: Theme.of(context).colorScheme.primary,
@@ -574,6 +566,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           dayIndexMap: _dayIndexMap,
           logoImageProvider: _logoImageProvider,
         ),
+            ),
+          ),
+        ],
       ),
     );
   }

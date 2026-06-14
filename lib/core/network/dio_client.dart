@@ -6,6 +6,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'auth_interceptor.dart';
 import 'package:pasteleria_180_flutter/core/config.dart'; // ← usa kApiBase central
 
+import 'package:flutter/material.dart';
+import 'package:pasteleria_180_flutter/core/utils/snackbar_helper.dart';
+
 class DioClient {
   static final DioClient _instance = DioClient._internal();
   factory DioClient() => _instance;
@@ -49,8 +52,26 @@ class DioClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onError: (DioException e, handler) {
-          if (e.type == DioExceptionType.connectionError) {
-            debugPrint("🌐 Sin conexión a internet");
+          if (e.type == DioExceptionType.connectionError ||
+              e.type == DioExceptionType.connectionTimeout) {
+            debugPrint("🌐 Error de red global capturado");
+            
+            // Mostrar un banner visual si no hay red usando la global key
+            globalSnackbarKey.currentState?.showSnackBar(
+              SnackBar(
+                content: const Row(
+                  children: [
+                    Icon(Icons.wifi_off, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(child: Text("Sin conexión a internet. Revisa tu red.")),
+                  ],
+                ),
+                backgroundColor: Colors.red.shade800,
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.all(16),
+                duration: const Duration(seconds: 4),
+              ),
+            );
           }
           handler.next(e);
         },

@@ -58,7 +58,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(goRouterNotifierProvider);
 
   return GoRouter(
-    debugLogDiagnostics: true,
+    debugLogDiagnostics: false,
     initialLocation: '/loading',
     refreshListenable: notifier,
 

@@ -54,10 +54,6 @@ class OrdersRepository {
     required DateTime from,
     required DateTime to,
   }) async {
-    // 1. Definir el tiempo mínimo de carga percibida (ej. 500 ms)
-    const Duration minDuration = Duration(milliseconds: 500);
-    final stopwatch = Stopwatch()..start();
-
     final formatter = DateFormat('yyyy-MM-dd');
     final fromStr = formatter.format(from);
     final toStr = formatter.format(to);
@@ -81,17 +77,6 @@ class OrdersRepository {
     } else {
       orders = [];
     }
-
-    // 3. Esperar el tiempo restante para alcanzar la duración mínima
-    final elapsed = stopwatch.elapsed;
-    if (elapsed < minDuration) {
-      final remaining = minDuration - elapsed;
-      await Future.delayed(remaining);
-      debugPrint(
-        '⌛ Se agregó un retraso de ${remaining.inMilliseconds}ms para asegurar la duración mínima.',
-      );
-    }
-    stopwatch.stop();
 
     return orders; // Devolver los datos después del retraso asegurado
   }

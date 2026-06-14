@@ -9,6 +9,7 @@ import 'package:pasteleria_180_flutter/core/services/firebase_messaging_service.
 import 'router.dart';
 import 'core/theme/theme_data.dart';
 import 'core/theme/theme_provider.dart';
+import 'package:pasteleria_180_flutter/core/utils/snackbar_helper.dart';
 
 // 🎨 Constantes de color y estilo
 const Color primaryPink = Color(0xFFF8B6B6);
@@ -58,6 +59,7 @@ class One80App extends ConsumerWidget {
     return MaterialApp.router(
       title: '180° Pastelería',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: globalSnackbarKey,
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: themeMode,

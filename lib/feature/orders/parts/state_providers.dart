@@ -75,7 +75,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
       _fetchedMonths.add(DateTime(centerMonth.year, centerMonth.month + i, 1));
     }
 
-    orders.sortedByDateAndStatus();
+    orders.sortByDateAndStatus();
 
     return orders;
   }
@@ -99,7 +99,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
       if (newOrders.isNotEmpty) {
         final previousState = state.valueOrNull ?? [];
         final newList = [...previousState, ...newOrders];
-        newList.sortedByDateAndStatus();
+        newList.sortByDateAndStatus();
         state = AsyncData(newList);
       }
     } catch (e) {
@@ -163,7 +163,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
     final previousState = await future;
     final newList = [...previousState, newOrder];
 
-    newList.sortedByDateAndStatus();
+    newList.sortByDateAndStatus();
 
     state = AsyncData(newList);
   }
@@ -177,7 +177,7 @@ class OrdersWindowNotifier extends rp.AutoDisposeAsyncNotifier<List<Order>> {
       return order.id == updatedOrder.id ? updatedOrder : order;
     }).toList();
 
-    newList.sortedByDateAndStatus();
+    newList.sortByDateAndStatus();
 
     state = AsyncData(newList);
   }

@@ -2,7 +2,7 @@ import 'package:pasteleria_180_flutter/core/models/order.dart';
 import 'package:pasteleria_180_flutter/core/enums/order_status.dart';
 
 extension OrderListExtension on List<Order> {
-  void sortedByDateAndStatus() {
+  void sortByDateAndStatus() {
     const statusOrder = {
       OrderStatus.pending: 0,
       OrderStatus.confirmed: 1,
