@@ -6,16 +6,15 @@ import 'package:go_router/go_router.dart';
 import 'package:collection/collection.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
+import 'package:pasteleria_180_flutter/core/theme/order_status_colors.dart';
 import 'package:pasteleria_180_flutter/feature/orders/home_page.dart';
-// <-- Tu nuevo generador
 
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
-import '../../core/models/client_address.dart'; // <-- IMPORTAR ClientAddress
+import '../../core/models/client_address.dart';
 import '../../core/enums/order_status.dart';
 import '../auth/auth_state.dart';
 import 'orders_repository.dart';
-// import 'home_page.dart'; // No parece usarse aquí
 import 'product_catalog.dart';
 
 // Provider que busca un solo pedido por su ID
@@ -31,42 +30,13 @@ class OrderDetailPage extends ConsumerWidget {
   final int orderId;
   const OrderDetailPage({super.key, required this.orderId});
 
-  // ======= Paleta Pastel y Traducciones (COLORES DE MARCA) =======
-  // (Tus colores y traducciones se mantienen intactos)
+  // Colores propios de esta página (no en la paleta de estados)
   static const Color darkBrown = Color(0xFF7A4A4A);
   static const Color accentRed = Color(0xFFE57373);
   static const _kPastelRose = Color(0xFFFFE3E8);
   static const _kPastelLavender = Color(0xFFEDE7FF);
   static const _kInkRose = Color(0xFFF3A9B9);
   static const _kInkLavender = Color(0xFFB4A6FF);
-  static const _kPastelMint = Color(0xFFD8F6EC);
-  static const _kPastelBabyBlue = Color(0xFFDFF1FF);
-
-  static const Map<OrderStatus, String> statusTranslations = {
-    OrderStatus.pending: 'Pendiente',
-    OrderStatus.confirmed: 'Confirmado',
-    OrderStatus.ready: 'Listo',
-    OrderStatus.delivered: 'Entregado',
-    OrderStatus.canceled: 'Cancelado',
-    OrderStatus.unknown: 'Desconocido',
-  };
-  static const Map<OrderStatus, Color> _statusPastelBg = {
-    OrderStatus.pending: Color(0xFFFFF9C4), // Amarillo clarito
-    OrderStatus.confirmed: _kPastelMint,
-    OrderStatus.ready: Color(0xFFFFE6EF),
-    OrderStatus.delivered: _kPastelBabyBlue,
-    OrderStatus.canceled: Color(0xFFFFE0E0),
-    OrderStatus.unknown: Colors.grey,
-  };
-  static const Map<OrderStatus, Color> _statusInk = {
-    OrderStatus.pending: Color(0xFFFBC02D), // Amarillo mostaza
-    OrderStatus.confirmed: Color(0xFF83D1B9),
-    OrderStatus.ready: _kInkRose,
-    OrderStatus.delivered: Color(0xFF8CC5F5),
-    OrderStatus.canceled: accentRed,
-    OrderStatus.unknown: Colors.black54,
-  };
-  // ======= Fin Paleta (Sin cambios) =======
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -121,8 +91,8 @@ class OrderDetailPage extends ConsumerWidget {
             .toSet()
             .toList();
 
-        final ink = _statusInk[order.status] ?? Colors.grey.shade600;
-        final bg = _statusPastelBg[order.status] ?? Colors.grey.shade300;
+        final bg = kStatusPastelBg[order.status] ?? Colors.grey.shade300;
+        final ink = kStatusInk[order.status] ?? Colors.grey.shade600;
         // --- Fin Lógica de variables ---
 
         return Scaffold(
@@ -254,15 +224,14 @@ class OrderDetailPage extends ConsumerWidget {
                                     // Fondo del menú desplegable
                                     dropdownColor: cs.surfaceContainerHighest,
                                     // --- FIN ---
-                                    items: statusTranslations.keys
-                                        .where((k) => k != OrderStatus.unknown)
+                                    items: kStatusTranslations.keys
                                         .map((OrderStatus value) {
                                       final Color optionColor =
-                                          _statusInk[value] ?? Colors.grey;
+                                          kStatusInk[value] ?? Colors.grey;
                                       return DropdownMenuItem<OrderStatus>(
                                         value: value,
                                         child: Text(
-                                          statusTranslations[value]!,
+                                          kStatusTranslations[value]!,
                                           style: TextStyle(
                                             color: optionColor,
                                             fontWeight: FontWeight.bold,

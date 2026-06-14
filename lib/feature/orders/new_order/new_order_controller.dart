@@ -192,6 +192,9 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
     if (state.selectedClient == null || state.items.isEmpty) {
       throw ValidationException('Revisa los campos obligatorios: Cliente y al menos un Producto.');
     }
+    if (state.eventDate == null) {
+      throw ValidationException('Debes seleccionar una fecha para el evento.');
+    }
     if (state.grandTotal <= 0 && state.items.isNotEmpty) {
       throw ValidationException('El total calculado es cero o negativo. Revisa los precios de los productos.');
     }

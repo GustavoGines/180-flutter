@@ -489,8 +489,6 @@ class ClientDetailPage extends ConsumerWidget {
               return ('Entregado', deliveredColor);
             case OrderStatus.canceled:
               return ('Cancelado', cancelledColor);
-            default:
-              return ('Desconocido', defaultColor);
           }
         }
 

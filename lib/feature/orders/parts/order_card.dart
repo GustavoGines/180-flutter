@@ -1,40 +1,7 @@
 part of '../home_page.dart';
 
-// Paleta pastel (SIN CAMBIOS)
-const _kPastelBabyBlue = Color(0xFFDFF1FF);
-const _kPastelMint = Color(0xFFD8F6EC);
-const _kPastelSand = Color(0xFFF6EEDF);
+// Colores locales removidos, usa shared themes
 
-const _kInkBabyBlue = Color(0xFF8CC5F5);
-const _kInkMint = Color(0xFF83D1B9);
-const _kInkSand = Color(0xFFC9B99A);
-
-// Fondos pastel por estado (SIN CAMBIOS)
-const _statusPastelBg = <OrderStatus, Color>{
-  OrderStatus.pending: Color(0xFFFFF9C4), // Amarillo muy claro
-  OrderStatus.confirmed: _kPastelMint,
-  OrderStatus.ready: Color(0xFFFFE6EF),
-  OrderStatus.delivered: _kPastelBabyBlue,
-  OrderStatus.canceled: Color(0xFFFFE0E0),
-};
-
-// Acento/borde por estado (SIN CAMBIOS)
-const _statusInk = <OrderStatus, Color>{
-  OrderStatus.pending: Color(0xFFFBC02D), // Amarillo mostaza oscuro
-  OrderStatus.confirmed: _kInkMint,
-  OrderStatus.ready: Color(0xFFF3A9B9),
-  OrderStatus.delivered: _kInkBabyBlue,
-  OrderStatus.canceled: Color(0xFFE57373),
-};
-
-// Traducciones visibles (SIN CAMBIOS)
-const _statusTranslations = <OrderStatus, String>{
-  OrderStatus.pending: 'Pendiente',
-  OrderStatus.confirmed: 'Confirmado',
-  OrderStatus.ready: 'Listo',
-  OrderStatus.delivered: 'Entregado',
-  OrderStatus.canceled: 'Cancelado',
-};
 
 class OrderCard extends ConsumerWidget {
   const OrderCard({super.key, required this.order});
@@ -53,9 +20,9 @@ class OrderCard extends ConsumerWidget {
     final isDarkMode = theme.brightness == Brightness.dark;
 
     // 2. Obtenemos los colores semánticos (esto no cambia)
-    final bg = _statusPastelBg[order.status] ?? _kPastelSand;
+    final bg = kStatusPastelBg[order.status] ?? kStatusBgFallback;
     final ink =
-        _statusInk[order.status] ?? _kInkSand; // Color de acento principal
+        kStatusInk[order.status] ?? kStatusInkFallback; // Color de acento principal
 
     // 3. Los colores de texto AHORA dependen del tema
     final primaryTextColor = cs.onSurface; // (Negro en light, Blanco en dark)
@@ -211,9 +178,9 @@ class OrderCard extends ConsumerWidget {
                             // 7. El fondo del menú desplegable debe usar el tema
                             dropdownColor: cs.surface,
                             // --- 👆 FIN ADAPTACIÓN 👆 ---
-                            items: _statusTranslations.keys
+                            items: kStatusTranslations.keys
                                 .map((OrderStatus value) {
-                              final c = _statusInk[value] ?? _kInkSand;
+                              final c = kStatusInk[value] ?? kStatusInkFallback;
                               return DropdownMenuItem<OrderStatus>(
                                 value: value,
                                 child: Row(
@@ -229,7 +196,7 @@ class OrderCard extends ConsumerWidget {
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      _statusTranslations[value]!,
+                                      kStatusTranslations[value]!,
                                       // Estilo en el menú desplegado (ya es dinámico)
                                       style: textTheme.bodySmall?.copyWith(
                                         fontSize: 12,

@@ -3,8 +3,7 @@ enum OrderStatus {
   confirmed,
   ready,
   delivered,
-  canceled,
-  unknown;
+  canceled;
 
   static OrderStatus fromString(String? status) {
     switch (status?.toLowerCase()) {
@@ -19,7 +18,7 @@ enum OrderStatus {
       case 'canceled':
         return OrderStatus.canceled;
       default:
-        return OrderStatus.unknown;
+        return OrderStatus.pending;
     }
   }
 

@@ -163,7 +163,12 @@ class ClientsPage extends HookConsumerWidget {
 
     if (newClient != null && context.mounted) {
       _showSnackbar(context, 'Cliente creado con éxito');
-      ref.invalidate(clientsListProvider); // Refresca la lista
+      final currentQuery = ref.read(clientSearchQueryProvider);
+      ref.invalidate(clientsListProvider(currentQuery));
+      if (currentQuery.isNotEmpty) {
+        // También invalida la lista vacía por si volvemos sin filtro
+        ref.invalidate(clientsListProvider(''));
+      }
       context.push(
         '/clients/${newClient.id}',
       ); // Navega al detalle del nuevo cliente
@@ -202,7 +207,11 @@ class ClientsPage extends HookConsumerWidget {
 
     try {
       await ref.read(clientsRepoProvider).restoreClient(clientToRestore.id);
-      ref.invalidate(clientsListProvider);
+      final currentQuery = ref.read(clientSearchQueryProvider);
+      ref.invalidate(clientsListProvider(currentQuery));
+      if (currentQuery.isNotEmpty) {
+        ref.invalidate(clientsListProvider(''));
+      }
       ref.invalidate(trashedClientsProvider);
 
       if (context.mounted) {

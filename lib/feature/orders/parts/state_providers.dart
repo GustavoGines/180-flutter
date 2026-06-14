@@ -185,9 +185,7 @@ final monthlyIncomeProvider = rp.Provider.autoDispose<double>((ref) {
   for (final o in monthOrders) {
     // CONDICIÓN: Status NO cancelado AND isPaid == true
     // (Abarca confirmed, ready, delivered si están pagados)
-    if (o.status != OrderStatus.canceled &&
-        o.status != OrderStatus.unknown &&
-        o.isPaid) {
+    if (o.status != OrderStatus.canceled && o.isPaid) {
       final v = o.total ?? 0;
       if (v >= 0) {
         ingresosMes += v;
@@ -226,14 +224,14 @@ final monthlyPendingIncomeProvider = rp.Provider.autoDispose<double>((ref) {
 /// ===============================================================
 /// Conteo de pedidos (ingresos) para el mes
 /// (Opcional: ¿Contamos solo los verdes o todos los activos?)
-/// Por ahora contamos todos los activos (no cancelados/unknown) para dar volumen de trabajo.
+/// Por ahora contamos todos los activos (no cancelados) para dar volumen de trabajo.
 /// ===============================================================
 final monthlyOrdersCountProvider = rp.Provider.autoDispose<int>((ref) {
   final monthOrders = ref.watch(selectedMonthOrdersProvider);
 
   int count = 0;
   for (final o in monthOrders) {
-    if (o.status != OrderStatus.canceled && o.status != OrderStatus.unknown) {
+    if (o.status != OrderStatus.canceled) {
       count++;
     }
   }

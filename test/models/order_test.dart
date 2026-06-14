@@ -56,9 +56,9 @@ void main() {
       expect(order.isPaid, false);
     });
 
-    test('status desconocido → fallback a OrderStatus.unknown', () {
+    test('status desconocido → fallback a OrderStatus.pending', () {
       final order = Order.fromJson(baseJson()..['status'] = 'flying_saucer');
-      expect(order.status, OrderStatus.unknown);
+      expect(order.status, OrderStatus.pending);
     });
 
     test('status "canceled" → OrderStatus.canceled', () {
