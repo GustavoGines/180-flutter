@@ -286,9 +286,23 @@ class _HomePageState extends ConsumerState<HomePage> {
                 case 'search':
                   showGlobalOrderSearch(
                     context,
-                    onJumpToDate: (date) {
-                      // Normalize the date to match the map keys (which are midnight)
+                    onJumpToDate: (date) async {
+                      final monthKey = DateTime(date.year, date.month, 1);
                       final dayKey = DateTime(date.year, date.month, date.day);
+
+                      // 1. Navegar al mes en la barra (y hacer fetch si no está cargado)
+                      ref.read(selectedMonthProvider.notifier).setTo(monthKey);
+
+                      // 2. Si el mes no está en caché, esperamos a que se cargue
+                      final notifier = ref.read(ordersWindowProvider.notifier);
+                      await notifier.fetchMonthIfNeeded(monthKey);
+
+                      // 3. Esperar un frame para que la lista se reconstruya con los nuevos datos
+                      if (!mounted) return;
+                      await Future.delayed(const Duration(milliseconds: 300));
+                      if (!mounted) return;
+
+                      // 4. Buscar el índice de ese día y hacer scroll
                       final index = _dayIndexMap[dayKey];
                       if (index != null) {
                         _itemScrollController.scrollTo(
@@ -296,8 +310,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                           duration: const Duration(milliseconds: 450),
                           curve: Curves.easeOut,
                         );
-                        // Make sure the month bar highlights the right month
-                        ref.read(selectedMonthProvider.notifier).setTo(DateTime(date.year, date.month));
                       }
                     },
                   );

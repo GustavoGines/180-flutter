@@ -22,6 +22,8 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
   Timer? _debounce;
   List<Order> _cachedResults = [];
   bool _isLoading = false;
+  // Token para evitar race conditions: si llega un resultado viejo, lo descartamos
+  int _searchToken = 0;
 
   @override
   void initState() {
@@ -38,7 +40,8 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
   }
 
   Future<void> _performSearch(String q) async {
-    if (q.trim().isEmpty) {
+    final trimmed = q.trim();
+    if (trimmed.isEmpty) {
       if (mounted) {
         setState(() {
           _cachedResults = [];
@@ -48,6 +51,12 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
       return;
     }
 
+    // Requiere al menos 2 caracteres para buscar
+    if (trimmed.length < 2) return;
+
+    // Incrementar el token ANTES del await para detectar búsquedas obsoletas
+    final token = ++_searchToken;
+
     if (mounted) {
       setState(() {
         _isLoading = true;
@@ -56,15 +65,16 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
 
     try {
       final repository = ref.read(ordersRepoProvider);
-      final results = await repository.searchOrders(q.trim());
-      if (mounted) {
+      final results = await repository.searchOrders(trimmed);
+      // Solo aplicar resultados si este request sigue siendo el más reciente
+      if (mounted && token == _searchToken) {
         setState(() {
           _cachedResults = results;
           _isLoading = false;
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && token == _searchToken) {
         setState(() {
           _isLoading = false;
         });
@@ -74,7 +84,7 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
+    _debounce = Timer(const Duration(milliseconds: 350), () {
       _performSearch(query);
     });
   }

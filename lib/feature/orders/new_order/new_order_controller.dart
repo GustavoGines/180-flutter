@@ -69,7 +69,11 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
   @override
   NewOrderState build() {
     // Estado inicial por defecto (Formulario vacío)
-    return const NewOrderState();
+    // Modo CREACIÓN: pre-inicializa la fecha de hoy para no confundir al usuario
+    final now = DateTime.now();
+    return NewOrderState(
+      eventDate: DateTime(now.year, now.month, now.day),
+    );
   }
 
   // --- Inicialización (Modo Edición) ---
@@ -107,7 +111,13 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
   }
 
   void updateStartTime(TimeOfDay time) {
-    state = state.copyWith(startTime: time);
+    // Calcula automáticamente endTime = startTime + 1 hora
+    final totalMinutes = time.hour * 60 + time.minute + 60;
+    final endTime = TimeOfDay(
+      hour: (totalMinutes ~/ 60) % 24,
+      minute: totalMinutes % 60,
+    );
+    state = state.copyWith(startTime: time, endTime: endTime);
   }
 
   void updateEndTime(TimeOfDay time) {

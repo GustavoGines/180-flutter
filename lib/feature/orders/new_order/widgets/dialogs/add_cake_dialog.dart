@@ -160,8 +160,9 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
     }
 
     final bool isSmallCake = selectedCakeType?.name == 'Mini Torta Personalizada (Base)' || selectedCakeType?.name == 'Micro Torta (Base)';
-    double extraMultiplier = isSmallCake ? 0.5 : cakeWeight;
-
+    // Para Micro/Mini Torta el precio del catálogo ES el precio final (no se multiplica por kg)
+    // Para torta normal se multiplica por los kg elegidos
+    double extraMultiplier = isSmallCake ? 1.0 : cakeWeight;
     double kgAdj = double.tryParse(kgAdjustmentsController.text) ?? 0.0;
     calculatedBasePrice = (selectedCakeType!.price + kgAdj) * extraMultiplier;
 
@@ -350,6 +351,10 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
       calculateCakePrice();
     }
 
+    // Determina si el tipo seleccionado es una torta pequeña (sin campo de kg)
+    final bool isSmallCake = selectedCakeType?.name == 'Mini Torta Personalizada (Base)' ||
+        selectedCakeType?.name == 'Micro Torta (Base)';
+
     return AlertDialog(
       title: Text(isEditing ? 'Editar Torta' : 'Agregar Torta'),
       content: SizedBox(
@@ -370,29 +375,31 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
                 decoration: const InputDecoration(labelText: 'Tipo de Torta', isDense: true),
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Text('Peso Base (Kg): '),
-                  IconButton(
-                    icon: const Icon(Icons.remove),
-                    onPressed: () => setState(() {
-                      if (cakeWeight > 0.5) {
-                        cakeWeight -= 0.5;
+              if (!isSmallCake) ...[
+                Row(
+                  children: [
+                    const Text('Peso Base (Kg): '),
+                    IconButton(
+                      icon: const Icon(Icons.remove),
+                      onPressed: () => setState(() {
+                        if (cakeWeight > 0.5) {
+                          cakeWeight -= 0.5;
+                          calculateCakePrice();
+                        }
+                      }),
+                    ),
+                    Text(cakeWeight.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      onPressed: () => setState(() {
+                        cakeWeight += 0.5;
                         calculateCakePrice();
-                      }
-                    }),
-                  ),
-                  Text(cakeWeight.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: () => setState(() {
-                      cakeWeight += 0.5;
-                      calculateCakePrice();
-                    }),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
+                      }),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ],
               Theme(
                 data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
