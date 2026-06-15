@@ -290,12 +290,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                       final monthKey = DateTime(date.year, date.month, 1);
                       final dayKey = DateTime(date.year, date.month, date.day);
 
-                      // 1. Navegar al mes en la barra (y hacer fetch si no está cargado)
-                      ref.read(selectedMonthProvider.notifier).setTo(monthKey);
-
-                      // 2. Si el mes no está en caché, esperamos a que se cargue
+                      // 1. Si el mes no está en caché, esperamos a que se cargue PRIMERO
                       final notifier = ref.read(ordersWindowProvider.notifier);
                       await notifier.fetchMonthIfNeeded(monthKey);
+
+                      // 2. Navegar al mes en la barra
+                      ref.read(selectedMonthProvider.notifier).setTo(monthKey);
 
                       // 3. Esperar un frame para que la lista se reconstruya con los nuevos datos
                       if (!mounted) return;
