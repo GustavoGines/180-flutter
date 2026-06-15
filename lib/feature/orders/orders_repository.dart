@@ -89,6 +89,29 @@ class OrdersRepository {
     return data as Map<String, dynamic>;
   }
 
+  Future<List<Order>> searchOrders(String query) async {
+    final res = await _dio.get(
+      '/orders',
+      queryParameters: {'search': query, 'per_page': 50},
+    );
+
+    final List<Order> orders;
+    final data = res.data;
+    if (data is Map<String, dynamic> && data.containsKey('data')) {
+      final List<dynamic> orderList = data['data'];
+      orders = orderList
+          .map((j) => Order.fromJson(j as Map<String, dynamic>))
+          .toList();
+    } else if (data is List<dynamic>) {
+      orders = data
+          .map((j) => Order.fromJson(j as Map<String, dynamic>))
+          .toList();
+    } else {
+      orders = [];
+    }
+    return orders;
+  }
+
   Future<Order> getOrderById(int id) async {
     final res = await _dio.get('/orders/$id');
     return Order.fromJson(_parseOrderData(res.data));

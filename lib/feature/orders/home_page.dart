@@ -28,6 +28,7 @@ import '../../core/models/order.dart';
 import '../../core/extensions/order_list_extension.dart';
 import '../../core/enums/order_status.dart';
 import '../auth/auth_state.dart';
+import 'order_search_delegate.dart';
 import 'package:pasteleria_180_flutter/core/app_distribution.dart';
 import 'package:pasteleria_180_flutter/core/config.dart' show kFlavor;
 import 'package:pasteleria_180_flutter/core/theme/order_status_colors.dart';
@@ -65,9 +66,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Timer? _jumpCooldownTimer;
   ImageProvider? _logoImageProvider;
-
-  bool _isSearching = false;
-  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -230,9 +228,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
-    final ordersAsync = ref.watch(ordersWindowProvider);
     final cs = Theme.of(context).colorScheme;
-    final isRefreshing = ordersAsync is AsyncLoading;
+    final ordersAsync = ref.watch(filteredOrdersWindowProvider);
+    final isRefreshing = ref.watch(ordersWindowProvider).isLoading ||
+        ref.watch(ordersWindowProvider).isRefreshing;
 
     // --- LÓGICA DE INICIALIZACIÓN Y SALTO EN BARRA DE MESES ---
     if (ordersAsync is AsyncData && !_didPerformInitialScroll) {
@@ -248,42 +247,16 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Buscar cliente...',
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                ),
-                style: const TextStyle(fontSize: 16),
-                onChanged: (val) {
-                  ref.read(orderSearchQueryProvider.notifier).state = val;
-                },
-              )
-            : Row(
-                children: [
-                  Image.asset('assets/images/logo_180.png', height: 50.0),
-                  const SizedBox(width: 15),
-                  const Text('Pedidos'),
-                ],
-              ),
+        title: Row(
+          children: [
+            Image.asset('assets/images/logo_180.png', height: 50.0),
+            const SizedBox(width: 15),
+            const Text('Pedidos'),
+          ],
+        ),
         centerTitle: false,
 
         actions: [
-          if (_isSearching)
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () {
-                setState(() {
-                  _isSearching = false;
-                  _searchController.clear();
-                  ref.read(orderSearchQueryProvider.notifier).state = '';
-                });
-              },
-            ),
           // Botón de recarga
           IconButton(
             tooltip: 'Recargar pedidos',
@@ -311,9 +284,10 @@ class _HomePageState extends ConsumerState<HomePage> {
             onSelected: (value) async {
               switch (value) {
                 case 'search':
-                  setState(() {
-                    _isSearching = true;
-                  });
+                  showSearch(
+                    context: context,
+                    delegate: OrderSearchDelegate(ref: ref),
+                  );
                   break;
                 case 'logout':
                   ref.read(authStateProvider.notifier).logout();
