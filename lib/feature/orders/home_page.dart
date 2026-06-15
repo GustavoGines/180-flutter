@@ -28,7 +28,7 @@ import '../../core/models/order.dart';
 import '../../core/extensions/order_list_extension.dart';
 import '../../core/enums/order_status.dart';
 import '../auth/auth_state.dart';
-import 'order_search_delegate.dart';
+import 'order_search_modal.dart';
 import 'package:pasteleria_180_flutter/core/app_distribution.dart';
 import 'package:pasteleria_180_flutter/core/config.dart' show kFlavor;
 import 'package:pasteleria_180_flutter/core/theme/order_status_colors.dart';
@@ -229,7 +229,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final cs = Theme.of(context).colorScheme;
-    final ordersAsync = ref.watch(filteredOrdersWindowProvider);
+    final ordersAsync = ref.watch(ordersWindowProvider);
     final isRefreshing = ref.watch(ordersWindowProvider).isLoading ||
         ref.watch(ordersWindowProvider).isRefreshing;
 
@@ -284,9 +284,22 @@ class _HomePageState extends ConsumerState<HomePage> {
             onSelected: (value) async {
               switch (value) {
                 case 'search':
-                  showSearch(
-                    context: context,
-                    delegate: OrderSearchDelegate(ref: ref),
+                  showGlobalOrderSearch(
+                    context,
+                    onJumpToDate: (date) {
+                      // Normalize the date to match the map keys (which are midnight)
+                      final dayKey = DateTime(date.year, date.month, date.day);
+                      final index = _dayIndexMap[dayKey];
+                      if (index != null) {
+                        _itemScrollController.scrollTo(
+                          index: index,
+                          duration: const Duration(milliseconds: 450),
+                          curve: Curves.easeOut,
+                        );
+                        // Make sure the month bar highlights the right month
+                        ref.read(selectedMonthProvider.notifier).setTo(DateTime(date.year, date.month));
+                      }
+                    },
                   );
                   break;
                 case 'logout':

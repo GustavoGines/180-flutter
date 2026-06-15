@@ -36,11 +36,6 @@ const int _kBackMonths = 24;
 const int _kFwdMonths = 24;
 
 /// ===============================================================
-/// Búsqueda de Pedidos
-/// ===============================================================
-final orderSearchQueryProvider = rp.StateProvider<String>((ref) => '');
-
-/// ===============================================================
 /// Ventana de pedidos (MODERNO: AsyncNotifier)
 /// ===============================================================
 
@@ -189,19 +184,7 @@ final ordersWindowProvider =
   OrdersWindowNotifier.new,
 );
 
-final filteredOrdersWindowProvider = rp.Provider.autoDispose<rp.AsyncValue<List<Order>>>((ref) {
-  final query = ref.watch(orderSearchQueryProvider).toLowerCase().trim();
-  final asyncOrders = ref.watch(ordersWindowProvider);
 
-  if (query.isEmpty) return asyncOrders;
-
-  return asyncOrders.whenData((orders) {
-    return orders.where((order) {
-      final clientName = order.client?.name.toLowerCase() ?? '';
-      return clientName.contains(query);
-    }).toList();
-  });
-});
 
 /// ===============================================================
 /// 👇 NUEVO: Provider intermedio para los pedidos del mes

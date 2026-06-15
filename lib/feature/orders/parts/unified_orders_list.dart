@@ -51,11 +51,10 @@ class _UnifiedOrdersListState extends ConsumerState<_UnifiedOrdersList> {
 
   @override
   Widget build(BuildContext context) {
-    final ordersAsync = ref.watch(filteredOrdersWindowProvider);
+    final ordersAsync = ref.watch(ordersWindowProvider);
 
-    // 👇 ESTE LISTENER ES BUENO:
-    // Reconstruye la lista si los datos cambian (ej: borrar/editar)
-    ref.listen(filteredOrdersWindowProvider, (_, next) {
+    // Escuchar cambios para programar el salto solo si es necesario
+    ref.listen(ordersWindowProvider, (_, next) {
       if (next is AsyncData<List<Order>>) {
         setState(() {
           _rebuildFlatList(next.value);

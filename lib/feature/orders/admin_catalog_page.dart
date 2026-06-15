@@ -5,6 +5,47 @@ import '../../core/models/catalog.dart';
 import 'catalog_repository.dart';
 import 'admin/simple_forms.dart';
 
+Future<void> _confirmAndDeleteItem(
+  BuildContext context,
+  WidgetRef ref, {
+  required String title,
+  required String itemName,
+  required Future<void> Function() deleteAction,
+  required String successMessage,
+}) async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text('¿Estás seguro de eliminar "$itemName"?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Eliminar'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm == true) {
+    try {
+      await deleteAction();
+      ref.invalidate(catalogProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successMessage)));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+}
+
 class AdminCatalogPage extends ConsumerStatefulWidget {
   const AdminCatalogPage({super.key});
 
@@ -165,47 +206,14 @@ class _ProductList extends ConsumerWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Eliminar Producto'),
-                        content: Text(
-                          '¿Estás seguro de eliminar "${product.name}"?',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancelar'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Eliminar'),
-                          ),
-                        ],
-                      ),
-                    );
-
-                    if (confirm == true) {
-                      try {
-                        await ref
-                            .read(catalogRepoProvider)
-                            .deleteProduct(product.id);
-                        ref.invalidate(catalogProvider);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Producto eliminado')),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                        }
-                      }
-                    }
-                  },
+                  onPressed: () => _confirmAndDeleteItem(
+                    context,
+                    ref,
+                    title: 'Eliminar Producto',
+                    itemName: product.name,
+                    deleteAction: () => ref.read(catalogRepoProvider).deleteProduct(product.id),
+                    successMessage: 'Producto eliminado',
+                  ),
                 ),
               ],
             ),
@@ -243,43 +251,14 @@ class _FillingList extends ConsumerWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Eliminar Relleno'),
-                        content: Text('¿Estás seguro de eliminar "${f.name}"?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancelar'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Eliminar'),
-                          ),
-                        ],
-                      ),
-                    );
-
-                    if (confirm == true) {
-                      try {
-                        await ref.read(catalogRepoProvider).deleteFilling(f.id);
-                        ref.invalidate(catalogProvider);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Relleno eliminado')),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                        }
-                      }
-                    }
-                  },
+                  onPressed: () => _confirmAndDeleteItem(
+                    context,
+                    ref,
+                    title: 'Eliminar Relleno',
+                    itemName: f.name,
+                    deleteAction: () => ref.read(catalogRepoProvider).deleteFilling(f.id),
+                    successMessage: 'Relleno eliminado',
+                  ),
                 ),
               ],
             ),
@@ -319,43 +298,14 @@ class _ExtraList extends ConsumerWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Eliminar Extra'),
-                        content: Text('¿Estás seguro de eliminar "${e.name}"?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancelar'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Eliminar'),
-                          ),
-                        ],
-                      ),
-                    );
-
-                    if (confirm == true) {
-                      try {
-                        await ref.read(catalogRepoProvider).deleteExtra(e.id);
-                        ref.invalidate(catalogProvider);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Extra eliminado')),
-                          );
-                        }
-                      } catch (err) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error: $err')),
-                          );
-                        }
-                      }
-                    }
-                  },
+                  onPressed: () => _confirmAndDeleteItem(
+                    context,
+                    ref,
+                    title: 'Eliminar Extra',
+                    itemName: e.name,
+                    deleteAction: () => ref.read(catalogRepoProvider).deleteExtra(e.id),
+                    successMessage: 'Extra eliminado',
+                  ),
                 ),
               ],
             ),
