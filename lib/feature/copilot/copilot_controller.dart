@@ -30,8 +30,19 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
     state = [...state, loadingMessage];
 
     try {
+      // Filtrar el loader y tomar los últimos 6
+      final nonLoadingMessages = state.where((m) => !m.isLoading).toList();
+      final recentMessages = nonLoadingMessages.length > 6 
+          ? nonLoadingMessages.sublist(nonLoadingMessages.length - 6) 
+          : nonLoadingMessages;
+          
+      final payloadMessages = recentMessages.map((m) => {
+        'role': m.role == ChatRole.user ? 'user' : 'assistant',
+        'content': m.content
+      }).toList();
+
       final dio = DioClient().dio;
-      final response = await dio.post('/copilot/process', data: {'message': text.trim()});
+      final response = await dio.post('/copilot/process', data: {'messages': payloadMessages});
       
       final reply = response.data['reply'] ?? 'Hubo un error al procesar la respuesta.';
 
