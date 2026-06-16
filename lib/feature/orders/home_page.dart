@@ -286,7 +286,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 : const Icon(Icons.refresh),
           ),
 
-          _versionPillMenu(),
+
 
           // POPUPMENUBUTTON (3 PUNTOS)
           PopupMenuButton<String>(
@@ -325,6 +325,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   break;
                 case 'logout':
                   ref.read(authStateProvider.notifier).logout();
+                  break;
+                case 'check_update':
+                  await _checkForUpdate(interactive: true);
                   break;
                 // Casos del tema eliminados ya que la lógica está en el itemBuilder
               }
@@ -407,6 +410,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: ListTile(
                     leading: Icon(Icons.search),
                     title: Text('Buscar Pedidos'),
+                  ),
+                ),
+
+                PopupMenuItem(
+                  value: 'check_update',
+                  child: ListTile(
+                    leading: const Icon(Icons.system_update_alt),
+                    title: const Text('Actualización / Versión'),
+                    subtitle: Text(_versionName.isEmpty && _buildNumber.isEmpty ? 'versión —' : 'v$_versionName'),
                   ),
                 ),
 
