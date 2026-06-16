@@ -45,11 +45,16 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
       final response = await dio.post('/copilot/process', data: {'messages': payloadMessages});
       
       final reply = response.data['reply'] ?? 'Hubo un error al procesar la respuesta.';
+      final uiWidget = response.data['ui_widget'];
 
       // 3. Reemplazar mensaje de carga con la respuesta real
       state = [
         ...state.sublist(0, state.length - 1),
-        ChatMessage(role: ChatRole.assistant, content: reply.toString()),
+        ChatMessage(
+          role: ChatRole.assistant, 
+          content: reply.toString(),
+          uiWidget: uiWidget is Map<String, dynamic> ? uiWidget : null,
+        ),
       ];
     } on DioException catch (e) {
       String errorMsg = 'Error de conexión';

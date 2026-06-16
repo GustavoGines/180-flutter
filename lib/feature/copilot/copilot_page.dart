@@ -124,15 +124,76 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
                   ),
                 ),
               )
-            : Text(
-                message.content,
-                style: TextStyle(
-                  color: isUser 
-                      ? Theme.of(context).colorScheme.onPrimary 
-                      : Theme.of(context).colorScheme.onSurface,
-                  fontSize: 15,
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    message.content,
+                    style: TextStyle(
+                      color: isUser 
+                          ? Theme.of(context).colorScheme.onPrimary 
+                          : Theme.of(context).colorScheme.onSurface,
+                      fontSize: 15,
+                    ),
+                  ),
+                  if (message.uiWidget != null && message.uiWidget!['type'] == 'order_card') ...[
+                    const SizedBox(height: 12),
+                    _buildServerDrivenOrderCard(context, message.uiWidget!['data']),
+                  ]
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildServerDrivenOrderCard(BuildContext context, dynamic data) {
+    if (data == null || data is! Map) return const SizedBox.shrink();
+    
+    final title = data['title']?.toString() ?? 'Pedido';
+    final subtitle = data['subtitle']?.toString() ?? 'Detalle no disponible';
+    final total = data['total']?.toString() ?? '\$0';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              Text(
+                total,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
