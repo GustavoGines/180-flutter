@@ -16,6 +16,7 @@ T _$identity<T>(T value) => value;
 mixin _$NewOrderState {
   Order? get originalOrder; // Si es no nulo, estamos en modo edición
   Client? get selectedClient;
+  String get prefillClientName;
   int? get selectedAddressId;
   bool get isPaid;
   DateTime? get eventDate;
@@ -46,6 +47,8 @@ mixin _$NewOrderState {
                 other.originalOrder == originalOrder) &&
             (identical(other.selectedClient, selectedClient) ||
                 other.selectedClient == selectedClient) &&
+            (identical(other.prefillClientName, prefillClientName) ||
+                other.prefillClientName == prefillClientName) &&
             (identical(other.selectedAddressId, selectedAddressId) ||
                 other.selectedAddressId == selectedAddressId) &&
             (identical(other.isPaid, isPaid) || other.isPaid == isPaid) &&
@@ -71,6 +74,7 @@ mixin _$NewOrderState {
       runtimeType,
       originalOrder,
       selectedClient,
+      prefillClientName,
       selectedAddressId,
       isPaid,
       eventDate,
@@ -86,7 +90,7 @@ mixin _$NewOrderState {
 
   @override
   String toString() {
-    return 'NewOrderState(originalOrder: $originalOrder, selectedClient: $selectedClient, selectedAddressId: $selectedAddressId, isPaid: $isPaid, eventDate: $eventDate, startTime: $startTime, endTime: $endTime, deposit: $deposit, deliveryCost: $deliveryCost, notes: $notes, items: $items, filesToUpload: $filesToUpload, isLoading: $isLoading, error: $error)';
+    return 'NewOrderState(originalOrder: $originalOrder, selectedClient: $selectedClient, prefillClientName: $prefillClientName, selectedAddressId: $selectedAddressId, isPaid: $isPaid, eventDate: $eventDate, startTime: $startTime, endTime: $endTime, deposit: $deposit, deliveryCost: $deliveryCost, notes: $notes, items: $items, filesToUpload: $filesToUpload, isLoading: $isLoading, error: $error)';
   }
 }
 
@@ -99,6 +103,7 @@ abstract mixin class $NewOrderStateCopyWith<$Res> {
   $Res call(
       {Order? originalOrder,
       Client? selectedClient,
+      String prefillClientName,
       int? selectedAddressId,
       bool isPaid,
       DateTime? eventDate,
@@ -128,6 +133,7 @@ class _$NewOrderStateCopyWithImpl<$Res>
   $Res call({
     Object? originalOrder = freezed,
     Object? selectedClient = freezed,
+    Object? prefillClientName = null,
     Object? selectedAddressId = freezed,
     Object? isPaid = null,
     Object? eventDate = freezed,
@@ -150,6 +156,10 @@ class _$NewOrderStateCopyWithImpl<$Res>
           ? _self.selectedClient
           : selectedClient // ignore: cast_nullable_to_non_nullable
               as Client?,
+      prefillClientName: null == prefillClientName
+          ? _self.prefillClientName
+          : prefillClientName // ignore: cast_nullable_to_non_nullable
+              as String,
       selectedAddressId: freezed == selectedAddressId
           ? _self.selectedAddressId
           : selectedAddressId // ignore: cast_nullable_to_non_nullable
@@ -298,6 +308,7 @@ extension NewOrderStatePatterns on NewOrderState {
     TResult Function(
             Order? originalOrder,
             Client? selectedClient,
+            String prefillClientName,
             int? selectedAddressId,
             bool isPaid,
             DateTime? eventDate,
@@ -319,6 +330,7 @@ extension NewOrderStatePatterns on NewOrderState {
         return $default(
             _that.originalOrder,
             _that.selectedClient,
+            _that.prefillClientName,
             _that.selectedAddressId,
             _that.isPaid,
             _that.eventDate,
@@ -354,6 +366,7 @@ extension NewOrderStatePatterns on NewOrderState {
     TResult Function(
             Order? originalOrder,
             Client? selectedClient,
+            String prefillClientName,
             int? selectedAddressId,
             bool isPaid,
             DateTime? eventDate,
@@ -374,6 +387,7 @@ extension NewOrderStatePatterns on NewOrderState {
         return $default(
             _that.originalOrder,
             _that.selectedClient,
+            _that.prefillClientName,
             _that.selectedAddressId,
             _that.isPaid,
             _that.eventDate,
@@ -408,6 +422,7 @@ extension NewOrderStatePatterns on NewOrderState {
     TResult? Function(
             Order? originalOrder,
             Client? selectedClient,
+            String prefillClientName,
             int? selectedAddressId,
             bool isPaid,
             DateTime? eventDate,
@@ -428,6 +443,7 @@ extension NewOrderStatePatterns on NewOrderState {
         return $default(
             _that.originalOrder,
             _that.selectedClient,
+            _that.prefillClientName,
             _that.selectedAddressId,
             _that.isPaid,
             _that.eventDate,
@@ -452,6 +468,7 @@ class _NewOrderState extends NewOrderState {
   const _NewOrderState(
       {this.originalOrder,
       this.selectedClient,
+      this.prefillClientName = '',
       this.selectedAddressId,
       this.isPaid = false,
       this.eventDate,
@@ -473,6 +490,9 @@ class _NewOrderState extends NewOrderState {
 // Si es no nulo, estamos en modo edición
   @override
   final Client? selectedClient;
+  @override
+  @JsonKey()
+  final String prefillClientName;
   @override
   final int? selectedAddressId;
   @override
@@ -534,6 +554,8 @@ class _NewOrderState extends NewOrderState {
                 other.originalOrder == originalOrder) &&
             (identical(other.selectedClient, selectedClient) ||
                 other.selectedClient == selectedClient) &&
+            (identical(other.prefillClientName, prefillClientName) ||
+                other.prefillClientName == prefillClientName) &&
             (identical(other.selectedAddressId, selectedAddressId) ||
                 other.selectedAddressId == selectedAddressId) &&
             (identical(other.isPaid, isPaid) || other.isPaid == isPaid) &&
@@ -559,6 +581,7 @@ class _NewOrderState extends NewOrderState {
       runtimeType,
       originalOrder,
       selectedClient,
+      prefillClientName,
       selectedAddressId,
       isPaid,
       eventDate,
@@ -574,7 +597,7 @@ class _NewOrderState extends NewOrderState {
 
   @override
   String toString() {
-    return 'NewOrderState(originalOrder: $originalOrder, selectedClient: $selectedClient, selectedAddressId: $selectedAddressId, isPaid: $isPaid, eventDate: $eventDate, startTime: $startTime, endTime: $endTime, deposit: $deposit, deliveryCost: $deliveryCost, notes: $notes, items: $items, filesToUpload: $filesToUpload, isLoading: $isLoading, error: $error)';
+    return 'NewOrderState(originalOrder: $originalOrder, selectedClient: $selectedClient, prefillClientName: $prefillClientName, selectedAddressId: $selectedAddressId, isPaid: $isPaid, eventDate: $eventDate, startTime: $startTime, endTime: $endTime, deposit: $deposit, deliveryCost: $deliveryCost, notes: $notes, items: $items, filesToUpload: $filesToUpload, isLoading: $isLoading, error: $error)';
   }
 }
 
@@ -589,6 +612,7 @@ abstract mixin class _$NewOrderStateCopyWith<$Res>
   $Res call(
       {Order? originalOrder,
       Client? selectedClient,
+      String prefillClientName,
       int? selectedAddressId,
       bool isPaid,
       DateTime? eventDate,
@@ -618,6 +642,7 @@ class __$NewOrderStateCopyWithImpl<$Res>
   $Res call({
     Object? originalOrder = freezed,
     Object? selectedClient = freezed,
+    Object? prefillClientName = null,
     Object? selectedAddressId = freezed,
     Object? isPaid = null,
     Object? eventDate = freezed,
@@ -640,6 +665,10 @@ class __$NewOrderStateCopyWithImpl<$Res>
           ? _self.selectedClient
           : selectedClient // ignore: cast_nullable_to_non_nullable
               as Client?,
+      prefillClientName: null == prefillClientName
+          ? _self.prefillClientName
+          : prefillClientName // ignore: cast_nullable_to_non_nullable
+              as String,
       selectedAddressId: freezed == selectedAddressId
           ? _self.selectedAddressId
           : selectedAddressId // ignore: cast_nullable_to_non_nullable

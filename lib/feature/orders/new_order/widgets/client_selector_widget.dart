@@ -37,6 +37,8 @@ class _ClientSelectorWidgetState extends ConsumerState<ClientSelectorWidget> {
       final state = ref.read(newOrderControllerProvider);
       if (state.selectedClient != null) {
         _clientNameController.text = state.selectedClient!.name;
+      } else if (state.prefillClientName.isNotEmpty) {
+        _clientNameController.text = state.prefillClientName;
       }
     });
   }
@@ -61,6 +63,14 @@ class _ClientSelectorWidgetState extends ConsumerState<ClientSelectorWidget> {
   Widget build(BuildContext context) {
     final state = ref.watch(newOrderControllerProvider);
     final selectedClient = state.selectedClient;
+
+    ref.listen<NewOrderState>(newOrderControllerProvider, (previous, next) {
+      if (next.prefillClientName.isNotEmpty &&
+          next.selectedClient == null &&
+          _clientNameController.text != next.prefillClientName) {
+        _clientNameController.text = next.prefillClientName;
+      }
+    });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

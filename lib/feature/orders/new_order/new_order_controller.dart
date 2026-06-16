@@ -34,6 +34,7 @@ abstract class NewOrderState with _$NewOrderState {
   const factory NewOrderState({
     Order? originalOrder, // Si es no nulo, estamos en modo edición
     Client? selectedClient,
+    @Default('') String prefillClientName,
     int? selectedAddressId,
     @Default(false) bool isPaid,
     DateTime? eventDate,
@@ -324,9 +325,7 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
       }
 
       if (isNewClient) {
-        // En un escenario de cliente nuevo, idealmente se abre el modal para crearlo
-        // Pero el State no guarda el texto de búsqueda. Devolvemos el control a la UI.
-        // Opcional: Podríamos crear un estado temporal, pero por ahora lanzamos la orden a la UI.
+        state = state.copyWith(prefillClientName: clientName);
       } else {
         // Buscar cliente existente
         final result = await ref.read(clientsRepoProvider).searchClients(query: clientName);
