@@ -29,6 +29,7 @@ import '../../core/extensions/order_list_extension.dart';
 import '../../core/enums/order_status.dart';
 import '../auth/auth_state.dart';
 import 'order_search_modal.dart';
+import 'widgets/voice_assistant_fab.dart';
 import 'package:pasteleria_180_flutter/core/app_distribution.dart';
 import 'package:pasteleria_180_flutter/core/config.dart' show kFlavor;
 import 'package:pasteleria_180_flutter/core/theme/order_status_colors.dart';
@@ -426,9 +427,14 @@ class _HomePageState extends ConsumerState<HomePage> {
         ],
       ),
 
-      // SpeedDial para acciones flotantes
-      floatingActionButton: SpeedDial(
-        icon: Icons.add,
+      // SpeedDial para acciones flotantes y VoiceAssistant
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          const VoiceAssistantFab(),
+          const SizedBox(width: 16),
+          SpeedDial(
+            icon: Icons.add,
         activeIcon: Icons.close,
         // El botón principal ya está bien adaptado (usa primary/onPrimary)
         backgroundColor: cs.primary,
@@ -500,6 +506,8 @@ class _HomePageState extends ConsumerState<HomePage> {
               onTap: () => context.push('/admin/catalog'),
             ),
         ],
+      ),
+      ],
       ),
 
       // EL CUERPO (BODY) DE LA PÁGINA

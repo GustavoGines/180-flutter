@@ -307,6 +307,39 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
       setLoading(false);
     }
   }
+  // --- Lógica del Asistente de Voz ---
+  Future<void> prefillFromVoiceAssistant({
+    required String clientName,
+    required bool isNewClient,
+    DateTime? eventDate,
+    List<OrderItem>? items,
+  }) async {
+    setLoading(true);
+    try {
+      if (eventDate != null) {
+        updateDate(eventDate);
+      }
+      if (items != null && items.isNotEmpty) {
+        updateItems(items);
+      }
+
+      if (isNewClient) {
+        // En un escenario de cliente nuevo, idealmente se abre el modal para crearlo
+        // Pero el State no guarda el texto de búsqueda. Devolvemos el control a la UI.
+        // Opcional: Podríamos crear un estado temporal, pero por ahora lanzamos la orden a la UI.
+      } else {
+        // Buscar cliente existente
+        final result = await ref.read(clientsRepoProvider).searchClients(query: clientName);
+        if (result.isNotEmpty) {
+          updateClient(result.first);
+        }
+      }
+    } catch (e) {
+      // Ignorar fallos de búsqueda automática
+    } finally {
+      setLoading(false);
+    }
+  }
 }
 
 /// Provider público para acceder al controlador
