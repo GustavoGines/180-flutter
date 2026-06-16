@@ -105,7 +105,7 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha: 0.2),
               blurRadius: 20,
               offset: const Offset(0, 10),
             )
@@ -120,7 +120,7 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
                 color: colorScheme.surface,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 border: Border(
-                  bottom: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5)),
+                  bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
                 ),
               ),
               child: Row(
@@ -200,10 +200,10 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                   elevation: 0,
-                                  color: colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5)),
+                                    side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
                                   ),
                                   child: Padding(
                                     padding: const EdgeInsets.all(12),
@@ -303,7 +303,7 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
 Future<void> showGlobalOrderSearch(BuildContext context, {void Function(DateTime)? onJumpToDate}) {
   return showDialog(
     context: context,
-    barrierColor: Colors.black.withOpacity(0.5),
+    barrierColor: Colors.black.withValues(alpha: 0.5),
     builder: (context) => OrderSearchModal(onJumpToDate: onJumpToDate),
   );
 }
