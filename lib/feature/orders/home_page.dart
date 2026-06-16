@@ -257,6 +257,14 @@ class _HomePageState extends ConsumerState<HomePage> {
         centerTitle: false,
 
         actions: [
+          // Copiloto
+          IconButton(
+            tooltip: 'Copiloto Inteligente',
+            icon: const Icon(Icons.auto_awesome),
+            onPressed: () {
+              context.push('/copilot');
+            },
+          ),
           // Botón de recarga
           IconButton(
             tooltip: 'Recargar pedidos',
