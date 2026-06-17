@@ -10,6 +10,8 @@ import '../../../../core/models/order.dart';
 import '../../../../core/models/order_item.dart';
 import '../../clients/clients_repository.dart';
 import '../orders_repository.dart';
+import '../catalog_repository.dart';
+import 'package:collection/collection.dart';
 import '../home_page.dart';
 import '../order_detail_page.dart';
 
@@ -63,6 +65,12 @@ abstract class NewOrderState with _$NewOrderState {
 
   /// Indica si estamos editando un pedido existente
   bool get isEditMode => originalOrder != null;
+
+  /// Indica si el formulario tiene datos cargados que podrían perderse
+  bool get hasUnsavedChanges {
+    if (isEditMode) return true; // En modo edición siempre protegemos la salida por precaución
+    return items.isNotEmpty || selectedClient != null || notes.isNotEmpty || deposit > 0 || deliveryCost > 0;
+  }
 }
 
 /// Controlador principal de la pantalla de creación/edición de pedidos
@@ -321,7 +329,23 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
         updateDate(eventDate);
       }
       if (items != null && items.isNotEmpty) {
-        updateItems(items);
+        try {
+          final catalog = await ref.read(catalogProvider.future);
+          final updatedItems = items.map((item) {
+             final match = catalog.products.firstWhereOrNull(
+                (p) => p.name.toLowerCase() == item.name.toLowerCase()
+             );
+             if (match != null) {
+                return item.copyWith(
+                  basePrice: match.basePrice,
+                );
+             }
+             return item;
+          }).toList();
+          updateItems(updatedItems);
+        } catch(e) {
+          updateItems(items);
+        }
       }
 
       if (isNewClient) {

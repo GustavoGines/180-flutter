@@ -128,8 +128,8 @@ extension _UpdateHelpers on _HomePageState {
   // 👇 MODIFICADO: Ahora devuelve el controlador
   _ProgressSheetController _showProgressSheet({required String message}) {
     String currentMessage = message;
-    // Esta variable guardará la función setState del builder
     void Function(void Function())? updateState;
+    bool isSheetOpen = true; // Control para saber si el usuario lo cerró con el botón "Atrás"
 
     showModalBottomSheet(
       context: context,
@@ -139,47 +139,49 @@ extension _UpdateHelpers on _HomePageState {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      // 👇 USA UN STATEFULBUILDER para que el texto sea mutable
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) {
-          // 1. Captura la función setState para usarla desde el controlador
-          updateState = setState;
+      builder: (ctx) => PopScope(
+        canPop: true, // Permitimos que cierren con Atrás si quieren cancelar
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            updateState = (fn) {
+              if (context.mounted && isSheetOpen) {
+                setState(fn);
+              }
+            };
 
-          // 2. Esta es la UI de tu sheet (sin cambios, solo usa 'currentMessage')
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 4),
-                const Icon(Icons.system_update_alt, size: 28),
-                const SizedBox(height: 12),
-                Text(
-                  currentMessage, // Usa la variable de estado
-                  style: Theme.of(context).textTheme.titleMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                const LinearProgressIndicator(),
-              ],
-            ),
-          );
-        },
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 4),
+                  const Icon(Icons.system_update_alt, size: 28),
+                  const SizedBox(height: 12),
+                  Text(
+                    currentMessage,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  const LinearProgressIndicator(),
+                ],
+              ),
+            );
+          },
+        ),
       ),
-    );
+    ).then((_) {
+      isSheetOpen = false; // Se marca como cerrado cuando se destruye
+    });
 
-    // 3. Define las funciones que usará el controlador
-    // 👇 Así es como el linter prefiere que lo escribas
     void close() {
-      if (mounted && Navigator.of(context).canPop()) {
+      if (mounted && isSheetOpen) {
         Navigator.of(context).pop();
       }
     }
 
-    // 👇 Y así
     void update(String newMessage) {
       if (updateState != null) {
-        // Llama al setState del StatefulBuilder para redibujar el texto
         updateState!(() {
           currentMessage = newMessage;
         });

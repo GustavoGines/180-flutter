@@ -285,3 +285,6 @@ final monthlyOrdersCountProvider = rp.Provider.autoDispose<int>((ref) {
   }
   return count;
 });
+
+/// Proveedor para manejar saltos al calendario desde otras pantallas
+final jumpToDateProvider = rp.StateProvider<DateTime?>((ref) => null);

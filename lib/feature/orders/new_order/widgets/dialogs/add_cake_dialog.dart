@@ -87,7 +87,7 @@ class _AddCakeDialogState extends State<AddCakeDialog> {
 
     cakeWeight = (customData['weight_kg'] as num?)?.toDouble() ?? 1.0;
 
-    selectedFillings = (customData['selected_fillings'] as List<dynamic>? ?? []).map((name) => allFillings.firstWhereOrNull((f) => f.name == name?.toString())).whereType<Filling>().toList();
+    selectedFillings = (customData['selected_fillings'] as List<dynamic>? ?? []).map((name) => allFillings.firstWhereOrNull((f) => f.name == (name is Map ? name['name'] : name.toString()))).whereType<Filling>().toList();
     selectedExtraFillings = (customData['selected_extra_fillings'] as List<dynamic>? ?? []).map((data) {
       if (data is Map) return extraCostFillings.firstWhereOrNull((f) => f.name == data['name']?.toString());
       if (data is String) return extraCostFillings.firstWhereOrNull((f) => f.name == data);

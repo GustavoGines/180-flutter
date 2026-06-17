@@ -25,6 +25,11 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
   // Token para evitar race conditions: si llega un resultado viejo, lo descartamos
   int _searchToken = 0;
 
+  // Estado para Selección Múltiple
+  final Set<int> _selectedOrderIds = {};
+  bool _isBulkActionLoading = false;
+  bool get _isSelectionMode => _selectedOrderIds.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +51,7 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
         setState(() {
           _cachedResults = [];
           _isLoading = false;
+          _selectedOrderIds.clear();
         });
       }
       return;
@@ -71,6 +77,8 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
         setState(() {
           _cachedResults = results;
           _isLoading = false;
+          // Opcional: _selectedOrderIds.clear(); Si queremos limpiar al buscar.
+          // Por ahora mantenemos los IDs seleccionados por si el usuario busca otra cosa.
         });
       }
     } catch (e) {
@@ -87,6 +95,70 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
     _debounce = Timer(const Duration(milliseconds: 350), () {
       _performSearch(query);
     });
+  }
+
+  void _toggleSelection(int id) {
+    setState(() {
+      if (_selectedOrderIds.contains(id)) {
+        _selectedOrderIds.remove(id);
+      } else {
+        _selectedOrderIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _performBulkAction(String actionName, Future<void> Function(int) action) async {
+    if (_selectedOrderIds.isEmpty) return;
+    setState(() => _isBulkActionLoading = true);
+
+    try {
+      await Future.wait(_selectedOrderIds.map((id) => action(id)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Acción "$actionName" completada con éxito.')));
+        setState(() {
+          _selectedOrderIds.clear();
+        });
+        _performSearch(_controller.text); // Recargar búsqueda
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al procesar: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isBulkActionLoading = false);
+    }
+  }
+
+  void _deleteSelected() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar Pedidos'),
+        content: Text('¿Estás seguro de que deseas eliminar ${_selectedOrderIds.length} pedidos de forma permanente?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _performBulkAction('Eliminar', (id) => ref.read(ordersRepoProvider).deleteOrder(id));
+            },
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _markPaidSelected() {
+    _performBulkAction('Marcar Pagado', (id) => ref.read(ordersRepoProvider).markAsPaid(id));
+  }
+
+  void _markDeliveredSelected() {
+    _performBulkAction('Marcar Entregado', (id) => ref.read(ordersRepoProvider).updateStatus(id, 'delivered'));
   }
 
   @override
@@ -196,24 +268,50 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
                                 final dateStr = dateFormat.format(order.eventDate);
                                 final timeStr = DateFormat('HH:mm').format(order.startTime);
                                 final formatter = NumberFormat.currency(locale: 'es_AR', symbol: '\$', decimalDigits: 0);
+                                final isSelected = _selectedOrderIds.contains(order.id);
 
                                 return Card(
                                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                   elevation: 0,
-                                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                                  color: isSelected ? colorScheme.primaryContainer.withValues(alpha: 0.3) : colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                                    side: BorderSide(
+                                      color: isSelected ? colorScheme.primary : colorScheme.outlineVariant.withValues(alpha: 0.5),
+                                      width: isSelected ? 2 : 1,
+                                    ),
                                   ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            CircleAvatar(
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onLongPress: () {
+                                      if (!_isSelectionMode) _toggleSelection(order.id);
+                                    },
+                                    onTap: () {
+                                      if (_isSelectionMode) {
+                                        _toggleSelection(order.id);
+                                      } else {
+                                        Navigator.of(context).pop();
+                                        context.push('/order/${order.id}');
+                                      }
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              if (_isSelectionMode)
+                                                Padding(
+                                                  padding: const EdgeInsets.only(right: 8.0),
+                                                  child: Checkbox(
+                                                    value: isSelected,
+                                                    onChanged: (_) => _toggleSelection(order.id),
+                                                    visualDensity: VisualDensity.compact,
+                                                  ),
+                                                ),
+                                              CircleAvatar(
                                               backgroundColor: colorScheme.primaryContainer,
                                               child: Icon(Icons.shopping_bag,
                                                   size: 18, color: colorScheme.onPrimaryContainer),
@@ -289,10 +387,67 @@ class _OrderSearchModalState extends ConsumerState<OrderSearchModal> {
                                       ],
                                     ),
                                   ),
-                                );
-                              },
-                            ),
+                                ), // Cierre de InkWell
+                              ); // Cierre de Card
+                            },
+                          ),
             ),
+            if (_isSelectionMode)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${_selectedOrderIds.length} seleccionados',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() => _selectedOrderIds.clear()),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (_isBulkActionLoading)
+                      const Center(child: LinearProgressIndicator())
+                    else
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            FilledButton.icon(
+                              onPressed: _markPaidSelected,
+                              icon: const Icon(Icons.attach_money, size: 16),
+                              label: const Text('Pagado'),
+                              style: FilledButton.styleFrom(backgroundColor: Colors.green),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton.icon(
+                              onPressed: _markDeliveredSelected,
+                              icon: const Icon(Icons.check_circle, size: 16),
+                              label: const Text('Entregado'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton.icon(
+                              onPressed: _deleteSelected,
+                              icon: const Icon(Icons.delete, size: 16),
+                              label: const Text('Eliminar'),
+                              style: FilledButton.styleFrom(backgroundColor: colorScheme.error),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

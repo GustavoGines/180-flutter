@@ -7,9 +7,10 @@ import 'package:record/record.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/network/dio_client.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../core/models/order_item.dart';
 import '../new_order/new_order_controller.dart';
-import '../../../../core/models/order_item.dart';
+import 'ai_order_summary_sheet.dart';
 
 class VoiceAssistantFab extends ConsumerStatefulWidget {
   const VoiceAssistantFab({super.key});
@@ -72,6 +73,15 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
           _isRecording = true;
         });
         _pulseController.forward();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Permiso de micrófono denegado. Habilítalo en los ajustes.'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -110,6 +120,16 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
       setState(() {
         _isProcessing = false;
       });
+      
+      // Limpieza Extrema de Caché (Crítico)
+      if (_tempPath != null) {
+        try {
+          final file = File(_tempPath!);
+          if (await file.exists()) {
+            await file.delete();
+          }
+        } catch (_) {}
+      }
     }
   }
 
@@ -133,43 +153,60 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
       }
 
       if (data['intent'] == 'create_order') {
-        final clientName = data['client_name'] as String?;
-        final isNewClient = data['is_new_client'] as bool? ?? false;
-        final rawItems = data['items'] as List<dynamic>? ?? [];
-        final eventDateStr = data['event_date'] as String?;
-        
-        DateTime? eventDate;
-        if (eventDateStr != null) {
-          eventDate = DateTime.tryParse(eventDateStr);
-        }
-
-        final items = rawItems.map((item) {
-          final productName = item['matched_name'] as String? ?? item['original_name'] as String? ?? 'Desconocido';
-          return OrderItem(
-            name: productName,
-            qty: (item['quantity'] as num?)?.toDouble() ?? 1.0,
-            basePrice: 0.0, // Necesitaríamos el precio real del producto
-            customizationNotes: item['notes'] as String?,
-          );
-        }).toList();
-
-        // Si tenemos datos suficientes, saltamos a la página de nuevo pedido
         if (mounted) {
-          context.push('/orders/new');
-          
-          if (clientName != null) {
-            // Llenar datos pre-procesados
-            ref.read(newOrderControllerProvider.notifier).prefillFromVoiceAssistant(
-              clientName: clientName,
-              isNewClient: isNewClient,
-              eventDate: eventDate,
-              items: items,
-            );
-            
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Pedido iniciado para $clientName')),
-            );
-          }
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) => AiOrderSummarySheet(
+              aiData: response.data,
+              onCancel: () {
+                Navigator.of(ctx).pop();
+              },
+              onConfirm: () async {
+                Navigator.of(ctx).pop();
+                
+                final clientName = data['client_name'] as String?;
+                final isNewClient = data['is_new_client'] as bool? ?? false;
+                final rawItems = data['items'] as List<dynamic>? ?? [];
+                final eventDateStr = data['event_date'] as String?;
+                
+                DateTime? eventDate;
+                if (eventDateStr != null) {
+                  eventDate = DateTime.tryParse(eventDateStr);
+                }
+
+                final items = rawItems.map((item) {
+                  final productName = item['matched_name'] as String? ?? item['original_name'] as String? ?? 'Desconocido';
+                  return OrderItem(
+                    name: productName,
+                    qty: (item['quantity'] as num?)?.toDouble() ?? 1.0,
+                    basePrice: 0.0,
+                    customizationNotes: item['notes'] as String?,
+                    customizationJson: item['customization_json'] as Map<String, dynamic>?,
+                  );
+                }).toList();
+
+                // Mantener provider vivo (opcional, como NewOrderController está AutoDispose)
+                final sub = ref.listenManual(newOrderControllerProvider, (_, __) {});
+
+                if (clientName != null) {
+                  await ref.read(newOrderControllerProvider.notifier).prefillFromVoiceAssistant(
+                    clientName: clientName,
+                    isNewClient: isNewClient,
+                    eventDate: eventDate,
+                    items: items,
+                  );
+                }
+
+                if (mounted) {
+                  await context.push('/new_order');
+                }
+
+                sub.close();
+              },
+            ),
+          );
         }
       }
 
@@ -184,16 +221,6 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Ocurrió un error inesperado.')),
         );
-      }
-    } finally {
-      // Limpieza de Caché (Crítico)
-      try {
-        final file = File(path);
-        if (await file.exists()) {
-          await file.delete();
-        }
-      } catch (e) {
-        // Ignorar error al borrar temporal
       }
     }
   }
@@ -212,29 +239,27 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
       );
     }
 
-    return GestureDetector(
-      onLongPress: _startRecording,
-      onLongPressEnd: (_) => _stopRecording(),
-      child: AnimatedBuilder(
-        animation: _pulseAnimation,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _pulseAnimation.value,
-            child: FloatingActionButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Mantén presionado para hablar')),
-                );
-              },
-              backgroundColor: _isRecording ? Colors.red : Theme.of(context).colorScheme.primary,
-              child: Icon(
-                _isRecording ? Icons.mic : Icons.mic_none,
-                color: Colors.white,
-              ),
+    return AnimatedBuilder(
+      animation: _pulseAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _pulseAnimation.value,
+          child: FloatingActionButton(
+            onPressed: () {
+              if (_isRecording) {
+                _stopRecording();
+              } else {
+                _startRecording();
+              }
+            },
+            backgroundColor: _isRecording ? Colors.red : Theme.of(context).colorScheme.primary,
+            child: Icon(
+              _isRecording ? Icons.mic : Icons.mic_none,
+              color: Colors.white,
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

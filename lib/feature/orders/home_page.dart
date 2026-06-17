@@ -148,6 +148,33 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
+  Future<void> _jumpToSpecificDate(DateTime date) async {
+    final monthKey = DateTime(date.year, date.month, 1);
+    final dayKey = DateTime(date.year, date.month, date.day);
+
+    // 1. Si el mes no está en caché, esperamos a que se cargue PRIMERO
+    final notifier = ref.read(ordersWindowProvider.notifier);
+    await notifier.fetchMonthIfNeeded(monthKey);
+
+    // 2. Navegar al mes en la barra
+    ref.read(selectedMonthProvider.notifier).setTo(monthKey);
+
+    // 3. Esperar un frame para que la lista se reconstruya con los nuevos datos
+    if (!mounted) return;
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+
+    // 4. Buscar el índice de ese día y hacer scroll
+    final index = _dayIndexMap[dayKey];
+    if (index != null) {
+      _itemScrollController.scrollTo(
+        index: index,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
   Future<void> _jumpToMonth(DateTime m) async {
     _jumpCooldownTimer?.cancel();
 
@@ -228,6 +255,13 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<DateTime?>(jumpToDateProvider, (prev, date) {
+      if (date != null) {
+        Future.microtask(() => ref.read(jumpToDateProvider.notifier).state = null);
+        _jumpToSpecificDate(date);
+      }
+    });
+
     final authState = ref.watch(authStateProvider);
     final cs = Theme.of(context).colorScheme;
     final ordersAsync = ref.watch(ordersWindowProvider);
@@ -295,40 +329,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                 case 'search':
                   showGlobalOrderSearch(
                     context,
-                    onJumpToDate: (date) async {
-                      final monthKey = DateTime(date.year, date.month, 1);
-                      final dayKey = DateTime(date.year, date.month, date.day);
-
-                      // 1. Si el mes no está en caché, esperamos a que se cargue PRIMERO
-                      final notifier = ref.read(ordersWindowProvider.notifier);
-                      await notifier.fetchMonthIfNeeded(monthKey);
-
-                      // 2. Navegar al mes en la barra
-                      ref.read(selectedMonthProvider.notifier).setTo(monthKey);
-
-                      // 3. Esperar un frame para que la lista se reconstruya con los nuevos datos
-                      if (!mounted) return;
-                      await Future.delayed(const Duration(milliseconds: 300));
-                      if (!mounted) return;
-
-                      // 4. Buscar el índice de ese día y hacer scroll
-                      final index = _dayIndexMap[dayKey];
-                      if (index != null) {
-                        _itemScrollController.scrollTo(
-                          index: index,
-                          duration: const Duration(milliseconds: 450),
-                          curve: Curves.easeOut,
-                        );
-                      }
-                    },
+                    onJumpToDate: _jumpToSpecificDate,
                   );
                   break;
                 case 'logout':
                   ref.read(authStateProvider.notifier).logout();
                   break;
-                case 'check_update':
-                  await _checkForUpdate(interactive: true);
-                  break;
+
                 // Casos del tema eliminados ya que la lógica está en el itemBuilder
               }
             },
@@ -362,12 +369,27 @@ class _HomePageState extends ConsumerState<HomePage> {
               }
 
               return <PopupMenuEntry<String>>[
-                // --- 1. TÍTULO 'TEMA' ---
-                const PopupMenuItem(
+                // --- 1. TÍTULO 'TEMA' Y VERSIÓN ---
+                PopupMenuItem(
                   enabled: false,
-                  child: Text(
-                    'Tema',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  value: 'theme_header',
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Tema',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context); // Cierra el menú manualmente
+                          _checkForUpdate(interactive: true);
+                        },
+                        child: ShimmerVersionBadge(
+                          versionText: _versionName.isEmpty && _buildNumber.isEmpty ? 'v—' : 'v$_versionName',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -410,15 +432,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: ListTile(
                     leading: Icon(Icons.search),
                     title: Text('Buscar Pedidos'),
-                  ),
-                ),
-
-                PopupMenuItem(
-                  value: 'check_update',
-                  child: ListTile(
-                    leading: const Icon(Icons.system_update_alt),
-                    title: const Text('Actualización / Versión'),
-                    subtitle: Text(_versionName.isEmpty && _buildNumber.isEmpty ? 'versión —' : 'v$_versionName'),
                   ),
                 ),
 
@@ -603,3 +616,87 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 }
+
+// ======================= SHIMMER BADGE =======================
+class ShimmerVersionBadge extends StatefulWidget {
+  final String versionText;
+  const ShimmerVersionBadge({super.key, required this.versionText});
+
+  @override
+  State<ShimmerVersionBadge> createState() => _ShimmerVersionBadgeState();
+}
+
+class _ShimmerVersionBadgeState extends State<ShimmerVersionBadge> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            final x = -1.0 + (_controller.value * 3.0); // Barrido de luz
+            return LinearGradient(
+              colors: [
+                Colors.transparent, 
+                Colors.white.withValues(alpha: 0.8), 
+                Colors.transparent
+              ],
+              stops: const [0.0, 0.5, 1.0],
+              begin: Alignment(x - 0.5, -0.5),
+              end: Alignment(x + 0.5, 0.5),
+            ).createShader(bounds);
+          },
+          child: child,
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFF74ACDF), // Celeste bandera Argentina
+              Colors.white,      // Blanco bandera
+              Color(0xFF74ACDF), // Celeste bandera Argentina
+            ],
+            stops: [0.0, 0.5, 1.0],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF74ACDF).withValues(alpha: 0.5), // Resplandor celeste
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          widget.versionText,
+          style: const TextStyle(
+             fontSize: 12,
+             color: Color(0xFF003366), // Azul oscuro para alto contraste y legibilidad
+             fontWeight: FontWeight.w900,
+             letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+

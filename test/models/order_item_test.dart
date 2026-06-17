@@ -10,7 +10,7 @@ void main() {
         basePrice: 10000,
         adjustments: 1500,
       );
-      expect(item.finalUnitPrice, 10000);
+      expect(item.finalUnitPrice, 11500);
       expect(item.finalLinePrice, 11500);
     });
 
@@ -31,7 +31,7 @@ void main() {
         basePrice: 20000,
         adjustments: -2000,
       );
-      expect(item.finalUnitPrice, 20000);
+      expect(item.finalUnitPrice, 18000);
       expect(item.finalLinePrice, 18000);
     });
   });
@@ -48,7 +48,7 @@ void main() {
 
       expect(json['base_price'], 8000);
       expect(json['adjustments'], 500);
-      expect(json['customization_json']['calculated_final_unit_price'], 8000);
+      expect(json['customization_json']['calculated_final_unit_price'], 8500);
     });
 
     test('no incluye id si el item es nuevo (id == null)', () {
@@ -84,8 +84,8 @@ void main() {
       });
       expect(item.basePrice, 9000);
       expect(item.adjustments, 1000);
-      expect(item.finalUnitPrice, 9000);
-      expect(item.finalLinePrice, 19000); // 9000 * 2 + 1000
+      expect(item.finalUnitPrice, 10000);
+      expect(item.finalLinePrice, 20000); // 10000 * 2
     });
 
     test('fallback a unit_price si base_price no existe', () {

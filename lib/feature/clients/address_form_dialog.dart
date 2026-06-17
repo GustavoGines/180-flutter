@@ -12,7 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 // --- NUEVO IMPORT ---
 import 'package:google_maps_flutter/google_maps_flutter.dart'; // Para LatLng
 import 'map_picker_page.dart'; // La nueva pantalla
-// --------------------
+import 'package:geocoding/geocoding.dart' as geocoding;
 
 class AddressFormDialog extends ConsumerStatefulWidget {
   final int clientId;
@@ -85,11 +85,14 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
           setState(() => _isGettingLocation = false);
           return;
         }
+        
         Position position = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-        );
-        _latController.text = position.latitude.toStringAsFixed(7);
-        _lngController.text = position.longitude.toStringAsFixed(7);
+        ).timeout(const Duration(seconds: 15), onTimeout: () {
+          throw Exception("Tiempo de espera agotado al buscar el GPS.");
+        });
+
+        await _processCoordinates(position.latitude, position.longitude);
         if (mounted) context.showCustomSnackbar('Ubicación obtenida con éxito.');
       } else if (status.isDenied || status.isPermanentlyDenied) {
         if (mounted) context.showCustomSnackbar('Permiso de ubicación denegado.', isError: true);
@@ -123,9 +126,43 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
     );
 
     if (selectedLocation != null && mounted) {
-      _latController.text = selectedLocation.latitude.toStringAsFixed(7);
-      _lngController.text = selectedLocation.longitude.toStringAsFixed(7);
+      await _processCoordinates(selectedLocation.latitude, selectedLocation.longitude);
       if (mounted) context.showCustomSnackbar('Ubicación seleccionada desde el mapa.');
+    }
+  }
+
+  Future<void> _processCoordinates(double lat, double lng) async {
+    _latController.text = lat.toStringAsFixed(7);
+    _lngController.text = lng.toStringAsFixed(7);
+
+    // Autocompletar URL Google Maps
+    if (_gmapsController.text.isEmpty || _gmapsController.text.contains('maps.google.com/?q=')) {
+      _gmapsController.text = 'https://maps.google.com/?q=$lat,$lng';
+    }
+
+    // Magia: Reverse Geocoding
+    try {
+      List<geocoding.Placemark> placemarks = await geocoding
+          .placemarkFromCoordinates(lat, lng)
+          .timeout(const Duration(seconds: 10));
+          
+      if (placemarks.isNotEmpty) {
+        final p = placemarks.first;
+        final street = p.thoroughfare ?? '';
+        final number = p.subThoroughfare ?? '';
+        
+        if (street.isNotEmpty) {
+          String fullAddress = street;
+          if (number.isNotEmpty) fullAddress += ' $number';
+          
+          if (_addressController.text.trim().isEmpty) {
+             _addressController.text = fullAddress;
+             if (mounted) context.showCustomSnackbar('¡Dirección autocompletada mágicamente!');
+          }
+        }
+      }
+    } catch (e) {
+       debugPrint("Error reverse geocoding: $e");
     }
   }
 
@@ -232,11 +269,14 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
           TextFormField(
             controller: _addressController,
             decoration: const InputDecoration(
-              labelText: 'Dirección (Calle y Número)',
+              labelText: 'Dirección (Calle y Número) *',
               border: OutlineInputBorder(),
               prefixIcon: Icon(Icons.location_on_outlined),
             ),
             textCapitalization: TextCapitalization.sentences,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'La dirección es obligatoria'
+                : null,
           ),
           const SizedBox(height: 16),
           TextFormField(
@@ -247,6 +287,8 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
               prefixIcon: Icon(Icons.notes_outlined),
             ),
             textCapitalization: TextCapitalization.sentences,
+            minLines: 1,
+            maxLines: 4,
           ),
           const SizedBox(height: 16),
           Text(
@@ -270,12 +312,6 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
                         )
                       : const Icon(Icons.my_location, size: 18),
                   label: const Text('Mi Ubicación'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colorScheme.primary,
-                    side: BorderSide(
-                      color: colorScheme.primary.withValues(alpha: 0.5),
-                    ),
-                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -285,12 +321,6 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
                   onPressed: isButtonDisabled ? null : _openMapPicker,
                   icon: const Icon(Icons.map_outlined, size: 18),
                   label: const Text('Ver Mapa'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colorScheme.secondary,
-                    side: BorderSide(
-                      color: colorScheme.secondary.withValues(alpha: 0.5),
-                    ),
-                  ),
                 ),
               ),
             ],
@@ -333,6 +363,17 @@ class _AddressFormDialogState extends ConsumerState<AddressFormDialog> {
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.url,
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return null;
+              final RegExp urlRegex = RegExp(
+                r'^(https?:\/\/)?([\w\d\-_]+\.)+[a-zA-Z]{2,}(:\d+)?(\/.*)?$',
+                caseSensitive: false,
+              );
+              if (!urlRegex.hasMatch(v.trim())) {
+                return 'Ingresa una URL válida';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: 24),
           FilledButton.icon(

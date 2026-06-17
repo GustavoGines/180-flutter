@@ -28,6 +28,10 @@ import 'package:dio/dio.dart'; // Para manejo de errores
 final clientSearchQueryProvider = StateProvider.autoDispose<String>(
   (ref) => '',
 );
+
+final selectedClientsProvider = StateProvider.autoDispose<Set<int>>(
+  (ref) => {},
+);
 // -----------------------------------------
 
 class ClientsPage extends HookConsumerWidget {
@@ -163,6 +167,10 @@ class ClientsPage extends HookConsumerWidget {
     final searchQuery = ref.watch(clientSearchQueryProvider);
     // 4. Observamos el provider que trae los datos
     final asyncClients = ref.watch(clientsListProvider(searchQuery));
+    
+    // 5. Estado de selección múltiple
+    final selectedClients = ref.watch(selectedClientsProvider);
+    final isSelectionMode = selectedClients.isNotEmpty;
 
     // --- LÓGICA PARA RESETEAR EL CAMPO DE TEXTO ---
     // Si el provider se resetea a '', limpiamos el controlador
@@ -178,27 +186,72 @@ class ClientsPage extends HookConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Clientes'),
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
+        title: Text(isSelectionMode ? '${selectedClients.length} seleccionados' : 'Clientes'),
+        backgroundColor: isSelectionMode ? cs.primaryContainer : cs.surface,
+        foregroundColor: isSelectionMode ? cs.onPrimaryContainer : cs.onSurface,
         elevation: 1,
         titleTextStyle: tt.titleLarge?.copyWith(
           fontWeight: FontWeight.bold,
-          color: cs.onSurface,
+          color: isSelectionMode ? cs.onPrimaryContainer : cs.onSurface,
         ),
-        actionsIconTheme: IconThemeData(color: cs.onSurfaceVariant),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Ver papelera',
-            onPressed: () => context.push('/clients/trashed'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Recargar',
-            onPressed: () => ref.invalidate(clientsListProvider(searchQuery)),
-          ),
-        ],
+        actionsIconTheme: IconThemeData(color: isSelectionMode ? cs.onPrimaryContainer : cs.onSurfaceVariant),
+        actions: isSelectionMode
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  tooltip: 'Eliminar seleccionados',
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('¿Eliminar clientes?'),
+                        content: Text('¿Seguro que deseas mover ${selectedClients.length} clientes a la papelera?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true), 
+                            style: TextButton.styleFrom(foregroundColor: Colors.red),
+                            child: const Text('Eliminar')
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirm == true) {
+                      if (!context.mounted) return;
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => const Center(child: CircularProgressIndicator()),
+                      );
+                      try {
+                        for (final id in selectedClients) {
+                          await ref.read(clientsRepoProvider).deleteClient(id);
+                        }
+                        if (context.mounted) Navigator.pop(context); // Cerrar loader
+                        if (context.mounted) context.showCustomSnackbar('${selectedClients.length} clientes eliminados.');
+                        ref.read(selectedClientsProvider.notifier).state = {}; // Limpiar selección
+                        ref.invalidate(clientsListProvider(searchQuery));
+                      } catch (e) {
+                        if (context.mounted) Navigator.pop(context); // Cerrar loader
+                        if (context.mounted) context.showCustomSnackbar('Error al eliminar: $e', isError: true);
+                      }
+                    }
+                  },
+                ),
+              ]
+            : [
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Ver papelera',
+                  onPressed: () => context.push('/clients/trashed'),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Recargar',
+                  onPressed: () => ref.invalidate(clientsListProvider(searchQuery)),
+                ),
+              ],
       ),
       body: Column(
         children: [
@@ -253,23 +306,57 @@ class ClientsPage extends HookConsumerWidget {
                         const Divider(height: 1, indent: 16, endIndent: 16),
                     itemBuilder: (_, i) {
                       final c = clients[i];
+                      final isSelected = selectedClients.contains(c.id);
+                      
                       return ListTile(
+                        selected: isSelected,
+                        selectedTileColor: cs.primaryContainer.withAlpha(77), // 0.3 * 255 = 76.5
                         title: Text(c.name),
                         subtitle: Text(
                           '${c.phone ?? "Sin teléfono"} • ${c.email ?? "Sin email"}',
                         ),
-                        leading: CircleAvatar(
-                          backgroundColor: cs.primaryContainer,
-                          foregroundColor: cs.onPrimaryContainer,
-                          child: Text(
-                            c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C',
-                          ),
-                        ),
-                        trailing: Icon(
+                        leading: isSelectionMode
+                            ? Checkbox(
+                                value: isSelected,
+                                onChanged: (val) {
+                                  final currentSet = Set<int>.from(selectedClients);
+                                  if (val == true) {
+                                    currentSet.add(c.id);
+                                  } else {
+                                    currentSet.remove(c.id);
+                                  }
+                                  ref.read(selectedClientsProvider.notifier).state = currentSet;
+                                },
+                              )
+                            : CircleAvatar(
+                                backgroundColor: cs.primaryContainer,
+                                foregroundColor: cs.onPrimaryContainer,
+                                child: Text(
+                                  c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C',
+                                ),
+                              ),
+                        trailing: isSelectionMode ? null : Icon(
                           Icons.chevron_right,
                           color: cs.onSurfaceVariant,
                         ),
-                        onTap: () => context.push('/clients/${c.id}'),
+                        onLongPress: () {
+                          if (!isSelectionMode) {
+                            ref.read(selectedClientsProvider.notifier).state = {c.id};
+                          }
+                        },
+                        onTap: () {
+                          if (isSelectionMode) {
+                            final currentSet = Set<int>.from(selectedClients);
+                            if (isSelected) {
+                              currentSet.remove(c.id);
+                            } else {
+                              currentSet.add(c.id);
+                            }
+                            ref.read(selectedClientsProvider.notifier).state = currentSet;
+                          } else {
+                            context.push('/clients/${c.id}');
+                          }
+                        },
                       );
                     },
                   ),

@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pasteleria_180_flutter/core/network/dio_client.dart';
 import 'models/chat_message.dart';
 
@@ -8,8 +10,12 @@ final copilotControllerProvider = AutoDisposeNotifierProvider<CopilotNotifier, L
 });
 
 class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
+  static const _cacheKey = 'copilot_chat_history';
+  static const _lastUpdateKey = 'copilot_chat_last_update';
+
   @override
   List<ChatMessage> build() {
+    _loadHistory();
     return [
       ChatMessage(
         role: ChatRole.assistant,
@@ -18,12 +24,56 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
     ];
   }
 
+  Future<void> _loadHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastUpdate = prefs.getInt(_lastUpdateKey) ?? 0;
+      
+      // Si pasaron más de 24 horas (86400000 ms), limpiar
+      if (DateTime.now().millisecondsSinceEpoch - lastUpdate > 86400000) {
+        await prefs.remove(_cacheKey);
+        return;
+      }
+      
+      final str = prefs.getString(_cacheKey);
+      if (str != null) {
+        final List<dynamic> decoded = jsonDecode(str);
+        final history = decoded.map((e) {
+          return ChatMessage(
+            role: e['role'] == 'user' ? ChatRole.user : ChatRole.assistant,
+            content: e['content'],
+            uiWidget: e['uiWidget'],
+          );
+        }).toList();
+        
+        if (history.isNotEmpty) {
+          state = history;
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _saveHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final toSave = state.where((m) => !m.isLoading).map((m) => {
+        'role': m.role == ChatRole.user ? 'user' : 'assistant',
+        'content': m.content,
+        'uiWidget': m.uiWidget,
+      }).toList();
+      
+      await prefs.setString(_cacheKey, jsonEncode(toSave));
+      await prefs.setInt(_lastUpdateKey, DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {}
+  }
+
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 
     // 1. Agregar mensaje del usuario
     final userMessage = ChatMessage(role: ChatRole.user, content: text.trim());
     state = [...state, userMessage];
+    _saveHistory();
 
     // 2. Agregar mensaje temporal de carga de la IA
     final loadingMessage = ChatMessage(role: ChatRole.assistant, content: '', isLoading: true);
@@ -56,6 +106,7 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
           uiWidget: uiWidget is Map<String, dynamic> ? uiWidget : null,
         ),
       ];
+      _saveHistory();
     } on DioException catch (e) {
       String errorMsg = 'Error de conexión';
       if (e.response != null && e.response?.data != null && e.response?.data['error'] != null) {

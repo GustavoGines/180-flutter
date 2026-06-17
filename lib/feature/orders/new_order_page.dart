@@ -32,16 +32,51 @@ class NewOrderPage extends ConsumerWidget {
 
     final catalogAsync = ref.watch(catalogProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          isEditMode ? 'Editar Pedido' : 'Nuevo Pedido',
-          style: TextStyle(color: Theme.of(context).colorScheme.primary),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        final hasChanges = ref.read(newOrderControllerProvider).hasUnsavedChanges;
+        if (!hasChanges) {
+          if (context.mounted) context.pop();
+          return;
+        }
+
+        final bool? shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('¿Descartar cambios?'),
+              content: const Text('Tienes datos agregados en el formulario que no han sido guardados. ¿Estás seguro de que quieres salir y descartarlos?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Seguir Editando'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Descartar Todo', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (shouldPop == true && context.mounted) {
+          context.pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            isEditMode ? 'Editar Pedido' : 'Nuevo Pedido',
+            style: TextStyle(color: Theme.of(context).colorScheme.primary),
+          ),
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          elevation: 1,
+          iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
         ),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        elevation: 1,
-        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
-      ),
       body: catalogAsync.when(
         loading: () =>
             Center(child: CircularProgressIndicator(color: darkBrown)),
@@ -65,6 +100,7 @@ class NewOrderPage extends ConsumerWidget {
           }
           return _OrderForm(catalog: catalogData);
         },
+      ),
       ),
     );
   }
