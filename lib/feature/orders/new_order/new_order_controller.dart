@@ -37,6 +37,7 @@ abstract class NewOrderState with _$NewOrderState {
     Order? originalOrder, // Si es no nulo, estamos en modo edición
     Client? selectedClient,
     @Default('') String prefillClientName,
+    @Default([]) List<Map<String, dynamic>> suggestedClients,
     int? selectedAddressId,
     @Default(false) bool isPaid,
     DateTime? eventDate,
@@ -107,6 +108,8 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
     state = state.copyWith(
       selectedClient: client,
       selectedAddressId: null, // Si cambia el cliente, reiniciamos la dirección seleccionada
+      suggestedClients: [], // Limpiamos las sugerencias al elegir
+      prefillClientName: '',
     );
   }
 
@@ -322,6 +325,7 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
     required bool isNewClient,
     DateTime? eventDate,
     List<OrderItem>? items,
+    List<Map<String, dynamic>>? suggestedClients,
   }) async {
     setLoading(true);
     try {
@@ -349,7 +353,10 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
       }
 
       if (isNewClient) {
-        state = state.copyWith(prefillClientName: clientName);
+        state = state.copyWith(
+          prefillClientName: clientName,
+          suggestedClients: suggestedClients ?? [],
+        );
       } else {
         // Buscar cliente existente
         final result = await ref.read(clientsRepoProvider).searchClients(query: clientName);

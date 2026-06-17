@@ -17,6 +17,7 @@ mixin _$NewOrderState {
   Order? get originalOrder; // Si es no nulo, estamos en modo edición
   Client? get selectedClient;
   String get prefillClientName;
+  List<Map<String, dynamic>> get suggestedClients;
   int? get selectedAddressId;
   bool get isPaid;
   DateTime? get eventDate;
@@ -49,6 +50,8 @@ mixin _$NewOrderState {
                 other.selectedClient == selectedClient) &&
             (identical(other.prefillClientName, prefillClientName) ||
                 other.prefillClientName == prefillClientName) &&
+            const DeepCollectionEquality()
+                .equals(other.suggestedClients, suggestedClients) &&
             (identical(other.selectedAddressId, selectedAddressId) ||
                 other.selectedAddressId == selectedAddressId) &&
             (identical(other.isPaid, isPaid) || other.isPaid == isPaid) &&
@@ -75,6 +78,7 @@ mixin _$NewOrderState {
       originalOrder,
       selectedClient,
       prefillClientName,
+      const DeepCollectionEquality().hash(suggestedClients),
       selectedAddressId,
       isPaid,
       eventDate,
@@ -90,7 +94,7 @@ mixin _$NewOrderState {
 
   @override
   String toString() {
-    return 'NewOrderState(originalOrder: $originalOrder, selectedClient: $selectedClient, prefillClientName: $prefillClientName, selectedAddressId: $selectedAddressId, isPaid: $isPaid, eventDate: $eventDate, startTime: $startTime, endTime: $endTime, deposit: $deposit, deliveryCost: $deliveryCost, notes: $notes, items: $items, filesToUpload: $filesToUpload, isLoading: $isLoading, error: $error)';
+    return 'NewOrderState(originalOrder: $originalOrder, selectedClient: $selectedClient, prefillClientName: $prefillClientName, suggestedClients: $suggestedClients, selectedAddressId: $selectedAddressId, isPaid: $isPaid, eventDate: $eventDate, startTime: $startTime, endTime: $endTime, deposit: $deposit, deliveryCost: $deliveryCost, notes: $notes, items: $items, filesToUpload: $filesToUpload, isLoading: $isLoading, error: $error)';
   }
 }
 
@@ -104,6 +108,7 @@ abstract mixin class $NewOrderStateCopyWith<$Res> {
       {Order? originalOrder,
       Client? selectedClient,
       String prefillClientName,
+      List<Map<String, dynamic>> suggestedClients,
       int? selectedAddressId,
       bool isPaid,
       DateTime? eventDate,
@@ -134,6 +139,7 @@ class _$NewOrderStateCopyWithImpl<$Res>
     Object? originalOrder = freezed,
     Object? selectedClient = freezed,
     Object? prefillClientName = null,
+    Object? suggestedClients = null,
     Object? selectedAddressId = freezed,
     Object? isPaid = null,
     Object? eventDate = freezed,
@@ -160,6 +166,10 @@ class _$NewOrderStateCopyWithImpl<$Res>
           ? _self.prefillClientName
           : prefillClientName // ignore: cast_nullable_to_non_nullable
               as String,
+      suggestedClients: null == suggestedClients
+          ? _self.suggestedClients
+          : suggestedClients // ignore: cast_nullable_to_non_nullable
+              as List<Map<String, dynamic>>,
       selectedAddressId: freezed == selectedAddressId
           ? _self.selectedAddressId
           : selectedAddressId // ignore: cast_nullable_to_non_nullable
@@ -309,6 +319,7 @@ extension NewOrderStatePatterns on NewOrderState {
             Order? originalOrder,
             Client? selectedClient,
             String prefillClientName,
+            List<Map<String, dynamic>> suggestedClients,
             int? selectedAddressId,
             bool isPaid,
             DateTime? eventDate,
@@ -331,6 +342,7 @@ extension NewOrderStatePatterns on NewOrderState {
             _that.originalOrder,
             _that.selectedClient,
             _that.prefillClientName,
+            _that.suggestedClients,
             _that.selectedAddressId,
             _that.isPaid,
             _that.eventDate,
@@ -367,6 +379,7 @@ extension NewOrderStatePatterns on NewOrderState {
             Order? originalOrder,
             Client? selectedClient,
             String prefillClientName,
+            List<Map<String, dynamic>> suggestedClients,
             int? selectedAddressId,
             bool isPaid,
             DateTime? eventDate,
@@ -388,6 +401,7 @@ extension NewOrderStatePatterns on NewOrderState {
             _that.originalOrder,
             _that.selectedClient,
             _that.prefillClientName,
+            _that.suggestedClients,
             _that.selectedAddressId,
             _that.isPaid,
             _that.eventDate,
@@ -423,6 +437,7 @@ extension NewOrderStatePatterns on NewOrderState {
             Order? originalOrder,
             Client? selectedClient,
             String prefillClientName,
+            List<Map<String, dynamic>> suggestedClients,
             int? selectedAddressId,
             bool isPaid,
             DateTime? eventDate,
@@ -444,6 +459,7 @@ extension NewOrderStatePatterns on NewOrderState {
             _that.originalOrder,
             _that.selectedClient,
             _that.prefillClientName,
+            _that.suggestedClients,
             _that.selectedAddressId,
             _that.isPaid,
             _that.eventDate,
@@ -469,6 +485,7 @@ class _NewOrderState extends NewOrderState {
       {this.originalOrder,
       this.selectedClient,
       this.prefillClientName = '',
+      final List<Map<String, dynamic>> suggestedClients = const [],
       this.selectedAddressId,
       this.isPaid = false,
       this.eventDate,
@@ -481,7 +498,8 @@ class _NewOrderState extends NewOrderState {
       final Map<String, XFile> filesToUpload = const {},
       this.isLoading = false,
       this.error})
-      : _items = items,
+      : _suggestedClients = suggestedClients,
+        _items = items,
         _filesToUpload = filesToUpload,
         super._();
 
@@ -493,6 +511,16 @@ class _NewOrderState extends NewOrderState {
   @override
   @JsonKey()
   final String prefillClientName;
+  final List<Map<String, dynamic>> _suggestedClients;
+  @override
+  @JsonKey()
+  List<Map<String, dynamic>> get suggestedClients {
+    if (_suggestedClients is EqualUnmodifiableListView)
+      return _suggestedClients;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_suggestedClients);
+  }
+
   @override
   final int? selectedAddressId;
   @override
@@ -556,6 +584,8 @@ class _NewOrderState extends NewOrderState {
                 other.selectedClient == selectedClient) &&
             (identical(other.prefillClientName, prefillClientName) ||
                 other.prefillClientName == prefillClientName) &&
+            const DeepCollectionEquality()
+                .equals(other._suggestedClients, _suggestedClients) &&
             (identical(other.selectedAddressId, selectedAddressId) ||
                 other.selectedAddressId == selectedAddressId) &&
             (identical(other.isPaid, isPaid) || other.isPaid == isPaid) &&
@@ -582,6 +612,7 @@ class _NewOrderState extends NewOrderState {
       originalOrder,
       selectedClient,
       prefillClientName,
+      const DeepCollectionEquality().hash(_suggestedClients),
       selectedAddressId,
       isPaid,
       eventDate,
@@ -597,7 +628,7 @@ class _NewOrderState extends NewOrderState {
 
   @override
   String toString() {
-    return 'NewOrderState(originalOrder: $originalOrder, selectedClient: $selectedClient, prefillClientName: $prefillClientName, selectedAddressId: $selectedAddressId, isPaid: $isPaid, eventDate: $eventDate, startTime: $startTime, endTime: $endTime, deposit: $deposit, deliveryCost: $deliveryCost, notes: $notes, items: $items, filesToUpload: $filesToUpload, isLoading: $isLoading, error: $error)';
+    return 'NewOrderState(originalOrder: $originalOrder, selectedClient: $selectedClient, prefillClientName: $prefillClientName, suggestedClients: $suggestedClients, selectedAddressId: $selectedAddressId, isPaid: $isPaid, eventDate: $eventDate, startTime: $startTime, endTime: $endTime, deposit: $deposit, deliveryCost: $deliveryCost, notes: $notes, items: $items, filesToUpload: $filesToUpload, isLoading: $isLoading, error: $error)';
   }
 }
 
@@ -613,6 +644,7 @@ abstract mixin class _$NewOrderStateCopyWith<$Res>
       {Order? originalOrder,
       Client? selectedClient,
       String prefillClientName,
+      List<Map<String, dynamic>> suggestedClients,
       int? selectedAddressId,
       bool isPaid,
       DateTime? eventDate,
@@ -643,6 +675,7 @@ class __$NewOrderStateCopyWithImpl<$Res>
     Object? originalOrder = freezed,
     Object? selectedClient = freezed,
     Object? prefillClientName = null,
+    Object? suggestedClients = null,
     Object? selectedAddressId = freezed,
     Object? isPaid = null,
     Object? eventDate = freezed,
@@ -669,6 +702,10 @@ class __$NewOrderStateCopyWithImpl<$Res>
           ? _self.prefillClientName
           : prefillClientName // ignore: cast_nullable_to_non_nullable
               as String,
+      suggestedClients: null == suggestedClients
+          ? _self._suggestedClients
+          : suggestedClients // ignore: cast_nullable_to_non_nullable
+              as List<Map<String, dynamic>>,
       selectedAddressId: freezed == selectedAddressId
           ? _self.selectedAddressId
           : selectedAddressId // ignore: cast_nullable_to_non_nullable

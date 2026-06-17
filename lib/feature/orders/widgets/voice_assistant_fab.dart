@@ -168,6 +168,9 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
                 
                 final clientName = data['client_name'] as String?;
                 final isNewClient = data['is_new_client'] as bool? ?? false;
+                final suggestedClientsRaw = data['suggested_clients'] as List<dynamic>? ?? [];
+                final suggestedClients = suggestedClientsRaw.map((e) => Map<String, dynamic>.from(e)).toList();
+                
                 final rawItems = data['items'] as List<dynamic>? ?? [];
                 final eventDateStr = data['event_date'] as String?;
                 
@@ -196,6 +199,7 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
                     isNewClient: isNewClient,
                     eventDate: eventDate,
                     items: items,
+                    suggestedClients: suggestedClients,
                   );
                 }
 
