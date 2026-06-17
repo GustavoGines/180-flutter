@@ -33,7 +33,13 @@ class AuthRepository {
 
     final token = res.data['token'] as String?;
     if (token != null && token.isNotEmpty) {
-      await _storage.write(key: 'auth_token', value: token);
+      try {
+        await _storage.write(key: 'auth_token', value: token);
+      } catch (e) {
+        debugPrint('⚠️ Error escribiendo token (posible corrupción de Keystore). Limpiando storage... $e');
+        await _storage.deleteAll();
+        await _storage.write(key: 'auth_token', value: token);
+      }
       debugPrint('🔐 Token guardado correctamente: $token');
       // Re-inicializamos Dio para que use el nuevo token en las siguientes peticiones
       await init();
@@ -85,16 +91,25 @@ class AuthRepository {
       debugPrint('API logout call failed, logging out locally anyway: $e');
     } finally {
       // Siempre borra el token del almacenamiento seguro
-      await _storage.delete(key: 'auth_token');
-      debugPrint("🔑 Token eliminado del almacenamiento seguro.");
+      try {
+        await _storage.delete(key: 'auth_token');
+        debugPrint("🔑 Token eliminado del almacenamiento seguro.");
+      } catch (e) {
+        debugPrint("🔑 Error al eliminar token del almacenamiento seguro: $e");
+      }
     }
   }
 
   // Lee el token desde el almacenamiento seguro
   Future<String?> getToken() async {
-    final token = await _storage.read(key: 'auth_token');
-    debugPrint('📦 Token leído de SecureStorage: $token');
-    return token;
+    try {
+      final token = await _storage.read(key: 'auth_token');
+      debugPrint('📦 Token leído de SecureStorage: $token');
+      return token;
+    } catch (e) {
+      debugPrint('📦 Error al leer token de SecureStorage: $e');
+      return null; // Si hay error de Keystore, asumimos que no hay token
+    }
   }
 
   /// Solicita un enlace de restablecimiento de contraseña.

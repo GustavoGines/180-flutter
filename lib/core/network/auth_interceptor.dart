@@ -14,9 +14,13 @@ class AuthInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final token = await storage.read(key: 'auth_token');
-    if (token != null && token.isNotEmpty) {
-      options.headers['Authorization'] = 'Bearer $token';
+    try {
+      final token = await storage.read(key: 'auth_token');
+      if (token != null && token.isNotEmpty) {
+        options.headers['Authorization'] = 'Bearer $token';
+      }
+    } catch (e) {
+      // Ignorar error de lectura (ej. Keystore corrupto en reinstalación)
     }
 
     // ✅ CORRECCIÓN:
@@ -31,10 +35,18 @@ class AuthInterceptor extends Interceptor {
       final path = err.requestOptions.path;
 
       if (!path.contains('/auth/') && !path.contains('/ping')) {
-        final token = await storage.read(key: 'auth_token');
-        if (token != null && token.isNotEmpty) {
-          await storage.delete(key: 'auth_token');
-          // Disparamos el callback para invalidar el provider y redirigir
+        try {
+          final token = await storage.read(key: 'auth_token');
+          if (token != null && token.isNotEmpty) {
+            await storage.delete(key: 'auth_token');
+            // Disparamos el callback para invalidar el provider y redirigir
+            if (onUnauthorized != null) {
+              onUnauthorized!();
+            }
+          }
+        } catch (e) {
+          // Si hubo error leyendo, igual intentamos borrar y desloguear
+          try { await storage.delete(key: 'auth_token'); } catch (_) {}
           if (onUnauthorized != null) {
             onUnauthorized!();
           }
