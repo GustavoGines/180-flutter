@@ -148,8 +148,24 @@ Widget _buildOrderCard(BuildContext context, WidgetRef ref, Order order) {
   // (Tu código de _buildOrderCard va aquí, sin cambios)
   return Dismissible(
     key: ValueKey(order.id),
-    direction: DismissDirection.endToStart,
+    direction: DismissDirection.horizontal,
     background: Container(
+      color: Colors.green.shade600,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          Icon(Icons.check_circle_outline, color: Colors.white),
+          SizedBox(width: 8),
+          Text(
+            'MARCAR PAGADO',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    ),
+    secondaryBackground: Container(
       color: Colors.red.shade700,
       alignment: Alignment.centerRight,
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -166,54 +182,92 @@ Widget _buildOrderCard(BuildContext context, WidgetRef ref, Order order) {
       ),
     ),
     confirmDismiss: (direction) async {
-      final bool? didConfirm = await showDialog<bool>(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: const Text('Confirmar Eliminación'),
-            content: const Text(
-              '¿Estás seguro de que quieres eliminar este pedido?',
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.red.shade700,
-                ),
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Eliminar'),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (didConfirm == true) {
-        try {
-          // 👇 8. CORRECCIÓN DE TIPO (usa 'order.id' que es un 'int')
-          await ref.read(ordersWindowProvider.notifier).deleteOrder(order.id);
-
-          if (!context.mounted) return true; // Chequeo de seguridad
+      if (direction == DismissDirection.startToEnd) {
+        if (order.isPaid) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Pedido #${order.id} eliminado.'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          return true;
-        } catch (e) {
-          if (!context.mounted) return false; // Chequeo de seguridad
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error al eliminar: $e'),
-              backgroundColor: Colors.red,
+            const SnackBar(
+              content: Text('Este pedido ya está pagado.'),
+              backgroundColor: Colors.orange,
             ),
           );
           return false;
         }
+
+        try {
+          final updatedOrder = await ref.read(ordersRepoProvider).markAsPaid(order.id);
+          if (updatedOrder != null) {
+            await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Pedido #${order.id} marcado como pagado.'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          }
+          return false; // Retornamos false para que la tarjeta no desaparezca, solo se actualice
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error al marcar pagado: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return false;
+        }
+      } else if (direction == DismissDirection.endToStart) {
+        final bool? didConfirm = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Confirmar Eliminación'),
+              content: const Text(
+                '¿Estás seguro de que quieres eliminar este pedido?',
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Eliminar'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (didConfirm == true) {
+          try {
+            await ref.read(ordersWindowProvider.notifier).deleteOrder(order.id);
+
+            if (!context.mounted) return true;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Pedido #${order.id} eliminado.'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            return true;
+          } catch (e) {
+            if (!context.mounted) return false;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error al eliminar: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return false;
+          }
+        }
+        return false;
       }
       return false;
     },
