@@ -212,8 +212,15 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
 
     } on DioException catch (e) {
       if (mounted) {
+        String errMsg = 'Error de conexión: ${e.message}';
+        if (e.response?.data != null && e.response!.data is Map && e.response!.data['error'] != null) {
+          errMsg = e.response!.data['error'].toString();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error de conexión: ${e.message}')),
+          SnackBar(
+            content: Text(errMsg),
+            backgroundColor: Colors.orange,
+          ),
         );
       }
     } catch (e) {
