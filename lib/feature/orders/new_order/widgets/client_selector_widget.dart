@@ -75,7 +75,7 @@ class _ClientSelectorWidgetState extends ConsumerState<ClientSelectorWidget> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (selectedClient == null)
+        if (selectedClient == null) ...[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -141,7 +141,7 @@ class _ClientSelectorWidgetState extends ConsumerState<ClientSelectorWidget> {
               ),
             ],
           ),
-          if (selectedClient == null && state.suggestedClients.isNotEmpty) ...[
+          if (state.suggestedClients.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
               '¿Te refieres a alguno de estos clientes?',
@@ -178,8 +178,8 @@ class _ClientSelectorWidgetState extends ConsumerState<ClientSelectorWidget> {
                 );
               }).toList(),
             ),
-          ]
-        else
+          ],
+        ] else
           Card(
             elevation: 0,
             color: Theme.of(context).colorScheme.tertiaryContainer,
