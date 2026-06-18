@@ -165,32 +165,63 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
               },
               onConfirm: () async {
                 Navigator.of(ctx).pop();
-                
+
                 final clientName = data['client_name'] as String?;
                 final isNewClient = data['is_new_client'] as bool? ?? false;
                 final suggestedClientsRaw = data['suggested_clients'] as List<dynamic>? ?? [];
                 final suggestedClients = suggestedClientsRaw.map((e) => Map<String, dynamic>.from(e)).toList();
-                
+
                 final rawItems = data['items'] as List<dynamic>? ?? [];
                 final eventDateStr = data['event_date'] as String?;
-                
+
                 DateTime? eventDate;
                 if (eventDateStr != null) {
                   eventDate = DateTime.tryParse(eventDateStr);
                 }
 
+                // BUG-V02: Leer y parsear el horario que ahora llega del backend
+                TimeOfDay? startTime;
+                final startTimeStr = data['start_time'] as String?;
+                if (startTimeStr != null && startTimeStr.isNotEmpty) {
+                  final parts = startTimeStr.split(':');
+                  if (parts.length >= 2) {
+                    final hour = int.tryParse(parts[0]);
+                    final minute = int.tryParse(parts[1]);
+                    if (hour != null && minute != null) {
+                      startTime = TimeOfDay(hour: hour, minute: minute);
+                    }
+                  }
+                }
+
+                // Los items ya vienen con campos planos (fillings, extras, quantity, weight_kg)
+                // gracias al fix en AiBrainService::parseOrderArguments
                 final items = rawItems.map((item) {
-                  final productName = item['matched_name'] as String? ?? item['original_name'] as String? ?? 'Desconocido';
+                  final productName = item['matched_name'] as String?
+                      ?? item['name'] as String?
+                      ?? item['original_name'] as String?
+                      ?? 'Desconocido';
+                  final fillings = (item['fillings'] as List<dynamic>?)?.cast<String>() ?? [];
+                  final extras   = (item['extras']   as List<dynamic>?)?.cast<String>() ?? [];
+                  final weight   = (item['weight_kg'] as num?)?.toDouble();
+                  final isUnit   = item['is_unit_sale'] == true;
+
                   return OrderItem(
                     name: productName,
                     qty: (item['quantity'] as num?)?.toDouble() ?? 1.0,
-                    basePrice: 0.0,
-                    customizationNotes: item['notes'] as String?,
-                    customizationJson: item['customization_json'] as Map<String, dynamic>?,
+                    basePrice: (item['base_price'] as num?)?.toDouble() ?? 0.0,
+                    customizationNotes: item['customization_notes'] as String?,
+                    customizationJson: {
+                      ...(item['customization_json'] as Map<String, dynamic>? ?? {}),
+                      if (weight != null)        'weight_kg': weight,
+                      if (isUnit)                'is_unit_sale': true,
+                      if (fillings.isNotEmpty)   'selected_fillings': fillings,
+                      if (extras.isNotEmpty)     'selected_extras_kg':
+                          extras.map((e) => {'name': e, 'price': 0.0}).toList(),
+                    },
                   );
                 }).toList();
 
-                // Mantener provider vivo (opcional, como NewOrderController está AutoDispose)
+                // Mantener provider vivo (NewOrderController está AutoDispose)
                 final sub = ref.listenManual(newOrderControllerProvider, (_, __) {});
 
                 if (clientName != null) {
@@ -198,6 +229,7 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
                     clientName: clientName,
                     isNewClient: isNewClient,
                     eventDate: eventDate,
+                    startTime: startTime,       // BUG-V02: pasar horario al controller
                     items: items,
                     suggestedClients: suggestedClients,
                   );

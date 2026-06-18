@@ -30,6 +30,8 @@ class AiOrderSummarySheet extends StatelessWidget {
     final formattedDate = deliveryDate != null 
         ? DateFormat('EEEE d \'de\' MMMM, yyyy', 'es').format(deliveryDate)
         : 'Sin fecha';
+        
+    final startTime = data['start_time'] as String?;
 
     final items = data['items'] as List<dynamic>? ?? [];
 
@@ -76,6 +78,18 @@ class AiOrderSummarySheet extends StatelessWidget {
                 ),
               ],
             ),
+            if (startTime != null && startTime.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                children: [
+                  Chip(
+                    avatar: const Icon(Icons.access_time, size: 16),
+                    label: Text(startTime),
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             
             Text('Productos detectados:', style: theme.textTheme.titleMedium),
@@ -89,18 +103,31 @@ class AiOrderSummarySheet extends StatelessWidget {
                 separatorBuilder: (context, index) => const Divider(),
                 itemBuilder: (context, index) {
                   final item = items[index];
-                  final product = item['matched_name'] ?? item['original_name'] ?? 'Producto';
-                  final notes = item['notes'] ?? '';
+                  final product = item['product_name'] ?? item['original_name'] ?? 'Producto';
+                  final notes = item['notes']?.toString() ?? '';
                   final quantity = item['quantity'] ?? 1;
                   
+                  final fillings = (item['fillings'] as List<dynamic>?)?.cast<String>() ?? [];
+                  final extras = (item['extras'] as List<dynamic>?)?.cast<String>() ?? [];
+                  final weight = item['weight_kg'];
+                  final isUnit = item['is_unit_sale'] == true;
+
+                  List<String> details = [];
+                  if (weight != null) details.add('$weight kg');
+                  if (fillings.isNotEmpty) details.add('Rellenos: ${fillings.join(', ')}');
+                  if (extras.isNotEmpty) details.add('Extras: ${extras.join(', ')}');
+                  if (notes.isNotEmpty) details.add('Notas: $notes');
+
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       backgroundColor: colorScheme.primaryContainer,
                       child: Icon(Icons.cake, color: colorScheme.onPrimaryContainer),
                     ),
-                    title: Text('$quantity x $product', style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: notes.isNotEmpty ? Text('Notas: $notes') : null,
+                    title: Text('$quantity${isUnit ? 'u' : ''} x $product', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: details.isNotEmpty 
+                        ? Text(details.join('\n')) 
+                        : null,
                   );
                 },
               ),

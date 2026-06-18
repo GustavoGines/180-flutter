@@ -10,7 +10,6 @@ import '../../../../core/models/order.dart';
 import '../../../../core/models/order_item.dart';
 import '../../clients/clients_repository.dart';
 import '../orders_repository.dart';
-import '../catalog_repository.dart';
 import 'package:collection/collection.dart';
 import '../home_page.dart';
 import '../order_detail_page.dart';
@@ -319,11 +318,12 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
       setLoading(false);
     }
   }
-  // --- Lógica del Asistente de Voz ---
+  /// Carga el estado del formulario a partir de la interpretación del Asistente de Voz
   Future<void> prefillFromVoiceAssistant({
     required String clientName,
     required bool isNewClient,
     DateTime? eventDate,
+    TimeOfDay? startTime,                         // BUG-V02: nuevo parámetro para el horario
     List<OrderItem>? items,
     List<Map<String, dynamic>>? suggestedClients,
   }) async {
@@ -332,24 +332,12 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
       if (eventDate != null) {
         updateDate(eventDate);
       }
+      // BUG-V02: Inyectar el horario si la IA lo detectó
+      if (startTime != null) {
+        updateStartTime(startTime); // updateStartTime ya calcula endTime = startTime + 1h
+      }
       if (items != null && items.isNotEmpty) {
-        try {
-          final catalog = await ref.read(catalogProvider.future);
-          final updatedItems = items.map((item) {
-             final match = catalog.products.firstWhereOrNull(
-                (p) => p.name.toLowerCase() == item.name.toLowerCase()
-             );
-             if (match != null) {
-                return item.copyWith(
-                  basePrice: match.basePrice,
-                );
-             }
-             return item;
-          }).toList();
-          updateItems(updatedItems);
-        } catch(e) {
-          updateItems(items);
-        }
+        updateItems(items);
       }
 
       if (isNewClient) {

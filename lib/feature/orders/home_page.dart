@@ -156,22 +156,37 @@ class _HomePageState extends ConsumerState<HomePage> {
     final notifier = ref.read(ordersWindowProvider.notifier);
     await notifier.fetchMonthIfNeeded(monthKey);
 
-    // 2. Navegar al mes en la barra
+    // 2. Navegar al mes en la barra de meses
     ref.read(selectedMonthProvider.notifier).setTo(monthKey);
+    _monthBarKey.currentState?.scrollToCurrentMonth(monthKey, animate: true);
 
-    // 3. Esperar un frame para que la lista se reconstruya con los nuevos datos
+    // 3. Esperar un tiempo suficiente para que la lista se reconstruya con el nuevo mes.
+    //    500ms (en lugar de 300ms) cubre meses recién cargados de red (BUG-04).
     if (!mounted) return;
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
 
     // 4. Buscar el índice de ese día y hacer scroll
     final index = _dayIndexMap[dayKey];
     if (index != null) {
+      // Caso nominal: el día exacto tiene pedidos y está en el mapa
       _itemScrollController.scrollTo(
         index: index,
         duration: const Duration(milliseconds: 450),
         curve: Curves.easeOut,
       );
+    } else {
+      // Fallback (BUG-05): el día no tiene pedidos (no está en _dayIndexMap),
+      // pero igual saltamos al inicio del mes para que el usuario vea la zona correcta.
+      final monthIndex = _monthIndexMap[monthKey];
+      if (monthIndex != null) {
+        _itemScrollController.scrollTo(
+          index: monthIndex,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOut,
+          alignment: 0.08,
+        );
+      }
     }
   }
 

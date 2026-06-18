@@ -26,6 +26,9 @@ class Order {
   final ClientAddress? clientAddress; // ANTES: deliveryAddress
   final bool isPaid;
 
+  // Getter semántico para la seña
+  double get paidAmount => deposit ?? 0.0;
+
   const Order({
     required this.id,
     required this.clientId,

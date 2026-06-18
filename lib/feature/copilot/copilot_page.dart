@@ -18,16 +18,6 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
-  }
-
   void _handleSend() {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
@@ -52,10 +42,7 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
   Widget build(BuildContext context) {
     final messages = ref.watch(copilotControllerProvider);
 
-    // Scroll to bottom whenever messages change
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-    });
+    // Ya no hacemos scroll programático en cada build. ListView(reverse: true) lo maneja.
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -70,10 +57,11 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
             Expanded(
               child: ListView.builder(
                 controller: _scrollController,
+                reverse: true,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 itemCount: messages.length,
                 itemBuilder: (context, index) {
-                  final msg = messages[index];
+                  final msg = messages[messages.length - 1 - index];
                   return _buildChatBubble(context, msg);
                 },
               ),
@@ -186,9 +174,12 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
           // Guardar la fecha en el provider y volver al home (donde está el calendario)
           final date = DateTime.tryParse(dateStr.toString());
           if (date != null) {
-            // El Riverpod listener en HomePage hará el salto a la fecha
+            // Primero establecer la fecha, luego navegar directamente al Home.
+            // Usamos go('/') en lugar de pop() para evitar la race condition:
+            // con pop(), el listener se disparaba durante la animación de transición
+            // cuando _dayIndexMap aún estaba reconstruyéndose → el scroll fallaba.
             ref.read(jumpToDateProvider.notifier).state = date;
-            context.pop();
+            context.go('/');
           }
         },
         icon: const Icon(Icons.calendar_month),
@@ -294,7 +285,15 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
           final orderId = order['id'];
           final clientName = order['client']?['name'] ?? order['client_name'] ?? 'Cliente Desconocido';
           final date = order['event_date'] ?? 'Sin fecha';
-          final status = order['status'] ?? 'pending';
+          final rawStatus = order['status'] ?? 'pending';
+          String status = rawStatus;
+          switch (rawStatus) {
+            case 'pending': status = 'Pendiente'; break;
+            case 'in_process': status = 'En Proceso'; break;
+            case 'completed': status = 'Terminado'; break;
+            case 'delivered': status = 'Entregado'; break;
+            case 'cancelled': status = 'Cancelado'; break;
+          }
           
           return ListTile(
             leading: const Icon(Icons.receipt_long),
