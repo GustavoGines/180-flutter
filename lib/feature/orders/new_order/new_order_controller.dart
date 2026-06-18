@@ -10,7 +10,6 @@ import '../../../../core/models/order.dart';
 import '../../../../core/models/order_item.dart';
 import '../../clients/clients_repository.dart';
 import '../orders_repository.dart';
-import 'package:collection/collection.dart';
 import '../home_page.dart';
 import '../order_detail_page.dart';
 
@@ -106,7 +105,6 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
     state = state.copyWith(
       selectedClient: client,
       selectedAddressId: null, // Si cambia el cliente, reiniciamos la dirección seleccionada
-      suggestedClients: [], // Limpiamos las sugerencias al elegir
       prefillClientName: '',
     );
   }
