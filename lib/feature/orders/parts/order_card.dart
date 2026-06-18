@@ -131,55 +131,7 @@ class OrderCard extends ConsumerWidget {
                   ),
                 ],
               ),
-              // 👇 NUEVO: Desglose financiero si hay seña
-              if (order.paidAmount > 0) ...[
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? cs.surfaceContainerHighest.withValues(alpha: 0.5) : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: isDarkMode ? cs.outlineVariant : Colors.grey.shade300),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total: $totalString',
-                        style: textTheme.labelSmall?.copyWith(color: secondaryTextColor),
-                      ),
-                      Row(
-                        children: [
-                          Text(
-                            'Seña: ${fmt.format(order.paidAmount)}',
-                            style: textTheme.labelSmall?.copyWith(
-                              color: isDarkMode ? Colors.green.shade400 : Colors.green.shade700,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (order.paidAmount >= (order.total ?? 0))
-                            Text(
-                              'Pagado en su totalidad',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: isDarkMode ? Colors.green.shade400 : Colors.green.shade700,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                          else
-                            Text(
-                              'Saldo: ${fmt.format((order.total ?? 0) - order.paidAmount)}',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: isDarkMode ? Colors.orange.shade400 : Colors.orange.shade800,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+
               const SizedBox(height: 8),
               // --- Fila 2: Fecha/Hora y Dropdown de Estado ---
               Row(
