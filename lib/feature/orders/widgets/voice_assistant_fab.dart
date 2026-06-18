@@ -163,13 +163,15 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
               onCancel: () {
                 Navigator.of(ctx).pop();
               },
-              onConfirm: () async {
+              onConfirm: (selectedClientId) async {
                 Navigator.of(ctx).pop();
 
                 final clientName = data['client_name'] as String?;
-                final isNewClient = data['is_new_client'] as bool? ?? false;
-                final suggestedClientsRaw = data['suggested_clients'] as List<dynamic>? ?? [];
-                final suggestedClients = suggestedClientsRaw.map((e) => Map<String, dynamic>.from(e)).toList();
+                bool isNewClient = data['is_new_client'] as bool? ?? false;
+                
+                if (selectedClientId != null) {
+                  isNewClient = false; // Ya no es nuevo si eligió una sugerencia
+                }
 
                 final rawItems = data['items'] as List<dynamic>? ?? [];
                 final eventDateStr = data['event_date'] as String?;
@@ -230,8 +232,8 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
                     isNewClient: isNewClient,
                     eventDate: eventDate,
                     startTime: startTime,       // BUG-V02: pasar horario al controller
+                    exactClientId: selectedClientId,
                     items: items,
-                    suggestedClients: suggestedClients,
                   );
                 }
 

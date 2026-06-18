@@ -141,44 +141,7 @@ class _ClientSelectorWidgetState extends ConsumerState<ClientSelectorWidget> {
               ),
             ],
           ),
-          if (state.suggestedClients.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              '¿Te refieres a alguno de estos clientes?',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8.0,
-              runSpacing: 8.0,
-              children: state.suggestedClients.map((suggested) {
-                return ActionChip(
-                  avatar: const Icon(Icons.person_search, size: 16),
-                  label: Text('${suggested["name"]} (${suggested["phone"] ?? "Sin tel"})'),
-                  onPressed: () async {
-                    // Refrescar cliente completo para obtener direcciones
-                    try {
-                      final client = await ref.read(clientsRepoProvider).getClientById(suggested["id"] as int);
-                      if (client != null) {
-                        _selectClient(client);
-                      }
-                    } catch (e) {
-                      // Fallback a cliente básico
-                      final fallback = Client(
-                        id: suggested["id"] as int,
-                        name: suggested["name"] as String,
-                        phone: suggested["phone"] as String?,
-                      );
-                      _selectClient(fallback);
-                    }
-                  },
-                );
-              }).toList(),
-            ),
-          ],
+
         ] else
           Card(
             elevation: 0,
