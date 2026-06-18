@@ -204,13 +204,20 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
                       ?? 'Desconocido';
                   final fillings = (item['fillings'] as List<dynamic>?)?.cast<String>() ?? [];
                   final extras   = (item['extras']   as List<dynamic>?)?.cast<String>() ?? [];
-                  final weight   = (item['weight_kg'] as num?)?.toDouble();
+                  double parseDoubleSafe(dynamic val, [double def = 0.0]) {
+                    if (val == null) return def;
+                    if (val is num) return val.toDouble();
+                    if (val is String) return double.tryParse(val) ?? def;
+                    return def;
+                  }
+
+                  final weight   = item['weight_kg'] != null ? parseDoubleSafe(item['weight_kg']) : null;
                   final isUnit   = item['is_unit_sale'] == true;
 
                   return OrderItem(
                     name: productName,
-                    qty: (item['quantity'] as num?)?.toDouble() ?? 1.0,
-                    basePrice: (item['base_price'] as num?)?.toDouble() ?? 0.0,
+                    qty: parseDoubleSafe(item['quantity'], 1.0),
+                    basePrice: parseDoubleSafe(item['base_price'], 0.0),
                     customizationNotes: item['customization_notes'] as String?,
                     customizationJson: {
                       ...(item['customization_json'] as Map<String, dynamic>? ?? {}),
