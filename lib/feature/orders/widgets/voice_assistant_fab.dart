@@ -11,6 +11,7 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/models/order_item.dart';
 import '../new_order/new_order_controller.dart';
 import 'ai_order_summary_sheet.dart';
+import '../../copilot/copilot_bottom_sheet.dart';
 
 class VoiceAssistantFab extends ConsumerStatefulWidget {
   const VoiceAssistantFab({super.key});
@@ -143,16 +144,19 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
       final response = await dio.post('/ai/process-voice', data: formData);
 
       final data = response.data['data'];
-      if (data == null || data['intent'] == 'unknown') {
+      if (data == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No pude entender el pedido.')),
+            const SnackBar(content: Text('Error al procesar la respuesta.')),
           );
         }
         return;
       }
 
-      if (data['intent'] == 'create_order') {
+      final intent = data['intent'] as String?;
+      final transcription = data['transcription'] as String?;
+
+      if (intent == 'create_order') {
         if (mounted) {
           showModalBottomSheet(
             context: context,
@@ -233,6 +237,8 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
                 // Mantener provider vivo (NewOrderController está AutoDispose)
                 final sub = ref.listenManual(newOrderControllerProvider, (_, __) {});
 
+                final generalNotes = data['general_notes'] as String?;
+
                 if (clientName != null) {
                   await ref.read(newOrderControllerProvider.notifier).prefillFromVoiceAssistant(
                     clientName: clientName,
@@ -241,6 +247,7 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
                     startTime: startTime,       // BUG-V02: pasar horario al controller
                     exactClientId: selectedClientId,
                     items: items,
+                    generalNotes: generalNotes,
                   );
                 }
 
@@ -252,6 +259,19 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
               },
             ),
           );
+        }
+      } else {
+        // Smart Handoff: derivar cualquier otra intención o texto suelto al Copiloto
+        if (mounted && transcription != null && transcription.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Derivando al Copiloto...'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          // Ocultamos el SnackBar rápido para que no estorbe el modal
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          showCopilotSheet(context, initialMessage: transcription);
         }
       }
 

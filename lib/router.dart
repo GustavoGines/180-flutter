@@ -24,8 +24,6 @@ import 'feature/orders/services/pdf_preview_page.dart';
 import 'feature/orders/admin_catalog_page.dart';
 import 'feature/orders/admin/product_form_page.dart';
 import 'core/models/catalog.dart';
-import 'feature/copilot/copilot_page.dart';
-
 // 🔔 Notificador de GoRouter
 final goRouterNotifierProvider = ChangeNotifierProvider((ref) {
   return GoRouterNotifier(ref);
@@ -152,10 +150,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
         ],
-      ),
-      GoRoute(
-        path: '/copilot',
-        pageBuilder: (context, state) => _fadePageBuilder(context, state, const CopilotPage()),
       ),
     ],
 

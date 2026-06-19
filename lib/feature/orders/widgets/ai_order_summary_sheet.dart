@@ -101,6 +101,48 @@ class _AiOrderSummarySheetState extends State<AiOrderSummarySheet> {
                 ),
               ],
               
+              if (data['general_notes'] != null && data['general_notes'].toString().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: colorScheme.tertiary.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.notes, color: colorScheme.tertiary, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Nota General',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: colorScheme.tertiary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              data['general_notes'].toString(),
+                              style: TextStyle(
+                                color: colorScheme.onTertiaryContainer,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              
               if (suggestedClients.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text(

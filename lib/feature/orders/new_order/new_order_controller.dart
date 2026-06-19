@@ -323,6 +323,7 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
     TimeOfDay? startTime,
     int? exactClientId,
     List<OrderItem>? items,
+    String? generalNotes,
   }) async {
     setLoading(true);
     try {
@@ -332,6 +333,9 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
       // BUG-V02: Inyectar el horario si la IA lo detectó
       if (startTime != null) {
         updateStartTime(startTime); // updateStartTime ya calcula endTime = startTime + 1h
+      }
+      if (generalNotes != null && generalNotes.trim().isNotEmpty) {
+        updateNotes(generalNotes.trim());
       }
       if (items != null && items.isNotEmpty) {
         updateItems(items);

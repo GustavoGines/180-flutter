@@ -6,27 +6,76 @@ import '../orders/home_page.dart'; // Para jumpToDateProvider
 import 'copilot_controller.dart';
 import 'models/chat_message.dart';
 
-class CopilotPage extends ConsumerStatefulWidget {
-  const CopilotPage({super.key});
-
-  @override
-  ConsumerState<CopilotPage> createState() => _CopilotPageState();
+Future<void> showCopilotSheet(BuildContext context, {String? initialMessage}) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      return Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: CopilotBottomSheet(initialMessage: initialMessage),
+      );
+    },
+  );
 }
 
-class _CopilotPageState extends ConsumerState<CopilotPage> {
+class CopilotBottomSheet extends ConsumerStatefulWidget {
+  final String? initialMessage;
+
+  const CopilotBottomSheet({super.key, this.initialMessage});
+
+  @override
+  ConsumerState<CopilotBottomSheet> createState() => _CopilotBottomSheetState();
+}
+
+class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
 
-  void _handleSend() {
-    final text = _textController.text;
-    if (text.trim().isEmpty) return;
+  final List<Map<String, dynamic>> _suggestedPrompts = [
+    {
+      'icon': Icons.receipt_long,
+      'text': '¿Cuántos pedidos faltan entregar hoy?',
+    },
+    {
+      'icon': Icons.attach_money,
+      'text': 'Resumen de facturación de este mes',
+    },
+    {
+      'icon': Icons.cake,
+      'text': '¿Qué tenemos que producir mañana?',
+    },
+    {
+      'icon': Icons.search,
+      'text': '¿Hay algún pedido pendiente de pago?',
+    },
+    {
+      'icon': Icons.help_outline,
+      'text': '¿Qué podés hacer?',
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialMessage != null && widget.initialMessage!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(copilotControllerProvider.notifier).sendMessage(widget.initialMessage!);
+      });
+    }
+  }
+
+  void _handleSend([String? text]) {
+    final message = text ?? _textController.text;
+    if (message.trim().isEmpty) return;
     
-    ref.read(copilotControllerProvider.notifier).sendMessage(text);
-    _textController.clear();
+    ref.read(copilotControllerProvider.notifier).sendMessage(message);
+    if (text == null) {
+      _textController.clear();
+    }
     
-    // Focus scope request if we want to keep keyboard open, but maybe we hide it to see response?
-    // Let's keep it open
     _focusNode.requestFocus();
   }
 
@@ -41,39 +90,134 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
   @override
   Widget build(BuildContext context) {
     final messages = ref.watch(copilotControllerProvider);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    // Si solo está el mensaje de bienvenida y no hay carga, mostramos prompts
+    final showPrompts = messages.length <= 1 && !messages.any((m) => m.isLoading);
 
-    // Ya no hacemos scroll programático en cada build. ListView(reverse: true) lo maneja.
-
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      appBar: AppBar(
-        title: const Text('Copiloto 180°'),
-        centerTitle: true,
-        elevation: 1,
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                reverse: true,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                itemCount: messages.length,
-                itemBuilder: (context, index) {
-                  final msg = messages[messages.length - 1 - index];
-                  return _buildChatBubble(context, msg);
-                },
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Cabecera
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5))),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.auto_awesome, size: 20, color: Colors.amber),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Chat de IA',
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: IconButton.styleFrom(
+                        backgroundColor: colorScheme.surface,
+                        padding: const EdgeInsets.all(8),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              
+              // Área de Mensajes
+              Expanded(
+                child: showPrompts
+                    ? _buildSuggestedPrompts(colorScheme)
+                    : ListView.builder(
+                        controller: scrollController, // Para que el DraggableScrollableSheet funcione con el ListView
+                        reverse: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final msg = messages[messages.length - 1 - index];
+                          return _buildChatBubble(context, msg, colorScheme);
+                        },
+                      ),
+              ),
+              
+              // Input inferior
+              _buildInputArea(context, colorScheme),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSuggestedPrompts(ColorScheme colorScheme) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 20),
+          Center(
+            child: Text(
+              '¡Hola! Soy Copiloto 180.',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
             ),
-            _buildInputArea(context),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              '¿En qué te puedo ayudar hoy?',
+              style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant),
+            ),
+          ),
+          const SizedBox(height: 32),
+          ..._suggestedPrompts.map((prompt) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: InkWell(
+                onTap: () => _handleSend(prompt['text'] as String),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(prompt['icon'] as IconData, color: colorScheme.primary, size: 24),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          prompt['text'] as String,
+                          style: TextStyle(color: colorScheme.onSurface),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
 
-  Widget _buildChatBubble(BuildContext context, ChatMessage message) {
+  Widget _buildChatBubble(BuildContext context, ChatMessage message, ColorScheme colorScheme) {
     final isUser = message.role == ChatRole.user;
     
     return Align(
@@ -86,8 +230,8 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isUser 
-              ? Theme.of(context).colorScheme.primary 
-              : Theme.of(context).colorScheme.surface,
+              ? colorScheme.primary 
+              : colorScheme.surface,
           borderRadius: BorderRadius.circular(20).copyWith(
             bottomRight: isUser ? const Radius.circular(0) : const Radius.circular(20),
             bottomLeft: !isUser ? const Radius.circular(0) : const Radius.circular(20),
@@ -110,7 +254,7 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
                     height: 15,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: colorScheme.primary,
                     ),
                   ),
                 ),
@@ -123,8 +267,8 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
                     message.content,
                     style: TextStyle(
                       color: isUser 
-                          ? Theme.of(context).colorScheme.onPrimary 
-                          : Theme.of(context).colorScheme.onSurface,
+                          ? colorScheme.onPrimary 
+                          : colorScheme.onSurface,
                       fontSize: 15,
                     ),
                   ),
@@ -176,7 +320,9 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
           final date = DateTime.tryParse(dateStr.toString());
           if (date != null) {
             ref.read(jumpToDateProvider.notifier).state = date;
-            context.go('/');
+            final router = GoRouter.of(context);
+            Navigator.of(context).pop(); // Cerramos el bottom sheet
+            router.go('/');
           }
         },
         icon: const Icon(Icons.calendar_month),
@@ -235,7 +381,6 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
@@ -262,7 +407,6 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
               ],
             ),
           ),
-          // Vista previa del mensaje
           Container(
             margin: const EdgeInsets.all(12),
             padding: const EdgeInsets.all(12),
@@ -279,7 +423,6 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
               ),
             ),
           ),
-          // Botón verde WhatsApp
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
             child: SizedBox(
@@ -365,7 +508,9 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () {
-            context.push('/order/$orderId');
+            final router = GoRouter.of(context);
+            Navigator.of(context).pop();
+            router.push('/order/$orderId');
           },
           child: card,
         ),
@@ -417,7 +562,11 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
             visualDensity: VisualDensity.compact,
             trailing: const Icon(Icons.chevron_right, size: 16),
             onTap: orderId != null 
-                ? () => context.push('/order/$orderId') 
+                ? () {
+                    final router = GoRouter.of(context);
+                    Navigator.of(context).pop();
+                    router.push('/order/$orderId');
+                  } 
                 : null,
           );
         },
@@ -585,12 +734,11 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
     );
   }
 
-
-  Widget _buildInputArea(BuildContext context) {
+  Widget _buildInputArea(BuildContext context, ColorScheme colorScheme) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: colorScheme.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -608,24 +756,24 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _handleSend(),
               decoration: InputDecoration(
-                hintText: 'Escribe un mensaje...',
+                hintText: 'Pregúntale a Copiloto...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                fillColor: colorScheme.surfaceContainerHighest,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
           CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primary,
+            backgroundColor: colorScheme.primary,
             radius: 24,
             child: IconButton(
               icon: const Icon(Icons.send, color: Colors.white),
-              onPressed: _handleSend,
+              onPressed: () => _handleSend(),
             ),
           ),
         ],

@@ -22,7 +22,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-
+import '../copilot/copilot_bottom_sheet.dart';
 import 'orders_repository.dart';
 import '../../core/models/order.dart';
 import '../../core/extensions/order_list_extension.dart';
@@ -312,7 +312,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             tooltip: 'Copiloto Inteligente',
             icon: const Icon(Icons.auto_awesome),
             onPressed: () {
-              context.push('/copilot');
+              showCopilotSheet(context);
             },
           ),
           // Botón de recarga
