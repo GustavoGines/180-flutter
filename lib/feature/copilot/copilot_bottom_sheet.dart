@@ -410,9 +410,13 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
     if (phone.isEmpty || message.isEmpty) return const SizedBox.shrink();
 
     Future<void> openWhatsApp() async {
-      // Codificar correctamente el mensaje para la URL de WhatsApp
-      final encoded  = Uri.encodeQueryComponent(message);
-      final whatsUrl = Uri.parse('https://wa.me/$phone?text=$encoded');
+      // Usar el constructor Uri() para que Dart maneje el encoding correcto
+      final whatsUrl = Uri(
+        scheme: 'https',
+        host: 'wa.me',
+        path: '/$phone',
+        queryParameters: {'text': message},
+      );
       if (await canLaunchUrl(whatsUrl)) {
         await launchUrl(whatsUrl, mode: LaunchMode.externalApplication);
       } else {
