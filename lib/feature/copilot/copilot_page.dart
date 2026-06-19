@@ -155,6 +155,8 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
         return _buildServerDrivenClientCard(context, data);
       case 'navigate_calendar':
         return _buildServerDrivenNavigateCalendar(context, data);
+      case 'whatsapp_dispatch_card':
+        return _buildWhatsappDispatchCard(context, data);
       default:
         return const SizedBox.shrink();
     }
@@ -171,13 +173,8 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
       margin: const EdgeInsets.only(top: 8),
       child: FilledButton.icon(
         onPressed: () {
-          // Guardar la fecha en el provider y volver al home (donde está el calendario)
           final date = DateTime.tryParse(dateStr.toString());
           if (date != null) {
-            // Primero establecer la fecha, luego navegar directamente al Home.
-            // Usamos go('/') en lugar de pop() para evitar la race condition:
-            // con pop(), el listener se disparaba durante la animación de transición
-            // cuando _dayIndexMap aún estaba reconstruyéndose → el scroll fallaba.
             ref.read(jumpToDateProvider.notifier).state = date;
             context.go('/');
           }
@@ -190,6 +187,123 @@ class _CopilotPageState extends ConsumerState<CopilotPage> {
             borderRadius: BorderRadius.circular(12),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildWhatsappDispatchCard(BuildContext context, dynamic data) {
+    if (data == null || data is! Map) return const SizedBox.shrink();
+
+    final phone       = data['phone']?.toString() ?? '';
+    final message     = data['message']?.toString() ?? '';
+    final clientName  = data['client_name']?.toString() ?? 'el cliente';
+
+    if (phone.isEmpty || message.isEmpty) return const SizedBox.shrink();
+
+    Future<void> openWhatsApp() async {
+      final encoded  = Uri.encodeComponent(message);
+      final whatsUrl = Uri.parse('https://wa.me/$phone?text=$encoded');
+      if (await canLaunchUrl(whatsUrl)) {
+        await launchUrl(whatsUrl, mode: LaunchMode.externalApplication);
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo abrir WhatsApp.')),
+          );
+        }
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF25D366).withValues(alpha: 0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF25D366),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.chat, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Mensaje para $clientName',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Vista previa del mensaje
+          Container(
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ),
+          // Botón verde WhatsApp
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: openWhatsApp,
+                icon: const Icon(Icons.send, size: 18),
+                label: const Text(
+                  'Enviar por WhatsApp',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
