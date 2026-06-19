@@ -780,17 +780,27 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.phone, color: Theme.of(context).colorScheme.tertiary),
-            onPressed: () async {
+          GestureDetector(
+            onTap: () async {
+              // Limpiar el número: quitar todo lo que no sea dígito
               final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
               if (cleanPhone.isNotEmpty) {
-                final url = Uri.parse('tel:$cleanPhone');
+                // wa.me abre directamente WhatsApp con ese número
+                final url = Uri.parse('https://wa.me/$cleanPhone');
                 if (await canLaunchUrl(url)) {
-                  await launchUrl(url);
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
                 }
               }
             },
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: const BoxDecoration(
+                color: const Color(0xFF25D366), // Verde WhatsApp
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.chat, color: Colors.white, size: 22),
+            ),
           )
         ],
       ),
