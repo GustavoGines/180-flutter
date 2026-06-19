@@ -13,8 +13,11 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
   static const _cacheKey = 'copilot_chat_history';
   static const _lastUpdateKey = 'copilot_chat_last_update';
 
+  bool _hasStartedChat = false;
+
   @override
   List<ChatMessage> build() {
+    _hasStartedChat = false;
     _loadHistory();
     return [
       ChatMessage(
@@ -47,7 +50,12 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
         }).toList();
         
         if (history.isNotEmpty) {
-          state = history;
+          if (!_hasStartedChat) {
+            state = history;
+          } else {
+            // Si ya se envió un mensaje (ej. Smart Handoff), conservar el historial y el mensaje nuevo
+            state = [...history, ...state.sublist(1)]; // Saltamos el saludo inicial
+          }
         }
       }
     } catch (_) {}
@@ -69,6 +77,8 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
 
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
+
+    _hasStartedChat = true;
 
     // 1. Agregar mensaje del usuario
     final userMessage = ChatMessage(role: ChatRole.user, content: text.trim());
