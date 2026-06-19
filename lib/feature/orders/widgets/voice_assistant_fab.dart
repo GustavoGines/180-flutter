@@ -154,7 +154,15 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
       }
 
       final intent = data['intent'] as String?;
-      final transcription = data['transcription'] as String?;
+      String? transcription = data['transcription'] as String?;
+
+      // Filtrar alucinaciones de Whisper por silencios
+      if (transcription != null) {
+        final lower = transcription.toLowerCase();
+        if (lower.contains('amara.org') || lower.contains('subtítulos') || lower.contains('subtitulos')) {
+          transcription = null;
+        }
+      }
 
       if (intent == 'create_order') {
         if (mounted) {
@@ -265,7 +273,7 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
         if (mounted && transcription != null && transcription.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Derivando al Copiloto...'),
+              content: Text('Derivando a 180 IA...'),
               duration: Duration(seconds: 2),
             ),
           );

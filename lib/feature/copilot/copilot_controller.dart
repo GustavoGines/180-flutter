@@ -22,7 +22,7 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
     return [
       ChatMessage(
         role: ChatRole.assistant,
-        content: '¡Hola! Soy Copiloto 180. ¿En qué te puedo ayudar hoy?',
+        content: '¡Hola! Soy 180 IA. ¿En qué te puedo ayudar hoy?',
       ),
     ];
   }
@@ -143,7 +143,7 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
       state = [
         ChatMessage(
           role: ChatRole.assistant,
-          content: '¡Hola! Soy Copiloto 180. ¿En qué te puedo ayudar hoy?',
+          content: '¡Hola! Soy 180 IA. ¿En qué te puedo ayudar hoy?',
         ),
       ];
     } catch (_) {}

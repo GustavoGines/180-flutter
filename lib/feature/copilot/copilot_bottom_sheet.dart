@@ -102,7 +102,7 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
-      minChildSize: 0.5,
+      minChildSize: 0.25,
       maxChildSize: 0.95,
       builder: (context, scrollController) {
         return TweenAnimationBuilder<double>(
@@ -234,7 +234,7 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
           const SizedBox(height: 20),
           Center(
             child: Text(
-              '¡Hola! Soy Copiloto 180.',
+              '¡Hola! Soy 180 IA.',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
             ),
           ),
@@ -819,7 +819,7 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _handleSend(),
               decoration: InputDecoration(
-                hintText: 'Pregúntale a Copiloto...',
+                hintText: 'Pregúntale a 180 IA...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,

@@ -309,7 +309,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         actions: [
           // Copiloto
           IconButton(
-            tooltip: 'Copiloto Inteligente',
+            tooltip: '180 IA',
             icon: const Icon(Icons.auto_awesome),
             onPressed: () {
               showCopilotSheet(context);
