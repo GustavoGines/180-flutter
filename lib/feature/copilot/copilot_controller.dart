@@ -134,4 +134,18 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
       ];
     }
   }
+
+  Future<void> clearChat() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cacheKey);
+      _hasStartedChat = false;
+      state = [
+        ChatMessage(
+          role: ChatRole.assistant,
+          content: '¡Hola! Soy Copiloto 180. ¿En qué te puedo ayudar hoy?',
+        ),
+      ];
+    } catch (_) {}
+  }
 }

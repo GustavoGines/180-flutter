@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Añadido para HapticFeedback
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:go_router/go_router.dart';
@@ -7,10 +8,13 @@ import 'copilot_controller.dart';
 import 'models/chat_message.dart';
 
 Future<void> showCopilotSheet(BuildContext context, {String? initialMessage}) {
+  HapticFeedback.mediumImpact(); // Respuesta táctil profesional al abrir
+  
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.7), // Fondo más inmersivo
     builder: (context) {
       return Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -101,39 +105,97 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
       minChildSize: 0.5,
       maxChildSize: 0.95,
       builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
+        return TweenAnimationBuilder<double>(
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutQuart,
+          tween: Tween(begin: 0.0, end: 1.0),
+          builder: (context, value, child) {
+            return Transform.translate(
+              offset: Offset(0, 40 * (1 - value)), // Deslizamiento interno suave
+              child: Opacity(
+                opacity: value, // Fade in
+                child: child,
+              ),
+            );
+          },
+          child: Container(
+            decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHighest,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             children: [
-              // Cabecera
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5))),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.auto_awesome, size: 20, color: Colors.amber),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Chat de IA',
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
+              // Cabecera (Handle de arrastre)
+              SingleChildScrollView(
+                controller: scrollController,
+                physics: const ClampingScrollPhysics(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5))),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome, size: 20, color: Colors.amber),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Chat 180 IA',
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: IconButton.styleFrom(
-                        backgroundColor: colorScheme.surface,
-                        padding: const EdgeInsets.all(8),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert),
+                        tooltip: 'Opciones del chat',
+                        onSelected: (value) {
+                          if (value == 'clear') {
+                            ref.read(copilotControllerProvider.notifier).clearChat();
+                          } else if (value == 'copy') {
+                            final msgs = ref.read(copilotControllerProvider);
+                            final lastAssistant = msgs.lastWhere(
+                              (m) => m.role == ChatRole.assistant && !m.isLoading,
+                              orElse: () => msgs.first,
+                            );
+                            Clipboard.setData(ClipboardData(text: lastAssistant.content));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Última respuesta copiada')),
+                            );
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'clear',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_sweep, size: 20),
+                                SizedBox(width: 8),
+                                Text('Vaciar chat'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'copy',
+                            child: Row(
+                              children: [
+                                Icon(Icons.copy, size: 20),
+                                SizedBox(width: 8),
+                                Text('Copiar respuesta'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: IconButton.styleFrom(
+                          backgroundColor: colorScheme.surface,
+                          padding: const EdgeInsets.all(8),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               
@@ -142,7 +204,7 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
                 child: showPrompts
                     ? _buildSuggestedPrompts(colorScheme)
                     : ListView.builder(
-                        controller: scrollController, // Para que el DraggableScrollableSheet funcione con el ListView
+                        // Removido: controller: scrollController para que el cuerpo NO arrastre el modal, solo haga scroll interno
                         reverse: true,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                         itemCount: messages.length,
@@ -157,7 +219,8 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
               _buildInputArea(context, colorScheme),
             ],
           ),
-        );
+        ), // Cierra Container
+        ); // Cierra TweenAnimationBuilder
       },
     );
   }
