@@ -606,21 +606,34 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
           if (order is! Map) return const SizedBox.shrink();
           final orderId = order['id'];
           final clientName = order['client']?['name'] ?? order['client_name'] ?? 'Cliente Desconocido';
-          final date = order['event_date'] ?? 'Sin fecha';
+          // Formatear fecha ISO → DD/MM/YYYY
+          final rawDate = order['event_date']?.toString() ?? '';
+          String date = 'Sin fecha';
+          try {
+            if (rawDate.isNotEmpty) {
+              final dt = DateTime.parse(rawDate).toLocal();
+              date = '${dt.day.toString().padLeft(2,'0')}/${dt.month.toString().padLeft(2,'0')}/${dt.year}';
+            }
+          } catch (_) { date = rawDate; }
+
           final rawStatus = order['status'] ?? 'pending';
-          String status = rawStatus;
+          String status;
           switch (rawStatus) {
-            case 'pending': status = 'Pendiente'; break;
+            case 'pending':    status = 'Pendiente';  break;
+            case 'confirmed':  status = 'Confirmado'; break;
             case 'in_process': status = 'En Proceso'; break;
-            case 'completed': status = 'Terminado'; break;
-            case 'delivered': status = 'Entregado'; break;
-            case 'cancelled': status = 'Cancelado'; break;
+            case 'ready':      status = 'Listo';       break;
+            case 'completed':  status = 'Terminado';  break;
+            case 'delivered':  status = 'Entregado';  break;
+            case 'cancelled':  status = 'Cancelado';  break;
+            case 'canceled':   status = 'Cancelado';  break;
+            default:           status = rawStatus;    break;
           }
-          
+
           return ListTile(
             leading: const Icon(Icons.receipt_long),
             title: Text(clientName, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('Fecha: $date\nEstado: $status'),
+            subtitle: Text('$date  •  $status'),
             isThreeLine: true,
             visualDensity: VisualDensity.compact,
             trailing: const Icon(Icons.chevron_right, size: 16),
@@ -796,7 +809,7 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
               width: 42,
               height: 42,
               decoration: const BoxDecoration(
-                color: const Color(0xFF25D366), // Verde WhatsApp
+                color: Color(0xFF25D366), // Verde WhatsApp
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.chat, color: Colors.white, size: 22),
