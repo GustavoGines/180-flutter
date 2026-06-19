@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Añadido para HapticFeedback
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:go_router/go_router.dart';
 import '../orders/home_page.dart'; // Para jumpToDateProvider
@@ -338,6 +339,33 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
                   if (message.uiWidget != null) ...[
                     const SizedBox(height: 12),
                     _buildServerDrivenWidget(context, message.uiWidget!),
+                  ],
+                  if (!isUser && !message.isLoading) ...[
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: InkWell(
+                        onTap: () async {
+                          final content = message.content;
+                          // Extract a short title from content for sourceContext
+                          final title = content.length > 30 ? '${content.substring(0, 30)}...' : content;
+                          final success = await ref.read(copilotControllerProvider.notifier).saveNote(
+                            content: content,
+                            uiWidget: message.uiWidget,
+                            sourceContext: title,
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(success ? '✓ Respuesta guardada' : 'Error al guardar respuesta')),
+                            );
+                          }
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(4.0),
+                          child: Icon(Icons.bookmark_border, size: 16, color: colorScheme.primary),
+                        ),
+                      ),
+                    ),
                   ]
                 ],
               ),
@@ -350,6 +378,8 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
     final data = widgetData['data'];
 
     switch (type) {
+      case 'bulk_payment_result':
+        return _buildBulkPaymentResult(context, data);
       case 'order_card':
         return _buildServerDrivenOrderCard(context, data);
       case 'order_list':
@@ -585,6 +615,53 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
       );
     }
     return card;
+  }
+
+  Widget _buildBulkPaymentResult(BuildContext context, dynamic data) {
+    if (data == null || data is! Map) return const SizedBox.shrink();
+
+    final affected = data['affected'] ?? 0;
+    final totalAmount = data['total_amount'] ?? 0;
+    final formatCurrency = NumberFormat.currency(locale: 'es_AR', symbol: '\$', decimalDigits: 2);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9), // Verde claro
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF81C784)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.check_circle, color: Color(0xFF388E3C)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$affected pedidos marcados como pagados',
+                  style: const TextStyle(
+                    color: Color(0xFF1B5E20),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Total cobrado: ${formatCurrency.format(totalAmount)}',
+            style: const TextStyle(
+              color: Color(0xFF2E7D32),
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildServerDrivenOrderList(BuildContext context, dynamic data) {

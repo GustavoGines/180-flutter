@@ -148,4 +148,22 @@ class CopilotNotifier extends AutoDisposeNotifier<List<ChatMessage>> {
       ];
     } catch (_) {}
   }
+
+  Future<bool> saveNote({
+    required String content,
+    Map<String, dynamic>? uiWidget,
+    String? sourceContext,
+  }) async {
+    try {
+      final dio = DioClient().dio;
+      await dio.post('/copilot/notes', data: {
+        'content': content,
+        if (uiWidget != null) 'ui_widget': uiWidget,
+        if (sourceContext != null) 'source_context': sourceContext,
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

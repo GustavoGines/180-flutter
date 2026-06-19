@@ -1,20 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pasteleria_180_flutter/core/providers/shared_preferences_provider.dart';
 
-// Opciones disponibles para el usuario
 enum AppThemeMode { system, light, dark }
 
-// Notifier para manejar el estado del modo de tema
 class ThemeModeNotifier extends Notifier<AppThemeMode> {
-  // Aquí se podría cargar el valor guardado de SharedPreferences
+  static const _key = 'theme_mode';
+
   @override
   AppThemeMode build() {
-    return AppThemeMode
-        .system; // Por defecto, sigue la configuración del sistema
+    final prefs = ref.watch(sharedPreferencesProvider);
+    final savedMode = prefs.getString(_key);
+    if (savedMode != null) {
+      return AppThemeMode.values.firstWhere(
+        (e) => e.name == savedMode,
+        orElse: () => AppThemeMode.system,
+      );
+    }
+    return AppThemeMode.system;
   }
 
   void setMode(AppThemeMode mode) {
     state = mode;
-    // En una app real, aquí guardarías 'mode.name' en SharedPreferences
+    ref.read(sharedPreferencesProvider).setString(_key, mode.name);
   }
 }
 

@@ -68,6 +68,30 @@ class AuthRepository {
     return AppUser.fromJson(map);
   }
 
+  Future<AppUser> updateProfile(String name, String email, {File? avatar}) async {
+    final Map<String, dynamic> data = {
+      'name': name,
+      'email': email,
+      '_method': 'PUT', // Laravel workaround for multipart PUT
+    };
+
+    if (avatar != null) {
+      data['avatar'] = await MultipartFile.fromFile(avatar.path);
+    }
+
+    final formData = FormData.fromMap(data);
+
+    final res = await _dio.post('/me', data: formData);
+    return AppUser.fromJson(res.data['data']);
+  }
+
+  Future<void> updatePassword(String currentPassword, String newPassword) async {
+    await _dio.put('/me/password', data: {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    });
+  }
+
   // Cierra la sesión en el backend y borra el token local
   Future<void> logout() async {
     try {

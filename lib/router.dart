@@ -23,8 +23,10 @@ import 'feature/users/presentation/edit_user_page.dart';
 import 'feature/orders/services/pdf_preview_page.dart';
 import 'feature/orders/admin_catalog_page.dart';
 import 'feature/orders/admin/product_form_page.dart';
+import 'feature/copilot/notes_page.dart';
+import 'feature/settings/settings_page.dart';
+import 'feature/analytics/analytics_page.dart';
 import 'core/models/catalog.dart';
-// 🔔 Notificador de GoRouter
 final goRouterNotifierProvider = ChangeNotifierProvider((ref) {
   return GoRouterNotifier(ref);
 });
@@ -150,6 +152,18 @@ final routerProvider = Provider<GoRouter>((ref) {
             },
           ),
         ],
+      ),
+      GoRoute(
+        path: '/copilot/notes',
+        pageBuilder: (context, state) => _fadePageBuilder(context, state, const CopilotNotesPage()),
+      ),
+      GoRoute(
+        path: '/settings',
+        pageBuilder: (context, state) => _fadePageBuilder(context, state, const SettingsPage()),
+      ),
+      GoRoute(
+        path: '/analytics',
+        pageBuilder: (context, state) => _fadePageBuilder(context, state, const AnalyticsPage()),
       ),
     ],
 

@@ -61,14 +61,15 @@ class OrderItem {
     // La lógica de arriba (base = unit_price, adjust = 0) es más simple si migras la API.
 
     return OrderItem(
-      id: j['id'] != null ? toInt(j['id']) : null,
-      name: j['name'] ?? 'Item Desconocido',
-      qty: toNum(j['qty'] ?? 1).toDouble(), // Default qty a 1 si falta
+      id: j['id'] != null ? int.tryParse(j['id'].toString()) : null,
+      name: j['name']?.toString() ?? 'Producto sin nombre',
+      qty: (j['qty'] != null ? toNum(j['qty']) : 1.0).toDouble(),
       basePrice: base,
       adjustments: adjust,
-      customizationNotes: j['customization_notes'] as String?,
-      customizationJson: j['customization_json'] as Map<String, dynamic>?,
-      // localFile no se recupera del JSON (es solo local)
+      customizationNotes: j['customization_notes']?.toString(),
+      customizationJson: j['customization_json'] != null && j['customization_json'] is Map
+          ? Map<String, dynamic>.from(j['customization_json'] as Map)
+          : null,
     );
   }
 

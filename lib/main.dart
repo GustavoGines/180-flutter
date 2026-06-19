@@ -10,6 +10,8 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 // ✅ 1. Importa el nuevo servicio
 import 'package:pasteleria_180_flutter/core/services/firebase_messaging_service.dart';
 import 'package:pasteleria_180_flutter/feature/auth/auth_state.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pasteleria_180_flutter/core/providers/shared_preferences_provider.dart';
 
 Future<void> pingApi() async {
   try {
@@ -28,9 +30,14 @@ Future<void> main() async {
 
   debugPrint('CONFIG → FLAVOR=$kFlavor  API_BASE=$kApiBase');
 
-  // ✅ 2. Crear el Contenedor de Riverpod
-  // Esto nos da acceso a los providers ANTES de que los widgets se dibujen
-  final container = ProviderContainer();
+  // ✅ 2. Crear el Contenedor de Riverpod y SharedPreferences
+  final sharedPrefs = await SharedPreferences.getInstance();
+
+  final container = ProviderContainer(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(sharedPrefs),
+    ],
+  );
 
   // ✅ Inicializar DioClient pasándole el callback para 401
   await DioClient().init(onUnauthorized: () {
@@ -56,6 +63,9 @@ Future<void> main() async {
   // ✅ 4. Iniciar la App
   // Le pasamos el 'container' que ya creamos para que Riverpod no se reinicie
   runApp(
-    UncontrolledProviderScope(container: container, child: const One80App()),
+    UncontrolledProviderScope(
+      container: container,
+      child: const One80App(),
+    ),
   );
 }

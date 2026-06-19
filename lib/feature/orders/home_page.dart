@@ -16,6 +16,7 @@ import 'package:pasteleria_180_flutter/core/theme/theme_provider.dart';
 import 'package:riverpod/riverpod.dart' as rp;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -296,17 +297,116 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
+      drawer: Drawer(
+        child: Column(
           children: [
-            Image.asset('assets/images/logo_180.png', height: 50.0),
-            const SizedBox(width: 15),
-            const Text('Pedidos'),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  DrawerHeader(
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 30,
+                              backgroundColor: Colors.transparent,
+                              backgroundImage: authState.user?.avatarUrl != null
+                                  ? CachedNetworkImageProvider(authState.user!.avatarUrl!)
+                                  : const AssetImage('assets/images/logo_180.png') as ImageProvider,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    authState.user?.name ?? 'Usuario',
+                                    style: TextStyle(color: cs.onSurface, fontSize: 18, fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    authState.user?.email ?? '',
+                                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.bookmark_border),
+                    title: const Text('Notas 180 IA'),
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      context.push('/copilot/notes');
+                    },
+                  ),
+
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.settings),
+                    title: const Text('Configuración'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/settings');
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                ref.read(authStateProvider.notifier).logout();
+              },
+            ),
+            const SizedBox(height: 16),
           ],
         ),
+      ),
+      appBar: AppBar(
+        leading: Builder(
+          builder: (context) {
+            return Padding(
+              padding: const EdgeInsets.all(6.0),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => Scaffold.of(context).openDrawer(),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Colors.transparent,
+                  backgroundImage: authState.user?.avatarUrl != null
+                      ? CachedNetworkImageProvider(authState.user!.avatarUrl!)
+                      : const AssetImage('assets/images/logo_180.png') as ImageProvider,
+                ),
+              ),
+            );
+          },
+        ),
+        title: const Text('Pedidos'),
         centerTitle: false,
 
         actions: [
+          // Analytics
+          IconButton(
+            tooltip: 'Analíticas',
+            icon: const Icon(Icons.bar_chart_rounded),
+            onPressed: () => context.push('/analytics'),
+          ),
           // Copiloto
           IconButton(
             tooltip: '180 IA',
@@ -337,7 +437,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
 
 
-          // POPUPMENUBUTTON (3 PUNTOS)
           PopupMenuButton<String>(
             onSelected: (value) async {
               switch (value) {
@@ -347,52 +446,20 @@ class _HomePageState extends ConsumerState<HomePage> {
                     onJumpToDate: _jumpToSpecificDate,
                   );
                   break;
-                case 'logout':
-                  ref.read(authStateProvider.notifier).logout();
-                  break;
-
                 // Casos del tema eliminados ya que la lógica está en el itemBuilder
               }
             },
             itemBuilder: (BuildContext context) {
-              final currentMode = ref.watch(themeModeProvider);
-              final cs = Theme.of(context).colorScheme;
-
-              // Helper para construir los 3 iconos del tema en una fila
-              Widget buildThemeIcon(AppThemeMode mode, IconData icon) {
-                final isSelected = currentMode == mode;
-                final tooltip = switch (mode) {
-                  AppThemeMode.system => 'Sistema',
-                  AppThemeMode.light => 'Claro',
-                  AppThemeMode.dark => 'Oscuro',
-                };
-
-                return Tooltip(
-                  message: tooltip,
-                  child: IconButton(
-                    icon: Icon(
-                      icon,
-                      size: 20,
-                      color: isSelected ? cs.primary : cs.onSurfaceVariant,
-                    ),
-                    onPressed: () {
-                      Navigator.pop(context); // Cierra el menú al seleccionar
-                      ref.read(themeModeProvider.notifier).setMode(mode);
-                    },
-                  ),
-                );
-              }
-
               return <PopupMenuEntry<String>>[
-                // --- 1. TÍTULO 'TEMA' Y VERSIÓN ---
+                // --- 1. VERSIÓN ---
                 PopupMenuItem(
                   enabled: false,
-                  value: 'theme_header',
+                  value: 'version_info',
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'Tema',
+                        'Versión',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       GestureDetector(
@@ -408,57 +475,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                 ),
 
-                // --- 2. FILA DE ICONOS DE TEMA (en un solo PopupMenuItem) ---
-                PopupMenuItem<String>(
-                  // Un valor ficticio para cumplir con el tipo
-                  value: 'theme_selector_row',
-                  enabled:
-                      false, // La fila en sí no se selecciona, solo los botones
-                  padding: EdgeInsets.zero,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8.0,
-                      vertical: 0,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        buildThemeIcon(
-                          AppThemeMode.system,
-                          Icons.auto_mode_outlined,
-                        ),
-                        buildThemeIcon(
-                          AppThemeMode.light,
-                          Icons.light_mode_outlined,
-                        ),
-                        buildThemeIcon(
-                          AppThemeMode.dark,
-                          Icons.dark_mode_outlined,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
                 const PopupMenuDivider(),
 
                 const PopupMenuItem(
                   value: 'search',
                   child: ListTile(
                     leading: Icon(Icons.search),
-                    title: Text('Buscar Pedidos'),
-                  ),
-                ),
-
-                // --- FIN SELECCIÓN DE TEMA ---
-                const PopupMenuItem(
-                  value: 'logout',
-                  child: ListTile(
-                    leading: Icon(Icons.logout, color: Colors.red),
-                    title: Text(
-                      'Cerrar Sesión',
-                      style: TextStyle(color: Colors.red),
-                    ),
+                    title: Text('Buscar'),
                   ),
                 ),
               ];
