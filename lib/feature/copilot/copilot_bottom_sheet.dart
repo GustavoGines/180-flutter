@@ -410,7 +410,8 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
     if (phone.isEmpty || message.isEmpty) return const SizedBox.shrink();
 
     Future<void> openWhatsApp() async {
-      final encoded  = Uri.encodeComponent(message);
+      // Codificar correctamente el mensaje para la URL de WhatsApp
+      final encoded  = Uri.encodeQueryComponent(message);
       final whatsUrl = Uri.parse('https://wa.me/$phone?text=$encoded');
       if (await canLaunchUrl(whatsUrl)) {
         await launchUrl(whatsUrl, mode: LaunchMode.externalApplication);
