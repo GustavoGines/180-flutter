@@ -11,8 +11,6 @@ import 'dart:io' show Platform;
 import 'dart:ui' as ui;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Importamos tu AppThemeMode y themeModeProvider
-import 'package:pasteleria_180_flutter/core/theme/theme_provider.dart';
 import 'package:riverpod/riverpod.dart' as rp;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';

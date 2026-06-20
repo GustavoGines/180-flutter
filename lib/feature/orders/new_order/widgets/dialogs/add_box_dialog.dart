@@ -499,7 +499,33 @@ class _AddBoxDialogState extends State<AddBoxDialog> {
               DropdownButtonFormField<Product>(
                 isExpanded: true,
                 initialValue: selectedProduct,
-                items: boxProducts.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                items: boxProducts.map((p) {
+                  return DropdownMenuItem(
+                    value: p,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(child: Text(p.name, overflow: TextOverflow.ellipsis)),
+                        if (p.isCombo && p.campaignName != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.tertiaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              p.campaignName!,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.onTertiaryContainer,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }).toList(),
                 onChanged: (p) => setState(() {
                   selectedProduct = p;
                   if (p != null && p.variants.isNotEmpty) {

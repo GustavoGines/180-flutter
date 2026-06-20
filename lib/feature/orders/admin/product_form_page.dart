@@ -27,6 +27,12 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
   // Variants
   List<ProductVariant> _variants = [];
 
+  // Campaign & Combos
+  bool _isCombo = false;
+  late TextEditingController _campaignNameController;
+  DateTime? _availableFrom;
+  DateTime? _availableUntil;
+
   @override
   void initState() {
     super.initState();
@@ -36,12 +42,16 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     _priceController = TextEditingController(
       text: p?.basePrice.toStringAsFixed(0) ?? '',
     );
+    _campaignNameController = TextEditingController(text: p?.campaignName ?? '');
 
     if (p != null) {
       _selectedCategory = p.category;
       _selectedUnit = p.unit; // FIXED: p.unit, not unitType
       _allowHalfDozen = p.allowHalfDozen;
       _variants = List.from(p.variants);
+      _isCombo = p.isCombo;
+      _availableFrom = p.availableFrom;
+      _availableUntil = p.availableUntil;
     }
   }
 
@@ -50,6 +60,7 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _campaignNameController.dispose();
     super.dispose();
   }
 
@@ -67,6 +78,10 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
       'category': _selectedCategory.name, // Enum to string
       'unit_type': _selectedUnit.name,
       'allow_half_dozen': _allowHalfDozen,
+      'is_combo': _isCombo,
+      'campaign_name': _campaignNameController.text.trim().isEmpty ? null : _campaignNameController.text.trim(),
+      'available_from': _availableFrom?.toIso8601String().split('T').first,
+      'available_until': _availableUntil?.toIso8601String().split('T').first,
       // Map variants to JSON
       'variants': _variants
           .map(
@@ -184,6 +199,84 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
                 value: _allowHalfDozen,
                 onChanged: (v) => setState(() => _allowHalfDozen = v),
               ),
+            const SizedBox(height: 24),
+            const Divider(),
+            const Text(
+              'Campaña y Vigencia (Opcional)',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            SwitchListTile(
+              title: const Text('Es un Combo Especial (No se separa)'),
+              value: _isCombo,
+              onChanged: (v) => setState(() {
+                _isCombo = v;
+                // Al desactivar, limpiar todos los campos de campaña
+                if (!v) {
+                  _campaignNameController.clear();
+                  _availableFrom = null;
+                  _availableUntil = null;
+                }
+              }),
+            ),
+            if (_isCombo) ...[
+              TextFormField(
+                controller: _campaignNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre de Campaña (Ej: Día del Padre 2026)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ListTile(
+                      title: const Text('Disponible Desde'),
+                      subtitle: Text(_availableFrom?.toIso8601String().split('T').first ?? 'No definido'),
+                      trailing: const Icon(Icons.calendar_today),
+                      onTap: () async {
+                        final d = await showDatePicker(
+                          context: context,
+                          initialDate: _availableFrom ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+                        if (d != null) setState(() => _availableFrom = d);
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: ListTile(
+                      title: const Text('Disponible Hasta'),
+                      subtitle: Text(_availableUntil?.toIso8601String().split('T').first ?? 'No definido'),
+                      trailing: const Icon(Icons.calendar_today),
+                      onTap: () async {
+                        final d = await showDatePicker(
+                          context: context,
+                          initialDate: _availableUntil ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+                        if (d != null) setState(() => _availableUntil = d);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _campaignNameController.clear();
+                      _availableFrom = null;
+                      _availableUntil = null;
+                    }),
+                    child: const Text('Limpiar Todo', style: TextStyle(color: Colors.red)),
+                  )
+                ],
+              ),
+            ],
             const SizedBox(height: 24),
             const Divider(),
             Row(

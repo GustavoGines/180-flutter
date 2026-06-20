@@ -48,6 +48,10 @@ class Product {
   final bool allowHalfDozen;
   final double? halfDozenPrice;
   final double multiplierAdjustmentPerKg;
+  final bool isCombo;
+  final String? campaignName;
+  final DateTime? availableFrom;
+  final DateTime? availableUntil;
   final List<ProductVariant> variants;
   final Map<ProductUnit, double>? pricesBySize; // Computed from variants
 
@@ -61,6 +65,10 @@ class Product {
     required this.allowHalfDozen,
     this.halfDozenPrice,
     required this.multiplierAdjustmentPerKg,
+    this.isCombo = false,
+    this.campaignName,
+    this.availableFrom,
+    this.availableUntil,
     required this.variants,
     this.pricesBySize,
   });
@@ -127,6 +135,10 @@ class Product {
       multiplierAdjustmentPerKg:
           double.tryParse(json['multiplier_adjustment_per_kg'].toString()) ??
               0.0,
+      isCombo: json['is_combo'] == true || json['is_combo'] == 1,
+      campaignName: json['campaign_name'],
+      availableFrom: json['available_from'] != null ? DateTime.tryParse(json['available_from']) : null,
+      availableUntil: json['available_until'] != null ? DateTime.tryParse(json['available_until']) : null,
       variants: variantsList,
       pricesBySize: pricesMap,
     );
