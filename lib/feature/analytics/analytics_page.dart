@@ -344,12 +344,12 @@ class AnalyticsPage extends ConsumerWidget {
                   child: SegmentedButton<_Period>(
                     segments: _Period.values.map((p) {
                       final shortLabel = switch (p) {
-                        _Period.thisMonth => '1M',
-                        _Period.threeMonths => '3M',
-                        _Period.sixMonths => '6M',
-                        _Period.twelveMonths => '1Y',
+                        _Period.thisMonth => '1 Mes',
+                        _Period.threeMonths => '3 Meses',
+                        _Period.sixMonths => '6 Meses',
+                        _Period.twelveMonths => '1 Año',
                       };
-                      return ButtonSegment(value: p, label: Text(shortLabel, style: const TextStyle(fontSize: 13)));
+                      return ButtonSegment(value: p, label: Text(shortLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)));
                     }).toList(),
                     selected: {period},
                     onSelectionChanged: (set) => ref.read(_selectedPeriodProvider.notifier).state = set.first,
@@ -430,11 +430,11 @@ class AnalyticsPage extends ConsumerWidget {
                   Card(
                     elevation: 0,
                     color: cs.surfaceContainerHighest.withValues(alpha: 0.1),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.2))),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                      padding: const EdgeInsets.fromLTRB(16, 24, 24, 16),
                       child: SizedBox(
-                        height: 220,
+                        height: 240, // Más alto para que se vea moderno y profesional
                         child: DailyTrendAreaChart(points: trendData, lineColor: mainColor),
                       ),
                     ),

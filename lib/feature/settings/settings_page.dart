@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -129,13 +130,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   leading: const Icon(Icons.edit_outlined),
                   title: const Text('Editar Perfil'),
                   trailing: const Icon(Icons.chevron_right, size: 20),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilePage())),
+                  onTap: () {
+                    if (vibration) HapticFeedback.lightImpact();
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilePage()));
+                  },
                 ),
                 ListTile(
                   leading: const Icon(Icons.lock_outline),
                   title: const Text('Cambiar Contraseña'),
                   trailing: const Icon(Icons.chevron_right, size: 20),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordPage())),
+                  onTap: () {
+                    if (vibration) HapticFeedback.lightImpact();
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordPage()));
+                  },
                 ),
               ],
             ),
@@ -189,6 +196,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     ],
                     selected: {currentThemeMode},
                     onSelectionChanged: (Set<AppThemeMode> newSelection) {
+                      if (vibration) HapticFeedback.selectionClick();
                       ref.read(themeModeProvider.notifier).setMode(newSelection.first);
                     },
                     style: SegmentedButton.styleFrom(
@@ -203,6 +211,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   subtitle: Text(isTodayView ? 'Iniciar en "Hoy"' : 'Iniciar en "Mes actual"'),
                   value: isTodayView,
                   onChanged: (val) {
+                    if (vibration) HapticFeedback.lightImpact();
                     ref.read(defaultViewProvider.notifier).toggle(val);
                   },
                 ),
@@ -236,6 +245,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   subtitle: const Text('Alertas de nuevos pedidos'),
                   value: pushNotifs,
                   onChanged: (val) {
+                    if (vibration) HapticFeedback.lightImpact();
                     ref.read(pushNotificationsProvider.notifier).toggle(val);
                   },
                 ),
@@ -246,6 +256,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   subtitle: const Text('Respuesta táctil al tocar'),
                   value: vibration,
                   onChanged: (val) {
+                    // Si el usuario activa la vibración, hacer que vibre enseguida para confirmarle
+                    if (val) HapticFeedback.lightImpact();
                     ref.read(vibrationProvider.notifier).toggle(val);
                   },
                 ),
@@ -278,7 +290,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               trailing: _isClearingCache
                   ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.chevron_right, size: 20),
-              onTap: _isClearingCache ? null : _clearCache,
+              onTap: () {
+                if (vibration) HapticFeedback.lightImpact();
+                if (!_isClearingCache) _clearCache();
+              },
             ),
           ),
           const SizedBox(height: 32),

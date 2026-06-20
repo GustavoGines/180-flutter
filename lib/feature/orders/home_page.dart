@@ -309,7 +309,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          cs.primaryContainer.withOpacity(0.7),
+                          cs.primaryContainer.withValues(alpha: 0.7),
                           cs.surfaceContainerHighest,
                         ],
                       ),
@@ -321,10 +321,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                           Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: cs.primary.withOpacity(0.2), width: 3),
+                            border: Border.all(color: cs.primary.withValues(alpha: 0.2), width: 3),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),
