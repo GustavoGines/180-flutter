@@ -101,128 +101,89 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
     // Si solo está el mensaje de bienvenida y no hay carga, mostramos prompts
     final showPrompts = messages.length <= 1 && !messages.any((m) => m.isLoading);
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.25,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return TweenAnimationBuilder<double>(
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOutQuart,
-          tween: Tween(begin: 0.0, end: 1.0),
-          builder: (context, value, child) {
-            return Transform.translate(
-              offset: Offset(0, 40 * (1 - value)), // Deslizamiento interno suave
-              child: Opacity(
-                opacity: value, // Fade in
-                child: child,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.95,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // Clave para que crezca desde abajo
+          children: [
+            // Cabecera arrastrable nativamente por showModalBottomSheet
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5))),
               ),
-            );
-          },
-          child: Container(
-            decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // Cabecera (Handle de arrastre)
-              SingleChildScrollView(
-                controller: scrollController,
-                physics: const ClampingScrollPhysics(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border(bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5))),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome, size: 20, color: Colors.amber),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Chat 180 IA',
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.auto_awesome, size: 20, color: Colors.amber),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Chat 180 IA',
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert),
-                        tooltip: 'Opciones del chat',
-                        onSelected: (value) {
-                          if (value == 'clear') {
-                            ref.read(copilotControllerProvider.notifier).clearChat();
-                          } else if (value == 'copy') {
-                            final msgs = ref.read(copilotControllerProvider);
-                            final lastAssistant = msgs.lastWhere(
-                              (m) => m.role == ChatRole.assistant && !m.isLoading,
-                              orElse: () => msgs.first,
-                            );
-                            Clipboard.setData(ClipboardData(text: lastAssistant.content));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Última respuesta copiada')),
-                            );
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'clear',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_sweep, size: 20),
-                                SizedBox(width: 8),
-                                Text('Vaciar chat'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'copy',
-                            child: Row(
-                              children: [
-                                Icon(Icons.copy, size: 20),
-                                SizedBox(width: 8),
-                                Text('Copiar respuesta'),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: IconButton.styleFrom(
-                          backgroundColor: colorScheme.surface,
-                          padding: const EdgeInsets.all(8),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert),
+                    tooltip: 'Opciones del chat',
+                    onSelected: (value) {
+                      if (value == 'clear') {
+                        ref.read(copilotControllerProvider.notifier).clearChat();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'clear',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_sweep, size: 20),
+                            SizedBox(width: 8),
+                            Text('Vaciar chat'),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: IconButton.styleFrom(
+                      backgroundColor: colorScheme.surface,
+                      padding: const EdgeInsets.all(8),
+                    ),
+                  ),
+                ],
               ),
-              
-              // Área de Mensajes
-              Expanded(
-                child: showPrompts
-                    ? _buildSuggestedPrompts(colorScheme)
-                    : ListView.builder(
-                        // Removido: controller: scrollController para que el cuerpo NO arrastre el modal, solo haga scroll interno
-                        reverse: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                        itemCount: messages.length,
-                        itemBuilder: (context, index) {
-                          final msg = messages[messages.length - 1 - index];
-                          return _buildChatBubble(context, msg, colorScheme);
-                        },
-                      ),
-              ),
-              
-              // Input inferior
-              _buildInputArea(context, colorScheme),
-            ],
-          ),
-        ), // Cierra Container
-        ); // Cierra TweenAnimationBuilder
-      },
+            ),
+            
+            // Área de Mensajes
+            Flexible(
+              child: showPrompts
+                  ? _buildSuggestedPrompts(colorScheme)
+                  : ListView.builder(
+                      shrinkWrap: true, // Esto hace que ocupe el mínimo espacio posible
+                      reverse: true,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final msg = messages[messages.length - 1 - index];
+                        return _buildChatBubble(context, msg, colorScheme);
+                      },
+                    ),
+            ),
+            
+            // Input inferior
+            _buildInputArea(context, colorScheme),
+          ],
+        ),
+      ),
     );
   }
 
@@ -342,29 +303,42 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
                   ],
                   if (!isUser && !message.isLoading) ...[
                     const SizedBox(height: 4),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: InkWell(
-                        onTap: () async {
-                          final content = message.content;
-                          // Extract a short title from content for sourceContext
-                          final title = content.length > 30 ? '${content.substring(0, 30)}...' : content;
-                          final success = await ref.read(copilotControllerProvider.notifier).saveNote(
-                            content: content,
-                            uiWidget: message.uiWidget,
-                            sourceContext: title,
-                          );
-                          if (context.mounted) {
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        InkWell(
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: message.content));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(success ? '✓ Respuesta guardada' : 'Error al guardar respuesta')),
+                              const SnackBar(content: Text('Respuesta copiada')),
                             );
-                          }
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.all(4.0),
-                          child: Icon(Icons.bookmark_border, size: 16, color: colorScheme.primary),
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Icon(Icons.copy, size: 16, color: colorScheme.primary),
+                          ),
                         ),
-                      ),
+                        InkWell(
+                          onTap: () async {
+                            final content = message.content;
+                            final title = content.length > 30 ? '${content.substring(0, 30)}...' : content;
+                            final success = await ref.read(copilotControllerProvider.notifier).saveNote(
+                              content: content,
+                              uiWidget: message.uiWidget,
+                              sourceContext: title,
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(success ? '✓ Respuesta guardada' : 'Error al guardar respuesta')),
+                              );
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Icon(Icons.bookmark_border, size: 16, color: colorScheme.primary),
+                          ),
+                        ),
+                      ],
                     ),
                   ]
                 ],
