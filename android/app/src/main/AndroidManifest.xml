@@ -69,6 +69,11 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyA8baP4628Al1QtulrKTSxWsQ3Zvl_wGrc"/>
 
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
+
     </application>
 
     <queries>

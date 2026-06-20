@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../../auth/auth_state.dart';
 import '../../auth/auth_repository.dart';
 
@@ -95,14 +96,36 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                           onTap: () async {
                             final XFile? image = await _picker.pickImage(
                               source: ImageSource.gallery,
-                              imageQuality: 70,
-                              maxWidth: 512,
-                              maxHeight: 512,
                             );
                             if (image != null) {
-                              setState(() {
-                                _selectedAvatar = File(image.path);
-                              });
+                              final croppedFile = await ImageCropper().cropImage(
+                                sourcePath: image.path,
+                                compressQuality: 70,
+                                maxWidth: 512,
+                                maxHeight: 512,
+                                uiSettings: [
+                                  AndroidUiSettings(
+                                    toolbarTitle: 'Acomodar Foto',
+                                    toolbarColor: cs.surface,
+                                    toolbarWidgetColor: cs.onSurface,
+                                    initAspectRatio: CropAspectRatioPreset.square,
+                                    lockAspectRatio: true,
+                                    cropStyle: CropStyle.circle,
+                                    hideBottomControls: true,
+                                  ),
+                                  IOSUiSettings(
+                                    title: 'Acomodar Foto',
+                                    aspectRatioLockEnabled: true,
+                                    cropStyle: CropStyle.circle,
+                                  ),
+                                ],
+                              );
+
+                              if (croppedFile != null) {
+                                setState(() {
+                                  _selectedAvatar = File(croppedFile.path);
+                                });
+                              }
                             }
                           },
                           child: CircleAvatar(
