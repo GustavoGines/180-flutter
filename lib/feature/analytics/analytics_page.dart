@@ -16,16 +16,69 @@ import 'widgets/summary_metric_card.dart';
 
 // ─────────────────────────── Providers ───────────────────────────
 
-enum _Period { thisMonth, threeMonths, sixMonths, twelveMonths }
 enum PaymentStatusFilter { all, paid, pending }
 
-extension _PeriodExt on _Period {
-  int get months => switch (this) {
-        _Period.thisMonth => 1,
-        _Period.threeMonths => 3,
-        _Period.sixMonths => 6,
-        _Period.twelveMonths => 12,
-      };
+// Helper record to manage period calculations
+typedef _PeriodCalc = ({DateTime start, DateTime end, DateTime prevStart, DateTime prevEnd, bool isSingleMonth, DateTime targetMonth, int rangeMonths});
+
+_PeriodCalc _parsePeriod(String key) {
+  final now = DateTime.now();
+  if (key == '1M') {
+    return (
+      start: DateTime(now.year, now.month, 1),
+      end: DateTime(now.year, now.month + 1, 0),
+      prevStart: DateTime(now.year, now.month - 1, 1),
+      prevEnd: DateTime(now.year, now.month, 0),
+      isSingleMonth: true,
+      targetMonth: now,
+      rangeMonths: 1,
+    );
+  } else if (key == '3M') {
+    return (
+      start: DateTime(now.year, now.month - 2, 1),
+      end: DateTime(now.year, now.month + 1, 0),
+      prevStart: DateTime(now.year, now.month - 5, 1),
+      prevEnd: DateTime(now.year, now.month - 2, 0),
+      isSingleMonth: false,
+      targetMonth: now,
+      rangeMonths: 3,
+    );
+  } else if (key == '6M') {
+    return (
+      start: DateTime(now.year, now.month - 5, 1),
+      end: DateTime(now.year, now.month + 1, 0),
+      prevStart: DateTime(now.year, now.month - 11, 1),
+      prevEnd: DateTime(now.year, now.month - 5, 0),
+      isSingleMonth: false,
+      targetMonth: now,
+      rangeMonths: 6,
+    );
+  } else if (key == '12M') {
+    return (
+      start: DateTime(now.year, now.month - 11, 1),
+      end: DateTime(now.year, now.month + 1, 0),
+      prevStart: DateTime(now.year, now.month - 23, 1),
+      prevEnd: DateTime(now.year, now.month - 11, 0),
+      isSingleMonth: false,
+      targetMonth: now,
+      rangeMonths: 12,
+    );
+  } else {
+    // Specific month
+    final parts = key.split('-');
+    final year = int.parse(parts[0]);
+    final month = int.parse(parts[1]);
+    final target = DateTime(year, month, 1);
+    return (
+      start: target,
+      end: DateTime(year, month + 1, 0),
+      prevStart: DateTime(year, month - 1, 1),
+      prevEnd: DateTime(year, month, 0),
+      isSingleMonth: true,
+      targetMonth: target,
+      rangeMonths: 1,
+    );
+  }
 }
 
 extension _PaymentFilterExt on PaymentStatusFilter {
@@ -36,7 +89,7 @@ extension _PaymentFilterExt on PaymentStatusFilter {
       };
 }
 
-final _selectedPeriodProvider = rp.StateProvider<_Period>((ref) => _Period.thisMonth);
+final _selectedPeriodProvider = rp.StateProvider<String>((ref) => '1M');
 final _statusFilterProvider = rp.StateProvider<PaymentStatusFilter>((ref) => PaymentStatusFilter.all);
 final _privacyModeProvider = rp.StateProvider<bool>((ref) => false);
 
@@ -44,11 +97,8 @@ final _privacyModeProvider = rp.StateProvider<bool>((ref) => false);
 final _periodOrdersProvider = rp.FutureProvider.autoDispose<List<Order>>((ref) async {
   final period = ref.watch(_selectedPeriodProvider);
   final repo = ref.watch(ordersRepoProvider);
-  final now = DateTime.now();
-  // Traemos (period.months * 2) meses para tener el período actual y el anterior
-  final from = DateTime(now.year, now.month - (period.months * 2 - 1), 1);
-  final to = DateTime(now.year, now.month + 1, 1).subtract(const Duration(days: 1));
-  return repo.getOrders(from: from, to: to);
+  final calc = _parsePeriod(period);
+  return repo.getOrders(from: calc.prevStart, to: calc.end);
 });
 
 /// Pedidos filtrados en memoria por el estado de pago (Latencia cero)
@@ -56,14 +106,13 @@ final _filteredOrdersProvider = rp.Provider.autoDispose<List<Order>>((ref) {
   final ordersAsync = ref.watch(_periodOrdersProvider);
   final statusFilter = ref.watch(_statusFilterProvider);
   final period = ref.watch(_selectedPeriodProvider);
-  final now = DateTime.now();
-  final currentPeriodStart = DateTime(now.year, now.month - (period.months - 1), 1);
+  final calc = _parsePeriod(period);
 
   return ordersAsync.when(
     data: (orders) {
       return orders.where((o) {
         if (o.status == OrderStatus.canceled) return false;
-        if (o.eventDate.isBefore(currentPeriodStart)) return false; // Solo actual
+        if (o.eventDate.isBefore(calc.start) || o.eventDate.isAfter(calc.end)) return false;
         switch (statusFilter) {
           case PaymentStatusFilter.all:
             return true;
@@ -84,14 +133,13 @@ final _previousFilteredOrdersProvider = rp.Provider.autoDispose<List<Order>>((re
   final ordersAsync = ref.watch(_periodOrdersProvider);
   final statusFilter = ref.watch(_statusFilterProvider);
   final period = ref.watch(_selectedPeriodProvider);
-  final now = DateTime.now();
-  final currentPeriodStart = DateTime(now.year, now.month - (period.months - 1), 1);
+  final calc = _parsePeriod(period);
 
   return ordersAsync.when(
     data: (orders) {
       return orders.where((o) {
         if (o.status == OrderStatus.canceled) return false;
-        if (!o.eventDate.isBefore(currentPeriodStart)) return false; // Solo anterior
+        if (o.eventDate.isBefore(calc.prevStart) || o.eventDate.isAfter(calc.prevEnd)) return false;
         switch (statusFilter) {
           case PaymentStatusFilter.all:
             return true;
@@ -191,30 +239,31 @@ final _localTopVolumeProvider = rp.Provider.autoDispose<List<TopProductItem>>((r
 final _dailyTrendProvider = rp.Provider.autoDispose<List<TrendPoint>>((ref) {
   final orders = ref.watch(_filteredOrdersProvider);
   final period = ref.watch(_selectedPeriodProvider);
-  final now = DateTime.now();
+  final calc = _parsePeriod(period);
 
   if (orders.isEmpty) return [];
 
   // Si es un solo mes, agrupamos por día. Si son varios, agrupamos por mes.
-  if (period == _Period.thisMonth) {
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+  if (calc.isSingleMonth) {
+    final targetDate = calc.targetMonth;
+    final daysInMonth = DateTime(targetDate.year, targetDate.month + 1, 0).day;
     final Map<int, double> dailyTotals = {for (var i = 1; i <= daysInMonth; i++) i: 0.0};
 
     for (final o in orders) {
-      if (o.eventDate.year == now.year && o.eventDate.month == now.month) {
+      if (o.eventDate.year == targetDate.year && o.eventDate.month == targetDate.month) {
         dailyTotals[o.eventDate.day] = dailyTotals[o.eventDate.day]! + (o.total ?? 0);
       }
     }
 
     return dailyTotals.entries.map((e) {
-      final date = DateTime(now.year, now.month, e.key);
+      final date = DateTime(targetDate.year, targetDate.month, e.key);
       return TrendPoint(date: date, label: '${e.key} ${DateFormat('MMM', 'es_AR').format(date)}', value: e.value);
     }).toList();
   } else {
     // Para períodos más largos, agrupamos por mes
     final Map<String, double> monthlyTotals = {};
-    for (int i = period.months - 1; i >= 0; i--) {
-      final targetDate = DateTime(now.year, now.month - i, 1);
+    for (int i = calc.rangeMonths - 1; i >= 0; i--) {
+      final targetDate = DateTime(calc.targetMonth.year, calc.targetMonth.month - i, 1);
       final key = '${targetDate.year}-${targetDate.month}';
       monthlyTotals[key] = 0.0;
     }
@@ -329,6 +378,7 @@ class AnalyticsPage extends ConsumerWidget {
                     return ButtonSegment(value: f, label: Text(f.label));
                   }).toList(),
                   selected: {statusFilter},
+                  showSelectedIcon: false,
                   onSelectionChanged: (set) => ref.read(_statusFilterProvider.notifier).state = set.first,
                   style: SegmentedButton.styleFrom(
                     backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.3),
@@ -338,26 +388,36 @@ class AnalyticsPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 
-                // ── Selector de Tiempo en Pastillas ──
-                SizedBox(
-                  width: double.infinity,
-                  child: SegmentedButton<_Period>(
-                    segments: _Period.values.map((p) {
-                      final shortLabel = switch (p) {
-                        _Period.thisMonth => '1 Mes',
-                        _Period.threeMonths => '3 Meses',
-                        _Period.sixMonths => '6 Meses',
-                        _Period.twelveMonths => '1 Año',
-                      };
-                      return ButtonSegment(value: p, label: Text(shortLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)));
-                    }).toList(),
-                    selected: {period},
-                    onSelectionChanged: (set) => ref.read(_selectedPeriodProvider.notifier).state = set.first,
-                    style: SegmentedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      backgroundColor: Colors.transparent,
-                      selectedForegroundColor: cs.onSecondaryContainer,
-                      selectedBackgroundColor: cs.secondaryContainer,
+                // ── Selector de Tiempo en Dropdown ──
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: period,
+                      icon: const Icon(Icons.calendar_month),
+                      isExpanded: true,
+                      items: [
+                        const DropdownMenuItem(value: '1M', child: Text('Últimos 30 días', style: TextStyle(fontWeight: FontWeight.bold))),
+                        const DropdownMenuItem(value: '3M', child: Text('Últimos 3 Meses', style: TextStyle(fontWeight: FontWeight.bold))),
+                        const DropdownMenuItem(value: '6M', child: Text('Últimos 6 Meses', style: TextStyle(fontWeight: FontWeight.bold))),
+                        const DropdownMenuItem(value: '12M', child: Text('Último Año', style: TextStyle(fontWeight: FontWeight.bold))),
+                        const DropdownMenuItem(value: '', enabled: false, child: Divider()),
+                        ...List.generate(12, (i) {
+                          final target = DateTime(DateTime.now().year, DateTime.now().month - i, 1);
+                          final key = '${target.year}-${target.month}';
+                          final label = toBeginningOfSentenceCase(DateFormat('MMMM yyyy', 'es_AR').format(target));
+                          return DropdownMenuItem(value: key, child: Text(label));
+                        }),
+                      ],
+                      onChanged: (val) {
+                        if (val != null && val.isNotEmpty) {
+                          ref.read(_selectedPeriodProvider.notifier).state = val;
+                        }
+                      },
                     ),
                   ),
                 ),
