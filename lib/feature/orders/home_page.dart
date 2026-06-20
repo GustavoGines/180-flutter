@@ -314,10 +314,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                         ],
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
+                    child: Center(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(color: cs.primary.withOpacity(0.2), width: 3),
@@ -360,6 +361,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         ),
                       ],
                     ),
+                  ),
                   ),
                   ListTile(
                     leading: const Icon(Icons.bookmark_border),
