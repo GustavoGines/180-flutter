@@ -394,6 +394,8 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
         return _buildServerDrivenNavigateCalendar(context, data);
       case 'whatsapp_dispatch_card':
         return _buildWhatsappDispatchCard(context, data);
+      case 'draft_product_card':
+        return _buildDraftProductCard(context, data);
       default:
         return const SizedBox.shrink();
     }
@@ -422,6 +424,36 @@ class _CopilotBottomSheetState extends ConsumerState<CopilotBottomSheet> {
         label: Text('Ir al Calendario ($dateStr)'),
         style: FilledButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDraftProductCard(BuildContext context, dynamic data) {
+    if (data == null || data is! Map) return const SizedBox.shrink();
+
+    final productName = data['name'] ?? 'Nuevo Producto';
+    final isCombo = data['is_combo'] == true || data['is_combo'] == 'true';
+    final typeLabel = isCombo ? 'Combo Especial' : 'Producto';
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      child: FilledButton.icon(
+        onPressed: () {
+          // Navegar a la pantalla de nuevo producto pasando la data parseada
+          Navigator.of(context).pop(); // Cerramos el bottom sheet
+          GoRouter.of(context).push('/admin/catalog/product/new', extra: data);
+        },
+        icon: const Icon(Icons.add_shopping_cart),
+        label: Text('Revisar y Guardar $typeLabel ($productName)'),
+        style: FilledButton.styleFrom(
+          backgroundColor: Theme.of(context).colorScheme.tertiary,
+          foregroundColor: Theme.of(context).colorScheme.onTertiary,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),

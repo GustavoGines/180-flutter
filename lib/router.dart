@@ -142,7 +142,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: 'product/new',
-            pageBuilder: (context, state) => _fadePageBuilder(context, state, const ProductFormPage()),
+            pageBuilder: (context, state) {
+              final prefillData = state.extra as Map<String, dynamic>?;
+              return _fadePageBuilder(context, state, ProductFormPage(prefillData: prefillData));
+            },
           ),
           GoRoute(
             path: 'product/edit',

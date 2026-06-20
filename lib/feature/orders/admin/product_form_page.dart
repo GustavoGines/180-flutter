@@ -6,8 +6,9 @@ import '../catalog_repository.dart';
 
 class ProductFormPage extends ConsumerStatefulWidget {
   final Product? productToEdit; // If null, creating new
+  final Map<String, dynamic>? prefillData; // AI prefill data
 
-  const ProductFormPage({super.key, this.productToEdit});
+  const ProductFormPage({super.key, this.productToEdit, this.prefillData});
 
   @override
   ConsumerState<ProductFormPage> createState() => _ProductFormPageState();
@@ -52,6 +53,36 @@ class _ProductFormPageState extends ConsumerState<ProductFormPage> {
       _isCombo = p.isCombo;
       _availableFrom = p.availableFrom;
       _availableUntil = p.availableUntil;
+    } else if (widget.prefillData != null) {
+      final prefill = widget.prefillData!;
+      
+      _nameController.text = prefill['name']?.toString() ?? '';
+      _descriptionController.text = prefill['description']?.toString() ?? '';
+      _priceController.text = prefill['base_price']?.toString() ?? '';
+      
+      if (prefill['category'] != null) {
+        _selectedCategory = ProductCategory.values.firstWhere(
+          (e) => e.name == prefill['category'],
+          orElse: () => ProductCategory.torta,
+        );
+      }
+      
+      if (prefill['unit_type'] != null) {
+        _selectedUnit = ProductUnit.values.firstWhere(
+          (e) => e.name == prefill['unit_type'],
+          orElse: () => ProductUnit.unit,
+        );
+      }
+      
+      _isCombo = prefill['is_combo'] == true || prefill['is_combo'] == 'true';
+      _campaignNameController.text = prefill['campaign_name']?.toString() ?? '';
+      
+      if (prefill['available_from'] != null) {
+        _availableFrom = DateTime.tryParse(prefill['available_from']);
+      }
+      if (prefill['available_until'] != null) {
+        _availableUntil = DateTime.tryParse(prefill['available_until']);
+      }
     }
   }
 
