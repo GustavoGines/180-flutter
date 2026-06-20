@@ -302,42 +302,61 @@ class _HomePageState extends ConsumerState<HomePage> {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  DrawerHeader(
+                  Container(
+                    padding: const EdgeInsets.only(top: 60, bottom: 24, left: 24, right: 24),
                     decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          cs.primaryContainer.withOpacity(0.7),
+                          cs.surfaceContainerHighest,
+                        ],
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 30,
-                              backgroundColor: Colors.transparent,
-                              backgroundImage: authState.user?.avatarUrl != null
-                                  ? CachedNetworkImageProvider(authState.user!.avatarUrl!)
-                                  : const AssetImage('assets/images/logo_180.png') as ImageProvider,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    authState.user?.name ?? 'Usuario',
-                                    style: TextStyle(color: cs.onSurface, fontSize: 18, fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    authState.user?.email ?? '',
-                                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: cs.primary.withOpacity(0.2), width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                          child: CircleAvatar(
+                            radius: 42,
+                            backgroundColor: cs.surface,
+                            backgroundImage: authState.user?.avatarUrl != null
+                                ? CachedNetworkImageProvider(authState.user!.avatarUrl!)
+                                : const AssetImage('assets/images/logo_180.png') as ImageProvider,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          authState.user?.name ?? 'Usuario',
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          authState.user?.email ?? '',
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
