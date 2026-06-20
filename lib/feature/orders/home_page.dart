@@ -20,7 +20,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+
 import '../copilot/copilot_bottom_sheet.dart';
 import 'orders_repository.dart';
 import '../../core/models/order.dart';
@@ -371,6 +371,33 @@ class _HomePageState extends ConsumerState<HomePage> {
                       context.push('/copilot/notes');
                     },
                   ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.people_outline),
+                    title: const Text('Clientes'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/clients');
+                    },
+                  ),
+                  if (authState.user?.isAdmin ?? false)
+                    ListTile(
+                      leading: const Icon(Icons.people_alt_outlined),
+                      title: const Text('Usuarios'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.push('/users');
+                      },
+                    ),
+                  if (authState.user?.isAdmin ?? false)
+                    ListTile(
+                      leading: const Icon(Icons.inventory_2_outlined),
+                      title: const Text('Catálogo'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.push('/admin/catalog');
+                      },
+                    ),
 
                   const Divider(),
                   ListTile(
@@ -515,80 +542,13 @@ class _HomePageState extends ConsumerState<HomePage> {
         children: [
           const VoiceAssistantFab(),
           const SizedBox(width: 16),
-          SpeedDial(
-            icon: Icons.add,
-        activeIcon: Icons.close,
-        // El botón principal ya está bien adaptado (usa primary/onPrimary)
-        backgroundColor: cs.primary,
-        foregroundColor: cs.onPrimary,
-
-        // --- 👇 ADAPTACIÓN DEL TEMA 👇 ---
-
-        // 1. Usa el color 'scrim' del tema para el fondo
-        overlayColor: cs.scrim,
-        // 2. Deja que el 'scrim' controle la opacidad
-        overlayOpacity: 0.4,
-
-        // --- 👆 FIN DE ADAPTACIÓN 👆 ---
-        spacing: 12,
-        childrenButtonSize: const Size(60.0, 60.0),
-        children: [
-          // Botón 1: Nuevo Pedido
-          SpeedDialChild(
-            child: const Icon(Icons.add_shopping_cart),
-            label: 'Nuevo Pedido',
-            labelStyle: const TextStyle(fontSize: 16),
-
-            // --- 👇 ADAPTACIÓN DEL TEMA 👇 ---
-            // 3. Usa un color de "contenedor" que se adapte
-            backgroundColor: cs.secondaryContainer,
-            // 4. Usa el color de contenido que va "sobre" ese contenedor
-            foregroundColor: cs.onSecondaryContainer,
-
-            // --- 👆 FIN DE ADAPTACIÓN 👆 ---
-            onTap: () => context.push('/new_order'),
+          FloatingActionButton.extended(
+            onPressed: () => context.push('/new_order'),
+            backgroundColor: cs.primary,
+            foregroundColor: cs.onPrimary,
+            icon: const Icon(Icons.add_shopping_cart),
+            label: const Text('Nuevo Pedido', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
-
-          // Botón 2: Clientes
-          SpeedDialChild(
-            child: const Icon(Icons.people_outline),
-            label: 'Clientes',
-            labelStyle: const TextStyle(fontSize: 16),
-
-            // --- 👇 ADAPTACIÓN DEL TEMA 👇 ---
-            backgroundColor: cs.secondaryContainer,
-            foregroundColor: cs.onSecondaryContainer,
-
-            // --- 👆 FIN DE ADAPTACIÓN 👆 ---
-            onTap: () => context.push('/clients'),
-          ),
-
-          // Botón 3: Usuarios (Solo visible si es Admin)
-          if (authState.user?.isAdmin ?? false)
-            SpeedDialChild(
-              child: const Icon(Icons.people_alt_outlined),
-              label: 'Usuarios',
-              labelStyle: const TextStyle(fontSize: 16),
-
-              // --- 👇 ADAPTACIÓN DEL TEMA 👇 ---
-              backgroundColor: cs.secondaryContainer,
-              foregroundColor: cs.onSecondaryContainer,
-
-              // --- 👆 FIN DE ADAPTACIÓN 👆 ---
-              onTap: () => context.push('/users'),
-            ),
-
-          if (authState.user?.isAdmin ?? false)
-            SpeedDialChild(
-              child: const Icon(Icons.inventory_2_outlined),
-              label: 'Catálogo',
-              labelStyle: const TextStyle(fontSize: 16),
-              backgroundColor: cs.secondaryContainer,
-              foregroundColor: cs.onSecondaryContainer,
-              onTap: () => context.push('/admin/catalog'),
-            ),
-        ],
-      ),
       ],
       ),
 
