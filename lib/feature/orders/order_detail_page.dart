@@ -27,16 +27,6 @@ final orderByIdProvider = FutureProvider.autoDispose.family<Order?, int>((
   ref,
   orderId,
 ) async {
-  // 1. Buscar primero en la caché en memoria (ventana de órdenes)
-  final windowAsync = ref.read(ordersWindowProvider);
-  if (windowAsync.hasValue && windowAsync.value != null) {
-    final cachedOrder = windowAsync.value!.where((o) => o.id == orderId).firstOrNull;
-    if (cachedOrder != null) {
-      return cachedOrder;
-    }
-  }
-
-  // 2. Fallback a petición de red
   final repository = ref.watch(ordersRepoProvider);
   return repository.getOrderById(orderId);
 });
@@ -1589,14 +1579,12 @@ class OrderDetailPage extends ConsumerWidget {
       // 1. Capturamos la orden actualizada
       // (Tu repo devuelve Order? pero updateOrderStatus en el Notifier también lo hace)
       // (Asumimos que updateStatus no devuelve null si tiene éxito)
-      final Order? updatedOrder = await ref
+      final Order updatedOrder = await ref
           .read(ordersRepoProvider)
           .updateStatus(order.id, newStatus.name);
 
-      if (updatedOrder != null) {
-        // 2. 🔥 ACTUALIZA LA LISTA LOCAL (en vez de invalidate)
-        await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
-      }
+      // 2. 🔥 ACTUALIZA LA LISTA LOCAL (en vez de invalidate)
+      await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
 
       // 3. Invalida solo la página actual
       ref.invalidate(orderByIdProvider(order.id));

@@ -121,7 +121,7 @@ class OrdersRepository {
     await _dio.delete('/orders/$id');
   }
 
-  Future<Order?> updateStatus(int orderId, String status) async {
+  Future<Order> updateStatus(int orderId, String status) async {
     try {
       final response = await _dio.patch(
         '/orders/$orderId/status',
@@ -132,7 +132,7 @@ class OrdersRepository {
       if (kDebugMode) {
         debugPrint('Error al actualizar estado: $e');
       }
-      return null;
+      rethrow;
     }
   }
 

@@ -10,7 +10,7 @@ class OrderCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fmt = NumberFormat(r"'$' #,##0", 'es_AR');
-    final totalString = fmt.format(order.total); // Usando order.total
+    final totalString = fmt.format(order.total ?? 0.0); // Usando order.total seguro contra nulos
 
     // --- 👇 ADAPTACIÓN TEMA 👇 ---
     // 1. Obtenemos el tema y el ColorScheme

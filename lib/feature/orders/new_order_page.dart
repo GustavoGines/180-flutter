@@ -281,6 +281,8 @@ class _OrderFormState extends ConsumerState<_OrderForm> {
 
 
   Future<void> _submit() async {
+    if (ref.read(newOrderControllerProvider).isLoading) return;
+
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) {
       ScaffoldMessenger.of(context).showSnackBar(

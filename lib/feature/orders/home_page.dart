@@ -220,8 +220,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isEmpty) return;
 
-    final topItemIndex = positions
-        .where((pos) => pos.itemLeadingEdge >= 0)
+    final visiblePositions = positions.where((pos) => pos.itemLeadingEdge >= 0);
+    if (visiblePositions.isEmpty) return;
+
+    final topItemIndex = visiblePositions
         .reduce(
           (min, pos) => pos.itemLeadingEdge < min.itemLeadingEdge ? pos : min,
         )

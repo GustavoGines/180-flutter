@@ -77,8 +77,9 @@ class _ProductsDonutChartState extends State<ProductsDonutChart> {
                 final isTouched = i == _touchedIndex;
                 final radius = isTouched ? 35.0 : 25.0;
                 final item = widget.items[i];
-                final percentage =
-                    (item.totalRevenue / widget.totalRevenue) * 100;
+                final percentage = widget.totalRevenue > 0
+                    ? (item.totalRevenue / widget.totalRevenue) * 100
+                    : 0.0;
                 final color = widget.colors[i % widget.colors.length];
 
                 return PieChartSectionData(

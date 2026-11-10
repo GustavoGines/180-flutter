@@ -163,6 +163,7 @@ class ClientsPage extends HookConsumerWidget {
     final searchController = useTextEditingController();
     // 2. Debouncer
     final debouncer = useMemoized(() => Debouncer(milliseconds: 300), []);
+    useEffect(() => debouncer.dispose, [debouncer]);
     // 3. Observamos el query de búsqueda
     final searchQuery = ref.watch(clientSearchQueryProvider);
     // 4. Observamos el provider que trae los datos

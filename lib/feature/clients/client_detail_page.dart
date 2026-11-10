@@ -17,6 +17,15 @@ import 'package:pasteleria_180_flutter/feature/clients/clients_repository.dart';
 import 'package:pasteleria_180_flutter/core/utils/launcher_utils.dart';
 import 'package:intl/intl.dart';
 
+final clientOrdersProvider = FutureProvider.autoDispose.family<List<Order>, int>((ref, clientId) async {
+  final repo = ref.watch(ordersRepoProvider);
+  final allOrders = await repo.getOrders(
+    from: DateTime.now().subtract(const Duration(days: 365 * 2)),
+    to: DateTime.now().add(const Duration(days: 365)),
+  );
+  return allOrders.where((o) => o.clientId == clientId).toList();
+});
+
 class ClientDetailPage extends ConsumerWidget {
   final int id;
   const ClientDetailPage({super.key, required this.id});
@@ -465,11 +474,6 @@ class ClientDetailPage extends ConsumerWidget {
         final cs = Theme.of(context).colorScheme;
         final tt = Theme.of(context).textTheme;
 
-        // Obtenemos el repositorio de Pedidos
-        final repo = ref.watch(
-          ordersRepoProvider,
-        ); // Asumiendo que tienes este provider
-
         // Helper para traducir y dar color a los estados (AHORA USA EL TEMA)
         (String, Color) getStatusStyle(OrderStatus status) {
           // Colores del tema
@@ -492,34 +496,17 @@ class ClientDetailPage extends ConsumerWidget {
           }
         }
 
-        // NOTA: Esta API no es ideal. Deberíamos tener un endpoint
-        // /clients/{id}/orders o /orders?client_id={id}
-        // Pero mantenemos tu lógica original por ahora.
-        return FutureBuilder<List<Order>>(
-          future: repo.getOrders(
-            from: DateTime.now().subtract(
-              const Duration(days: 365 * 2),
-            ), // 2 años
-            to: DateTime.now().add(const Duration(days: 365)),
+        final ordersAsync = ref.watch(clientOrdersProvider(clientId));
+
+        return ordersAsync.when(
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24.0),
+              child: CircularProgressIndicator(),
+            ),
           ),
-          builder: (ctx, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24.0),
-                  // Usará el color primario del tema por defecto
-                  child: CircularProgressIndicator(),
-                ),
-              );
-            }
-            if (snap.hasError) {
-              return Center(child: Text('Error: ${snap.error}'));
-            }
-
-            final allOrders = snap.data ?? [];
-            final clientOrders =
-                allOrders.where((o) => o.clientId == clientId).toList();
-
+          error: (err, _) => Center(child: Text('Error: $err')),
+          data: (clientOrders) {
             if (clientOrders.isEmpty) {
               return const Card(
                 elevation: 1,

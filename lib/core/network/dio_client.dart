@@ -15,6 +15,7 @@ class DioClient {
 
   late final Dio dio;
   final storage = const FlutterSecureStorage();
+  Function()? _onUnauthorized;
 
   DioClient._internal() {
     dio = Dio(
@@ -28,11 +29,14 @@ class DioClient {
   }
 
   Future<void> init({Function()? onUnauthorized}) async {
+    if (onUnauthorized != null) {
+      _onUnauthorized = onUnauthorized;
+    }
     dio.interceptors.clear();
 
     // 1. Auth interceptor (SIEMPRE PRIMERO)
     dio.interceptors
-        .add(AuthInterceptor(storage, onUnauthorized: onUnauthorized));
+        .add(AuthInterceptor(storage, onUnauthorized: _onUnauthorized));
 
     // 2. Logger (SOLO UNO)
     if (kLogHttp || kDebugMode) {

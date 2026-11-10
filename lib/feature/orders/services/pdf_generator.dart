@@ -636,7 +636,7 @@ class PdfGenerator {
     );
     final totalAdjustments = order.items.fold<double>(
       0.0,
-      (sum, item) => sum + item.adjustments,
+      (sum, item) => sum + (item.adjustments * item.qty),
     );
     final itemsSubtotal = rawSubtotal + totalAdjustments;
     

@@ -118,9 +118,13 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
         );
       }
     } finally {
-      setState(() {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      } else {
         _isProcessing = false;
-      });
+      }
       
       // Limpieza Extrema de Caché (Crítico)
       if (_tempPath != null) {
@@ -247,7 +251,7 @@ class _VoiceAssistantFabState extends ConsumerState<VoiceAssistantFab> with Sing
 
                 final generalNotes = data['general_notes'] as String?;
 
-                if (clientName != null) {
+                if (clientName != null || items.isNotEmpty) {
                   await ref.read(newOrderControllerProvider.notifier).prefillFromVoiceAssistant(
                     clientName: clientName,
                     isNewClient: isNewClient,

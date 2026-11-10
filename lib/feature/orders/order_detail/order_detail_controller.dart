@@ -93,10 +93,8 @@ class OrderDetailController {
   Future<void> handleChangeStatus(BuildContext context, Order order, OrderStatus newStatus) async {
     final cs = Theme.of(context).colorScheme;
     try {
-      final Order? updatedOrder = await ref.read(ordersRepoProvider).updateStatus(order.id, newStatus.name);
-      if (updatedOrder != null) {
-        await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
-      }
+      final Order updatedOrder = await ref.read(ordersRepoProvider).updateStatus(order.id, newStatus.name);
+      await ref.read(ordersWindowProvider.notifier).updateOrder(updatedOrder);
       ref.invalidate(orderByIdProvider(order.id));
 
       if (context.mounted) {

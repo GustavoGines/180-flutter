@@ -150,7 +150,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'product/edit',
             pageBuilder: (context, state) {
-              final product = state.extra as Product;
+              final product = state.extra is Product ? state.extra as Product : null;
+              if (product == null) {
+                return _fadePageBuilder(
+                  context,
+                  state,
+                  const Scaffold(
+                    body: Center(child: Text('Producto no encontrado')),
+                  ),
+                );
+              }
               return _fadePageBuilder(context, state, ProductFormPage(productToEdit: product));
             },
           ),

@@ -200,6 +200,11 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
 
   /// Guarda el pedido (Crea o Actualiza)
   Future<Order> saveOrder() async {
+    // 0. Bloqueo de reentrada para prevenir dobles toques
+    if (state.isLoading) {
+      throw ValidationException('Ya se está procesando el pedido. Por favor, espera.');
+    }
+
     // 1. Validaciones
     if (state.deposit > state.grandTotal + 0.01) {
       throw ValidationException('El monto de la seña/depósito no puede ser mayor al TOTAL del pedido. Verifica los valores.');
@@ -317,8 +322,8 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
   }
   /// Carga el estado del formulario a partir de la interpretación del Asistente de Voz
   Future<void> prefillFromVoiceAssistant({
-    required String clientName,
-    required bool isNewClient,
+    String? clientName,
+    bool isNewClient = false,
     DateTime? eventDate,
     TimeOfDay? startTime,
     int? exactClientId,
@@ -341,19 +346,21 @@ class NewOrderController extends AutoDisposeNotifier<NewOrderState> {
         updateItems(items);
       }
 
-      if (isNewClient) {
-        state = state.copyWith(
-          prefillClientName: clientName,
-        );
-      } else {
-        // Buscar cliente existente
-        if (exactClientId != null) {
-          final client = await ref.read(clientsRepoProvider).getClientById(exactClientId);
-          if (client != null) updateClient(client);
+      if (clientName != null && clientName.trim().isNotEmpty) {
+        if (isNewClient) {
+          state = state.copyWith(
+            prefillClientName: clientName.trim(),
+          );
         } else {
-          final result = await ref.read(clientsRepoProvider).searchClients(query: clientName);
-          if (result.isNotEmpty) {
-            updateClient(result.first);
+          // Buscar cliente existente
+          if (exactClientId != null) {
+            final client = await ref.read(clientsRepoProvider).getClientById(exactClientId);
+            if (client != null) updateClient(client);
+          } else {
+            final result = await ref.read(clientsRepoProvider).searchClients(query: clientName.trim());
+            if (result.isNotEmpty) {
+              updateClient(result.first);
+            }
           }
         }
       }
